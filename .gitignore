@@ -149,3 +149,9 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+##########################
+# Project specific
+
+session_store.db
+*.ipynb
