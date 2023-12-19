@@ -1,0 +1,4 @@
+# Raw datasets
+navistar:
+  type: dask.ParquetDataset
+  filepath: data/01_raw/stanford_dataset/
