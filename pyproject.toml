@@ -22,8 +22,8 @@ tools = "['Linting', 'Documentation', 'Data Structure', 'PySpark', 'Kedro Viz']"
 [tool.ruff]
 line-length = 88
 show-fixes = true
-select = [ "F", "W", "E", "I", "UP", "PL", "T201",]
-ignore = [ "E501",]
+lint.select = [ "F", "W", "E", "I", "UP", "PL", "T201",]
+lint.ignore = [ "E501",]
 
 [project.entry-points."kedro.hooks"]
 
