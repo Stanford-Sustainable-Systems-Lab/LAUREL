@@ -16,7 +16,11 @@ def format_navistar_columns(navistar, params):
 
 
 def build_h3_polygons(us_outline):
-    """Build H3 Scale 8 polygons for full continental U.S."""
+    """Build H3 Scale 8 polygons for full continental U.S.
+
+    Might be unnecessary if we can build polygons quickly on the fly, but this
+    depends on H3.
+    """
     raise NotImplementedError()
 
 
