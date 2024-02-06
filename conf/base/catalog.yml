@@ -2,3 +2,8 @@
 navistar:
   type: dask.ParquetDataset
   filepath: data/01_raw/stanford_dataset/
+
+# Preprocessed datasets
+trips:
+  type: dask.ParquetDataset
+  filepath: data/02_intermediate/trips/
