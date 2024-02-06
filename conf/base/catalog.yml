@@ -3,7 +3,37 @@ navistar:
   type: dask.ParquetDataset
   filepath: data/01_raw/stanford_dataset/
 
+us_outline:
+  type: geopandas.GeoJSONDataset
+  filepath: data/01_raw/us_outline.json
+
+vius_raw:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/VIUS/______.csv
+
+role_energy_readings:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/ROLE/energyreading.csv
+
+role_gps:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/ROLE/gps.csv
+
 # Preprocessed datasets
 trips:
   type: dask.ParquetDataset
   filepath: data/02_intermediate/trips/
+
+h3_8_polygons:
+  type: geopandas.GeoJSONDataset
+  filepath: data/02_intermediate/h3_8_polygons.json
+
+energy_sessions:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/energy_sessions.feather
+
+energy_consumption:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/energy_consumption_per_mile.csv
+  save_args:
+    index: True

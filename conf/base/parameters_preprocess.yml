@@ -11,3 +11,16 @@ navistar:
   category_columns:
     - veh_type
     - vin_gvw
+
+consump_rate:
+  coord_ref_sys: 4326
+  allow_sess_idle_time_hrs: 0.25
+  min_drive_sess_length_hrs: 0.05
+  max_drive_sess_length_hrs: 24
+  min_drive_sess_dist_miles: 0.5
+
+charge_sessions:
+  max_charge_gap_secs: 3600 # Longest gap in a charging session allowable before a new session is counted
+  truck_ids_to_drop:
+    - 8
+  max_possible_charger_power_kw: 37
