@@ -11,9 +11,15 @@ kedro~=0.19.1
 ruff~=0.0.290
 scikit-learn~=1.0
 seaborn~=0.12.1
+pre-commit~=3.6.0
 
 # Project dependencies
 h3~=3.7.6
 folium~=0.15
 geopandas~=0.14
 dask~=2023.12
+arviz~=0.16.1
+graphviz~=0.20.1
+numpyro~=0.13.0
+pandas~=2.1.0
+tensorflow-probability~=0.20.1
