@@ -3,3 +3,46 @@
 #
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.1/configuration/parameters.html
+pgm_struct:
+  n_vocs: 6
+  n_mix_components: 2
+  vocation_conc_prior: 0.5
+  gamma_rate: 0.1
+  covariance_conc_prior: 2.0
+  min_alpha: 0.01
+  min_active_session_length_hrs: 0.1
+  total_hrs: 24
+  output_schedule: False
+  pred_dims:
+    sched:
+      - veh_day_id
+      - sched_type
+    voc:
+      - veh_day_id
+    day_shift:
+      - veh_day_id
+    far:
+      - veh_day_id
+    times:
+      - veh_day_id
+      - times_type
+  pred_coords:
+    sched_type:
+      - end_offshift
+      - end_first_active
+      - end_break
+      - end_second_active
+    times_type:
+      - offshift
+      - active
+      - break
+  max_var_dims: 4
+
+pgm_train:
+  num_warmup: 50
+  num_samples: 50
+
+posterior_predictive:
+  n_samples: 2
+  n_vehs_per_fleet: 10
+  verbose: True

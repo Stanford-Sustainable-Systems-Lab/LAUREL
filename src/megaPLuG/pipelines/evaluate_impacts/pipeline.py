@@ -3,8 +3,32 @@ This is a boilerplate pipeline 'evaluate_impacts'
 generated using Kedro 0.19.1
 """
 
-from kedro.pipeline import Pipeline, pipeline
+from kedro.pipeline import Pipeline, node, pipeline
+
+from .nodes import aggregate_regional_loads, plot_hourly_load, plot_peak_load_evolution
 
 
 def create_pipeline(**kwargs) -> Pipeline:
-    return pipeline([])
+    pipe = pipeline(
+        [
+            node(
+                func=aggregate_regional_loads,
+                inputs=["charging_sessions_sampled", "grid_regions"],
+                outputs="regional_loads",
+                name="aggregate_regional_loads",
+            ),
+            node(
+                func=plot_peak_load_evolution,
+                inputs=["regional_loads", "baseline_load"],
+                outputs="peak_load_evolution",
+                name="plot_peak_load_evolution",
+            ),
+            node(
+                func=plot_hourly_load,
+                inputs=["regional_loads", "baseline_load"],
+                outputs="hourly_load",
+                name="plot_hourly_load",
+            ),
+        ],
+    )
+    return pipe

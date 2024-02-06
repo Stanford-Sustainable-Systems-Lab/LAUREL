@@ -5,7 +5,7 @@ generated using Kedro 0.19.1
 
 from kedro.pipeline import Pipeline, node, pipeline
 
-from .nodes import format_navistar_columns, build_h3_polygons, clean_vius
+from .nodes import build_h3_polygons, clean_vius, format_navistar_columns
 from .process_role_consumption import calc_energy_consump_rate
 from .process_role_energy import label_charging_sessions
 
@@ -28,7 +28,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=clean_vius,
                 inputs="vius_raw",
-                outputs="vius_cleaned",
+                outputs="vius_clean",
                 name="clean_vius",
             ),
             node(

@@ -3,3 +3,10 @@
 #
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.1/configuration/parameters.html
+
+vehicles:
+  battery_size_kwh: 750
+  charging_rate_kw: 350
+  charging_delays:
+    plug_in_mins: 10
+    plug_out_mins: 10

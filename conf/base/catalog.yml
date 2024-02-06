@@ -7,6 +7,10 @@ us_outline:
   type: geopandas.GeoJSONDataset
   filepath: data/01_raw/us_outline.json
 
+grid_regions:
+  type: geopandas.GeoJSONDataset
+  filepath: data/01_raw/grid_regions.json
+
 vius_raw:
   type: pandas.CSVDataset
   filepath: data/01_raw/VIUS/______.csv
@@ -28,6 +32,10 @@ h3_8_polygons:
   type: geopandas.GeoJSONDataset
   filepath: data/02_intermediate/h3_8_polygons.json
 
+vius_clean:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/vius_clean.csv
+
 energy_sessions:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/energy_sessions.feather
@@ -37,3 +45,54 @@ energy_consumption:
   filepath: data/02_intermediate/energy_consumption_per_mile.csv
   save_args:
     index: True
+
+# Electrification simulation datasets
+charging_sessions_simulated:
+  type: dask.ParquetDataset
+  filepath: data/04_feature/charging_sessions_simulated/
+
+# Model training
+pgm_trained:
+  type: pickle.PickleDataset
+  filepath: data/06_models/pgm_trained.pkl
+  versioned: true
+
+posterior_predictive:
+  type: pandas.CSVDataset
+  filepath: data/06_models/posterior_predictive.csv
+  versioned: true
+  save_args:
+    index: true
+
+eval_plot_single_vars:
+  type: matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/train_eval_plot_single_vars.png
+  versioned: true
+
+# Sample charging datasets
+adoption_scenario:
+  type: pandas.CSVDataset
+  filepath: data/05_model_input/adoption_scenario.csv
+
+pgm_conditioning:
+  type: json.JSONDataset
+  filepath: data/05_model_input/pgm_conditioning.json
+
+charging_sessions_sampled:
+  type: dask.ParquetDataset
+  filepath: data/07_model_output/charging_sessions_sampled/
+
+# Evaluate impacts datasets
+regional_loads:
+  type: pandas.FeatherDataset
+  filepath: data/07_model_output/regional_loads.feather
+
+peak_load_evolution:
+  type: matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/peak_load_evolution.png
+  versioned: true
+
+hourly_load:
+  type: matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/hourly_load.png
+  versioned: true
