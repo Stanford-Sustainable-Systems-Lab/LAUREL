@@ -3,18 +3,18 @@ requires = [ "setuptools",]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "epa_phase_iii"
+name = "megaPLuG"
 readme = "README.md"
 dynamic = [ "dependencies", "version",]
 
 [project.scripts]
-epa-phase-iii = "epa_phase_iii.__main__:main"
+epa-phase-iii = "megaPLuG.__main__:main"
 
 [project.optional-dependencies]
 docs = [ "docutils<0.18.0", "sphinx~=3.4.3", "sphinx_rtd_theme==0.5.1", "nbsphinx==0.8.1", "sphinx-autodoc-typehints==1.11.1", "sphinx_copybutton==0.3.1", "ipykernel>=5.3, <7.0", "Jinja2<3.1.0", "myst-parser~=0.17.2",]
 
 [tool.kedro]
-package_name = "epa_phase_iii"
+package_name = "megaPLuG"
 project_name = "EPA Phase III"
 kedro_init_version = "0.19.1"
 tools = "['Linting', 'Documentation', 'Data Structure', 'PySpark', 'Kedro Viz']"
@@ -31,7 +31,7 @@ ignore = [ "E501",]
 file = "requirements.txt"
 
 [tool.setuptools.dynamic.version]
-attr = "epa_phase_iii.__version__"
+attr = "megaPLuG.__version__"
 
 [tool.setuptools.packages.find]
 where = [ "src",]

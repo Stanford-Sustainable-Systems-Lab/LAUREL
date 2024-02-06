@@ -1,8 +1,8 @@
-.. epa_phase_iii documentation master file, created by sphinx-quickstart.
+.. megaPLuG documentation master file, created by sphinx-quickstart.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to project epa_phase_iii's API docs!
+Welcome to project megaPLuG's API docs!
 =============================================
 
 .. toctree::

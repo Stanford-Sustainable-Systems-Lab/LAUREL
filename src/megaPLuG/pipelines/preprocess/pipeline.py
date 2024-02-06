@@ -5,17 +5,17 @@ generated using Kedro 0.19.1
 
 from kedro.pipeline import Pipeline, node, pipeline
 
-from .nodes import read_navistar
+from .nodes import preprocess_navistar
 
 
 def create_pipeline(**kwargs) -> Pipeline:
     pipe = pipeline(
         [
             node(
-                func=read_navistar,
-                inputs="navistar",
-                outputs="test",
-                name="read_navistar",
+                func=preprocess_navistar,
+                inputs=["navistar", "params:navistar"],
+                outputs="trips",
+                name="preprocess_navistar",
             )
         ],
     )

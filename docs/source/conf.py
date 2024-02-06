@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 
-# epa_phase_iii documentation build
+# megaPLuG documentation build
 # configuration file, created by sphinx-quickstart.
 #
 # This file is execfile()d with the current directory set to its
@@ -21,11 +21,11 @@
 import re
 
 from kedro.framework.cli.utils import find_stylesheets
-from epa_phase_iii import __version__ as release
+from megaPLuG import __version__ as release
 
 # -- Project information -----------------------------------------------------
 
-project = "epa_phase_iii"
+project = "megaPLuG"
 author = "Kedro"
 
 # The short X.Y version.
@@ -121,7 +121,7 @@ html_show_copyright = False
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = "epa_phase_iiidoc"
+htmlhelp_basename = "megaPLuGdoc"
 
 # -- Options for LaTeX output ------------------------------------------------
 
@@ -149,8 +149,8 @@ latex_elements = {
 latex_documents = [
     (
         master_doc,
-        "epa_phase_iii.tex",
-        "epa_phase_iii Documentation",
+        "megaPLuG.tex",
+        "megaPLuG Documentation",
         "Kedro",
         "manual",
     )
@@ -163,8 +163,8 @@ latex_documents = [
 man_pages = [
     (
         master_doc,
-        "epa_phase_iii",
-        "epa_phase_iii Documentation",
+        "megaPLuG",
+        "megaPLuG Documentation",
         [author],
         1,
     )
@@ -178,11 +178,11 @@ man_pages = [
 texinfo_documents = [
     (
         master_doc,
-        "epa_phase_iii",
-        "epa_phase_iii Documentation",
+        "megaPLuG",
+        "megaPLuG Documentation",
         author,
-        "epa_phase_iii",
-        "Project epa_phase_iii codebase.",
+        "megaPLuG",
+        "Project megaPLuG codebase.",
         "Data-Science",
     )
 ]
