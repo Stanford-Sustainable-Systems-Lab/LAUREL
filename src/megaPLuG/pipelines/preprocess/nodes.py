@@ -7,6 +7,9 @@ import dask.dataframe as dd
 
 def format_navistar_columns(navistar, params):
     """Preprocess navistar data as a dask DataFrame object."""
+    if params["debug_subsample"]["active"]:
+        navistar = navistar.loc[0 : params["debug_subsample"]["n"]]
+
     navistar = navistar.categorize(params["category_columns"])
 
     for col in params["time_columns"]:
