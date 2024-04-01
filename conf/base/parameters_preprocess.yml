@@ -12,7 +12,7 @@ navistar:
     - veh_type
     - vin_gvw
   debug_subsample:
-    active: True
+    active: False
     n: 100
 
 consump_rate:
