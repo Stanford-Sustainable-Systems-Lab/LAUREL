@@ -2,6 +2,7 @@
 This is a boilerplate pipeline 'train'
 generated using Kedro 0.19.1
 """
+
 import matplotlib
 import pandas as pd
 

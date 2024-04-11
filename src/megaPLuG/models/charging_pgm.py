@@ -2,6 +2,7 @@
 by Fletcher Passow
 February 2024
 """
+
 import arviz as az
 import jax.numpy as jnp
 import numpyro

@@ -4,7 +4,6 @@ by Fletcher Passow
 February 2023
 """
 
-
 from typing import Callable
 
 import numpy as np

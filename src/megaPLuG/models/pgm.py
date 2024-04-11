@@ -2,6 +2,7 @@
 by Fletcher Passow
 August 2023
 """
+
 import abc
 from functools import partial
 from typing import Callable
