@@ -50,14 +50,14 @@ def get_events(
     event_df = event_df.set_index(["grp", "time"])
     if not event_df.index.is_monotonic_increasing:
         raise Exception(
-            f"The given combination of groups and times is not monotonic increasing."
+            "The given combination of groups and times is not monotonic increasing."
         )
 
     def get_events_geyser(meas_ser, obs_in_event, max_time_elapsed):
         """Get a series which gives the indices for events for a single geyser."""
 
         if meas_ser.index.get_level_values("grp").nunique() > 1:
-            raise Exception(f"meas_ser contains more than one grouping.")
+            raise Exception("meas_ser contains more than one grouping.")
 
         obs_out_event = lambda x: np.logical_not(obs_in_event(x))
 
