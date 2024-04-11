@@ -1,17 +1,53 @@
-[build-system]
-requires = [ "setuptools",]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "megaPLuG"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "Fletcher Passow", email = "fletcherpassow@icloud.com" }
+]
+dependencies = [
+    "arviz~=0.16.1",
+    "black~=22.0",
+    "cvxpy~=1.4",
+    "dask~=2023.12",
+    "geopandas~=0.14",
+    "graphviz~=0.20.1",
+    "h3~=3.7.6",
+    "ipython~=8.10 ; python_version >= '3.8'",
+    "jupyter~=1.0",
+    "jupyterlab~=3.0",
+    "jupyterlab_server>=2.11.1",
+    "kedro~=0.19.2",
+    "kedro-datasets[pandas.CSVDataset,pandas.FeatherDataset,matplotlib.MatplotlibWriter,dask.ParquetDataset]>=1.0",
+    "kedro-telemetry>=0.3.1",
+    "kedro-viz>=6.7.0",
+    "numpyro~=0.13.0",
+    "pandas~=2.2.0",
+    "pre-commit~=3.6.0",
+    "ruff~=0.0.290",
+    "scikit-learn~=1.0",
+    "seaborn~=0.12.1",
+    "tensorflow-probability~=0.20.1",
+]
 readme = "README.md"
-dynamic = [ "dependencies", "version",]
+requires-python = ">= 3.8"
 
 [project.scripts]
 megaPLuG = "megaPLuG.__main__:main"
 
-[project.optional-dependencies]
-docs = [ "docutils<0.18.0", "sphinx~=3.4.3", "sphinx_rtd_theme==0.5.1", "nbsphinx==0.8.1", "sphinx-autodoc-typehints==1.11.1", "sphinx_copybutton==0.3.1", "ipykernel>=5.3, <7.0", "Jinja2<3.1.0", "myst-parser~=0.17.2",]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = []
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/megaplug"]
 
 [tool.kedro]
 package_name = "megaPLuG"
@@ -26,13 +62,3 @@ lint.select = [ "F", "W", "E", "I", "UP", "PL", "T201",]
 lint.ignore = [ "E501",]
 
 [project.entry-points."kedro.hooks"]
-
-[tool.setuptools.dynamic.dependencies]
-file = "requirements.txt"
-
-[tool.setuptools.dynamic.version]
-attr = "megaPLuG.__version__"
-
-[tool.setuptools.packages.find]
-where = [ "src",]
-namespaces = false
