@@ -53,12 +53,15 @@ packages = ["src/megaplug"]
 package_name = "megaPLuG"
 project_name = "megaPLuG"
 kedro_init_version = "0.19.1"
-tools = "['Linting', 'Documentation', 'Data Structure', 'PySpark', 'Kedro Viz']"
+tools = "['Linting', 'Documentation', 'Data Structure', 'Kedro Viz']"
 
-[tool.ruff]
-line-length = 88
-show-fixes = true
-lint.select = [ "F", "W", "E", "I", "UP", "PL", "T201",]
-lint.ignore = [ "E501",]
-
-[project.entry-points."kedro.hooks"]
+[tool.ruff.lint]
+select = [
+    "F",  # Pyflakes
+    "E",  # Pycodestyle
+    "W",  # Pycodestyle
+    "UP",  # pyupgrade
+    "I",  # isort
+    "PL", # Pylint
+]
+ignore = ["E501"]  # Don't report line-too-long
