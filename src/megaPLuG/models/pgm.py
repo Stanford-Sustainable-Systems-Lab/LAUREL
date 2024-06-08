@@ -4,8 +4,8 @@ August 2023
 """
 
 import abc
+from collections.abc import Callable
 from functools import partial
-from typing import Callable
 from warnings import warn
 
 import graphviz
