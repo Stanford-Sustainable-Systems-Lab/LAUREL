@@ -151,7 +151,19 @@ venv.bak/
 .mypy_cache/
 
 ##########################
-# Project specific
-
+# Visualization files
+stats.json
 session_store.db
+
+# Jupyter notebooks
 *.ipynb
+
+# Auto-generated configs and bash scripts
+conf/scenario/*
+!conf/scenarios/.gitkeep
+src/megaPLuG/scenario_runners/*
+!src/megaPLuG/scenario_runners/.gitkeep
+
+# Slurm files
+slurm_logs/*
+!slurm_logs/.gitkeep
