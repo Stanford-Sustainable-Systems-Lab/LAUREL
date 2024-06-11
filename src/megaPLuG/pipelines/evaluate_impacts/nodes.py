@@ -5,8 +5,8 @@ generated using Kedro 0.19.1
 
 import dask.dataframe as dd
 import geopandas as gpd
-import matplotlib
 import pandas as pd
+from matplotlib.figure import Figure
 
 
 def aggregate_regional_loads(
@@ -20,7 +20,7 @@ def aggregate_regional_loads(
 def plot_peak_load_evolution(
     vehicle_load: pd.DataFrame,
     baseline_load: pd.DataFrame,
-) -> matplotlib.figure.Figure:
+) -> Figure:
     """Plot baseline loads compared to baseline plus vehicles loads."""
     raise NotImplementedError()
 
@@ -28,6 +28,6 @@ def plot_peak_load_evolution(
 def plot_hourly_load(
     vehicle_load: pd.DataFrame,
     baseline_load: pd.DataFrame,
-) -> matplotlib.figure.Figure:
+) -> Figure:
     """Plot baseline loads compared to baseline plus vehicles loads."""
     raise NotImplementedError()
