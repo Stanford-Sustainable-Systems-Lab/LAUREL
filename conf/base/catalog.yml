@@ -25,8 +25,8 @@ role_gps:
 
 # Preprocessed datasets
 trips:
-  type: pandas.FeatherDataset
-  filepath: data/02_intermediate/trips.feather
+  type: dask.ParquetDataset
+  filepath: data/02_intermediate/trips/
 
 h3_8_polygons:
   type: geopandas.GeoJSONDataset

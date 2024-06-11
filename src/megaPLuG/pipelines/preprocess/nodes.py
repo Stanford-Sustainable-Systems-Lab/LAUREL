@@ -16,7 +16,7 @@ def format_navistar_columns(navistar, params):
     for col in params["time_columns"]:
         navistar[col] = dd.to_datetime(navistar[col], utc=True)
 
-    return navistar.compute()
+    return navistar
 
 
 def build_h3_polygons(us_outline):
