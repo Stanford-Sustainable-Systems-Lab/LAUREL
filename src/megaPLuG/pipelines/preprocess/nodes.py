@@ -16,6 +16,8 @@ def format_navistar_columns(navistar, params):
     for col in params["time_columns"]:
         navistar[col] = dd.to_datetime(navistar[col], utc=True)
 
+    navistar = navistar.set_index(params["index_column"])
+
     return navistar
 
 

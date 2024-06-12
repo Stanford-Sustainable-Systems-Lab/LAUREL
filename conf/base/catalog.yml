@@ -27,6 +27,10 @@ role_gps:
 trips:
   type: dask.ParquetDataset
   filepath: data/02_intermediate/trips/
+  save_args:
+    write_index: True
+  load_args:
+    index: vehicle_id
 
 h3_8_polygons:
   type: geopandas.GeoJSONDataset

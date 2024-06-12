@@ -11,6 +11,7 @@ navistar:
   category_columns:
     - veh_type
     - vin_gvw
+  index_column: vehicle_id
   debug_subsample:
     active: False
     n: 100
