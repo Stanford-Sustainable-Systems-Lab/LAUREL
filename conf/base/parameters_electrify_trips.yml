@@ -10,3 +10,16 @@ vehicles:
   charging_delays:
     plug_in_mins: 10
     plug_out_mins: 10
+
+energy_use:
+  dist_col: trip_miles
+  consump_rate_kwh_per_mi: 1.9
+
+charging_choice:
+  veh_id_col: vehicle_id
+  battery_capacity_kwh: 500
+  initial_soc:
+    alpha: 5
+    beta: 5
+    seed: 42
+  charge_soc: 1.0

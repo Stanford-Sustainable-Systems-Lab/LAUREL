@@ -30,7 +30,11 @@ trips:
   save_args:
     write_index: True
   load_args:
-    index: vehicle_id
+    index: veh_time_id
+
+trips_feather:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/trips.feather
 
 h3_8_polygons:
   type: geopandas.GeoJSONDataset
@@ -51,9 +55,13 @@ energy_consumption:
     index: True
 
 # Electrification simulation datasets
-charging_sessions_simulated:
+trips_with_charging:
   type: dask.ParquetDataset
   filepath: data/04_feature/charging_sessions_simulated/
+  save_args:
+    write_index: True
+  load_args:
+    index: veh_time_id
 
 # Model training
 pgm_trained:
