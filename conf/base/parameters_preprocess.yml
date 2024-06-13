@@ -4,17 +4,22 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.1/configuration/parameters.html
 
-navistar:
+format_columns:
   time_columns:
     - start_timestamp_utc
     - end_timestamp_utc
   category_columns:
     - veh_type
     - vin_gvw
-  index_column: vehicle_id
+
+set_index:
   debug_subsample:
     active: False
-    n: 100
+    n: 1000
+  sort_column_order: # First listed column will iterate most slowly in the sorting
+    - vehicle_id
+    - start_timestamp_utc
+  index_column: veh_time_id
 
 consump_rate:
   coord_ref_sys: 4326

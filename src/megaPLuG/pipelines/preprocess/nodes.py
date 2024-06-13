@@ -3,22 +3,38 @@ This is a boilerplate pipeline 'preprocess'
 generated using Kedro 0.19.1
 """
 
+import logging
+
 import dask.dataframe as dd
 
+logger = logging.getLogger(__name__)
 
-def format_navistar_columns(navistar, params):
-    """Preprocess navistar data as a dask DataFrame object."""
-    if params["debug_subsample"]["active"]:
-        navistar = navistar.loc[0 : params["debug_subsample"]["n"]]
 
-    navistar = navistar.categorize(params["category_columns"])
+def format_trips_columns(trips, params):
+    """Preprocess trips data columns."""
+    trips = trips.categorize(params["category_columns"])
 
     for col in params["time_columns"]:
-        navistar[col] = dd.to_datetime(navistar[col], utc=True)
+        trips[col] = dd.to_datetime(trips[col], utc=True)
 
-    navistar = navistar.set_index(params["index_column"])
+    return trips
 
-    return navistar
+
+def set_trips_index(trips, params):
+    """Set index of trips data."""
+    if params["debug_subsample"]["active"]:
+        trips = trips.loc[0 : params["debug_subsample"]["n"]].compute()
+        trips = dd.from_pandas(trips, npartitions=2)
+
+    trips = trips.sort_values(by=params["sort_column_order"])
+
+    trips["temp"] = 1
+    trips[params["index_column"]] = trips["temp"].cumsum()
+    trips = trips.drop(columns=["temp"])
+
+    logger.info("Starting indexing compute")
+    trips = trips.set_index(params["index_column"], sorted=True)
+    return trips
 
 
 def build_h3_polygons(us_outline):
