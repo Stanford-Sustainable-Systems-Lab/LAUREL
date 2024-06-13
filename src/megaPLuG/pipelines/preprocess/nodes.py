@@ -23,17 +23,11 @@ def format_trips_columns(trips, params):
 def set_trips_index(trips, params):
     """Set index of trips data."""
     if params["debug_subsample"]["active"]:
-        trips = trips.loc[0 : params["debug_subsample"]["n"]].compute()
-        trips = dd.from_pandas(trips, npartitions=2)
-
+        trips = trips.loc[0 : params["debug_subsample"]["n"]]
+    trips = trips.compute()
     trips = trips.sort_values(by=params["sort_column_order"])
-
-    trips["temp"] = 1
-    trips[params["index_column"]] = trips["temp"].cumsum()
-    trips = trips.drop(columns=["temp"])
-
-    logger.info("Starting indexing compute")
-    trips = trips.set_index(params["index_column"], sorted=True)
+    trips = trips.reset_index(drop=True)
+    trips.index.name = params["index_column"]
     return trips
 
 
