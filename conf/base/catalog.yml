@@ -25,16 +25,10 @@ role_gps:
 
 # Preprocessed datasets
 trips:
-  type: dask.ParquetDataset
-  filepath: data/02_intermediate/trips/
-  save_args:
-    write_index: True
-  load_args:
-    index: veh_time_id
-
-trips_feather:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/trips.feather
+  load_args:
+    use_threads: True
 
 h3_8_polygons:
   type: geopandas.GeoJSONDataset
