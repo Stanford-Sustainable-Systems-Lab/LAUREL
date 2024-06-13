@@ -11,6 +11,10 @@ vehicles:
     plug_in_mins: 10
     plug_out_mins: 10
 
+dwell_times:
+  index_name: veh_time_id
+  group_col_name: vehicle_id
+
 energy_use:
   dist_col: trip_miles
   consump_rate_kwh_per_mi: 1.9

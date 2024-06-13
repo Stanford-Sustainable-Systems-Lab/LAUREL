@@ -5,21 +5,14 @@ generated using Kedro 0.19.1
 
 import logging
 
-import dask.dataframe as dd
 import numpy as np
 import pandas as pd
-from dask.diagnostics import ProgressBar
 from numba import njit
 
 logger = logging.getLogger(__name__)
 
 
-def convert_to_pandas(trips: dd.DataFrame) -> pd.DataFrame:
-    trips = trips.compute()
-    return trips
-
-
-def calc_energy_use(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
+def calc_energy_use(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Calculate energy use for all trips."""
     trips["energy_use_kwh"] = (
         trips[params["dist_col"]] * params["consump_rate_kwh_per_mi"]
@@ -27,48 +20,42 @@ def calc_energy_use(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
     return trips
 
 
-def calc_dwell_hrs(trips: dd.DataFrame) -> dd.DataFrame:
+def calc_dwell_hrs(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Calculate the length of time at each dwell."""
-    # with ProgressBar():
-    #     test = trips.compute()
+    if trips.index.name != params["index_name"]:
+        raise RuntimeError("Index name does not match the name from the config.")
+    if not trips.index.is_monotonic_increasing:
+        raise RuntimeError("Index must already be monotonic increasing.")
+
     trips["dwell_time_hrs"] = (
-        trips.groupby("vehicle_id")["start_timestamp_utc"].shift(-1)
+        trips.groupby(params["group_col_name"])["start_timestamp_utc"].shift(-1)
         - trips["end_timestamp_utc"]
     )
     trips["dwell_time_hrs"] = trips["dwell_time_hrs"].dt.total_seconds() / 3600
-
-    # meta = pd.Series(
-    #     data=pd.Timedelta(1),
-    #     index=pd.RangeIndex(start=0, stop=1),
-    #     name="dwell_time_hrs",
-    # )
-
-    # trips["dwell_time_hrs"] = trips.groupby(trips.index).apply(
-    #     lambda grp: grp["start_timestamp_utc"].shift(-1) - grp["end_timestamp_utc"],
-    #     meta=meta,
-    # )
-    # trips["dwell_time_hrs"] = trips["dwell_time_hrs"].dt.total_seconds() / 3600
-    # with ProgressBar():
-    #     test=trips.compute()
+    drop_idx = trips[trips["dwell_time_hrs"].isna()].index
+    trips = trips.drop(index=drop_idx)  # To get rid of NaT value from shift
     return trips
 
 
-def simulate_charging_choice(trips: pd.DataFrame, params: dict) -> dd.DataFrame:
-    """Simulate the charging choices of each vehicle."""
-    logger.info("Calculate new columns")
+def set_charging_availability(trips: pd.DataFrame) -> pd.DataFrame:
+    """Set the charging availability for each session."""
     trips["max_power_kw"] = 350
+    return trips
 
+
+def simulate_charging_choice(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Simulate the charging choices of each vehicle."""
     logger.info("Sample initial states of charge")
     soc_pars = params["initial_soc"]
     rng = np.random.default_rng(seed=soc_pars["seed"])
-    veh_ids = trips["vehicle_id"].unique()  # .compute()
+    veh_ids = trips["vehicle_id"].unique()
     soc_inits = rng.beta(a=soc_pars["alpha"], b=soc_pars["beta"], size=veh_ids.shape[0])
     soc_inits = pd.Series(data=soc_inits, index=veh_ids)
 
     # Switch trips index to vehicle_id (already sorted) to speed up groupby
     logger.info("Conduct charging simulation through groupby-apply")
     trips = trips.reset_index(drop=False)
-    trips = trips.set_index("vehicle_id", drop=True)  # , sorted=True)
+    trips = trips.set_index("vehicle_id", drop=True)
     charges = trips.groupby(trips.index, group_keys=False).apply(
         lambda grp: pd.DataFrame(
             charge_soc_fast(
@@ -81,22 +68,15 @@ def simulate_charging_choice(trips: pd.DataFrame, params: dict) -> dd.DataFrame:
             ),
             index=grp["veh_time_id"],
             columns=["charge_kwh", "dwell_init_kwh"],
-        ),
-        # meta={"charge_kwh": 'f8', "dwell_init_kwh": 'f8'},
+        )
     )
-    with ProgressBar():
-        charges = charges.compute()  # Note: Merging breaks if this is not pre-computed to a pandas DataFrame, but this might cause memory issues later
 
     # Switch trips index back to veh_time_id (already sorted) to speed up merge
     logger.info("Merge charging simulation results back onto trips")
     trips = trips.reset_index(drop=True)
-    trips = trips.set_index("veh_time_id", drop=True)  # , sorted=True)
-    trips_w_charge = trips.merge(charges, how="left", left_index=True, right_index=True)
-    with ProgressBar():
-        trips_w_charge = trips_w_charge.compute()
-    if isinstance(trips_w_charge, pd.DataFrame):
-        trips_w_charge = dd.from_pandas(trips_w_charge, npartitions=2)
-    return trips_w_charge
+    trips = trips.set_index("veh_time_id", drop=True)
+    trips = trips.merge(charges, how="left", left_index=True, right_index=True)
+    return trips
 
 
 @njit
