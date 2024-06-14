@@ -50,12 +50,10 @@ energy_consumption:
 
 # Electrification simulation datasets
 trips_with_charging:
-  type: dask.ParquetDataset
-  filepath: data/04_feature/charging_sessions_simulated/
-  save_args:
-    write_index: True
+  type: pandas.FeatherDataset
+  filepath: data/04_feature/trips_with_charging.feather
   load_args:
-    index: veh_time_id
+    use_threads: True
 
 # Model training
 pgm_trained:

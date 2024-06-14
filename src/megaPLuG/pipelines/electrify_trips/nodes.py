@@ -45,6 +45,11 @@ def set_charging_availability(trips: pd.DataFrame) -> pd.DataFrame:
 
 def simulate_charging_choice(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Simulate the charging choices of each vehicle."""
+    if trips.index.name != params["index_name"]:
+        raise RuntimeError("Index name does not match the name from the config.")
+    if not trips.index.is_monotonic_increasing:
+        raise RuntimeError("Index must already be monotonic increasing.")
+
     logger.info("Sample initial states of charge")
     soc_pars = params["initial_soc"]
     rng = np.random.default_rng(seed=soc_pars["seed"])
@@ -54,9 +59,7 @@ def simulate_charging_choice(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
 
     # Switch trips index to vehicle_id (already sorted) to speed up groupby
     logger.info("Conduct charging simulation through groupby-apply")
-    trips = trips.reset_index(drop=False)
-    trips = trips.set_index("vehicle_id", drop=True)
-    charges = trips.groupby(trips.index, group_keys=False).apply(
+    charges = trips.groupby(params["veh_id_col"], group_keys=False).apply(
         lambda grp: pd.DataFrame(
             charge_soc_fast(
                 consumed_kwh=grp["energy_use_kwh"].values,
@@ -66,16 +69,16 @@ def simulate_charging_choice(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
                 soc_init=soc_inits[grp.name],
                 charge_soc=params["charge_soc"],
             ),
-            index=grp["veh_time_id"],
+            index=grp.index,
             columns=["charge_kwh", "dwell_init_kwh"],
         )
     )
 
-    # Switch trips index back to veh_time_id (already sorted) to speed up merge
     logger.info("Merge charging simulation results back onto trips")
-    trips = trips.reset_index(drop=True)
-    trips = trips.set_index("veh_time_id", drop=True)
-    trips = trips.merge(charges, how="left", left_index=True, right_index=True)
+    if np.all(trips.index == charges.index):
+        trips = pd.concat([trips, charges], axis=1)
+    else:
+        trips = trips.merge(charges, how="left", left_index=True, right_index=True)
     return trips
 
 
