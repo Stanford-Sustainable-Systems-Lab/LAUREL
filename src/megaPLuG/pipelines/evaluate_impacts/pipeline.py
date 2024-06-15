@@ -5,12 +5,30 @@ generated using Kedro 0.19.1
 
 from kedro.pipeline import Pipeline, node, pipeline
 
-from .nodes import aggregate_regional_loads, plot_hourly_load, plot_peak_load_evolution
+from .nodes import (
+    aggregate_regional_loads,
+    calc_derived_trip_cols,
+    get_events_from_trips,
+    plot_hourly_load,
+    plot_peak_load_evolution,
+)
 
 
 def create_pipeline(**kwargs) -> Pipeline:
     pipe = pipeline(
         [
+            node(
+                func=calc_derived_trip_cols,
+                inputs=["trips_with_charging", "params:derived_cols"],
+                outputs="trips_derived",
+                name="calc_derived_trip_cols",
+            ),
+            node(
+                func=get_events_from_trips,
+                inputs=["trips_derived", "params:events_from_trips"],
+                outputs="events",
+                name="get_events_from_trips",
+            ),
             node(
                 func=aggregate_regional_loads,
                 inputs=["charging_sessions_sampled", "grid_regions"],
