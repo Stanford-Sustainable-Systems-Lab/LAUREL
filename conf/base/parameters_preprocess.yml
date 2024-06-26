@@ -11,6 +11,9 @@ format_columns:
   category_columns:
     - veh_type
     - vin_gvw
+  h3_columns:
+    - starting_h3_8
+    - ending_h3_8
 
 set_index:
   debug_subsample:

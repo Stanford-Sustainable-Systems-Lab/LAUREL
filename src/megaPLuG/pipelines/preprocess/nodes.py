@@ -6,6 +6,8 @@ generated using Kedro 0.19.1
 import logging
 
 import dask.dataframe as dd
+import h3.api.numpy_int as h3
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +19,14 @@ def format_trips_columns(trips, params):
     for col in params["time_columns"]:
         trips[col] = dd.to_datetime(trips[col], utc=True)
 
+    for col in params["h3_columns"]:
+        trips[col] = trips[col].map_partitions(str_to_h3, meta=(col, "int"))
+
     return trips
+
+
+def str_to_h3(s: pd.Series) -> pd.Series:
+    return s.transform(h3.string_to_h3)
 
 
 def set_trips_index(trips, params):
