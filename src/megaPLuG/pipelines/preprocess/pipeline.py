@@ -27,7 +27,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             node(
                 func=build_h3_polygons,
-                inputs="us_outline",
+                inputs=["trips", "params:build_hexes"],
                 outputs="h3_8_polygons",
                 name="build_h3_polygons",
             ),
