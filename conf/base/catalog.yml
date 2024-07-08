@@ -61,6 +61,12 @@ events:
   load_args:
     use_threads: True
 
+load_profiles:
+  type: pandas.FeatherDataset
+  filepath: data/04_feature/load_profiles.feather
+  load_args:
+    use_threads: True
+
 # Model training
 pgm_trained:
   type: pickle.PickleDataset
@@ -93,6 +99,10 @@ charging_sessions_sampled:
   filepath: data/07_model_output/charging_sessions_sampled/
 
 # Evaluate impacts datasets
+hex_peaks:
+  type: pandas.CSVDataset
+  filepath: data/07_model_output/hex_peaks.csv
+
 regional_loads:
   type: pandas.FeatherDataset
   filepath: data/07_model_output/regional_loads.feather

@@ -20,3 +20,11 @@ events_from_trips:
   seq_names:
     - dwell_start
     - dwell_end
+
+load_profiles:
+  id_cols:
+    location: hex_id
+    time: timestamp_utc
+  event_col: hex_kw_diff
+  drop_cols:
+    - veh_kwh

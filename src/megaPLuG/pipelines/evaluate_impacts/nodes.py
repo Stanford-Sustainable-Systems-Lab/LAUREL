@@ -53,6 +53,19 @@ def get_events_from_trips(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
     return events
 
 
+def get_load_profiles(events: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Sort events by hex instead of by vehicle."""
+    # Drop unnecessary data to speed up sorting
+    events = events.drop(columns=params["drop_cols"])
+    events = events.reset_index()
+    events = events.set_index(list(params["id_cols"].values()))
+
+    # Sort and cumsum
+    events = events.sort_index()
+    profs = events.groupby(params["id_cols"]["location"])[params["event_col"]].cumsum()
+    return profs.to_frame()
+
+
 def aggregate_regional_loads(
     sessions: dd.DataFrame,
     grid_regions: gpd.GeoDataFrame,

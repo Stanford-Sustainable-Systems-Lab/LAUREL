@@ -9,6 +9,7 @@ from .nodes import (
     aggregate_regional_loads,
     calc_derived_trip_cols,
     get_events_from_trips,
+    get_load_profiles,
     plot_hourly_load,
     plot_peak_load_evolution,
 )
@@ -28,6 +29,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["trips_derived", "params:events_from_trips"],
                 outputs="events",
                 name="get_events_from_trips",
+            ),
+            node(
+                func=get_load_profiles,
+                inputs=["events", "params:load_profiles"],
+                outputs="load_profiles",
+                name="get_load_profiles",
             ),
             node(
                 func=aggregate_regional_loads,
