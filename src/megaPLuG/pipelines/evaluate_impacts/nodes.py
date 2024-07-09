@@ -78,14 +78,13 @@ def report_by_hex(profs: pd.DataFrame, params: dict) -> pd.DataFrame:
 
 def add_geometries(df: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
     """Augment a pandas DataFrame with an H3 id column with the H3 geometries."""
-    if params["hex_col"] in df.columns:
-        id_ser = df[params["hex_col"]]
-    elif params["hex_col"] in df.index.names:
-        id_ser = df.index.get_level_values(params["hex_col"]).to_series()
+    hcol = params["hex_col"]
+    if hcol in df.columns:
+        id_ser = df[hcol]
+    elif hcol in df.index.names:
+        id_ser = df.index.get_level_values(hcol).to_series()
     else:
-        raise RuntimeError(
-            f"'{params["hex_col"]}' not found in DataFrame columns or index."
-        )
+        raise RuntimeError(f"'{hcol}' not found in DataFrame columns or index.")
 
     df["polygons"] = id_ser.transform(h3_to_poly)
     hexes = gpd.GeoDataFrame(df, geometry="polygons", crs=params["crs"])
