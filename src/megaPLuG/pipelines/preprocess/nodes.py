@@ -26,7 +26,7 @@ def format_trips_columns(trips, params):
 
 
 def str_to_h3(s: pd.Series) -> pd.Series:
-    return s.transform(h3.string_to_h3)
+    return s.transform(h3.str_to_int)
 
 
 def set_trips_index(trips, params):

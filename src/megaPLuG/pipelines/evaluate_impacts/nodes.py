@@ -93,7 +93,7 @@ def add_geometries(df: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
 
 
 def h3_to_poly(h: int) -> Polygon:
-    return Polygon(h3.h3_to_geo_boundary(h, geo_json=False))
+    return Polygon(h3.cell_to_boundary(h))
 
 
 def aggregate_regional_loads(
