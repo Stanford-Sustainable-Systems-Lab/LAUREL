@@ -28,3 +28,7 @@ load_profiles:
   event_col: hex_kw_diff
   drop_cols:
     - veh_kwh
+
+report_by_hex:
+  hex_col: hex_id
+  crs: EPSG:4326

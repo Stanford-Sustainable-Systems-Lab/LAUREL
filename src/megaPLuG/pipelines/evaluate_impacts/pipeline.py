@@ -12,6 +12,7 @@ from .nodes import (
     get_load_profiles,
     plot_hourly_load,
     plot_peak_load_evolution,
+    report_by_hex,
 )
 
 
@@ -35,6 +36,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["events", "params:load_profiles"],
                 outputs="load_profiles",
                 name="get_load_profiles",
+            ),
+            node(
+                func=report_by_hex,
+                inputs=["load_profiles", "params:report_by_hex"],
+                outputs="report_by_hex",
+                name="report_by_hex",
             ),
             node(
                 func=aggregate_regional_loads,

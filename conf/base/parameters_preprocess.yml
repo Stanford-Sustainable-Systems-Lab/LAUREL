@@ -36,9 +36,3 @@ charge_sessions:
   truck_ids_to_drop:
     - 8
   max_possible_charger_power_kw: 37
-
-build_hexes:
-  hex_cols:
-    - starting_h3_8
-    - ending_h3_8
-  crs: EPSG:4326

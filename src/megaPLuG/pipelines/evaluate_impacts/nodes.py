@@ -9,8 +9,10 @@ from itertools import product
 
 import dask.dataframe as dd
 import geopandas as gpd
+import h3.api.numpy_int as h3
 import pandas as pd
 from matplotlib.figure import Figure
+from shapely.geometry import Polygon
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +66,21 @@ def get_load_profiles(events: pd.DataFrame, params: dict) -> pd.DataFrame:
     events = events.sort_index()
     profs = events.groupby(params["id_cols"]["location"])[params["event_col"]].cumsum()
     return profs.to_frame()
+
+
+def report_by_hex(profs: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
+    """Report results by hex."""
+    peaks = profs.groupby(params["hex_col"]).agg(
+        peak_kw=pd.NamedAgg("hex_kw_diff", "max")
+    )
+    id_ser = peaks.index.get_level_values(params["hex_col"]).to_series()
+    peaks["polygons"] = id_ser.transform(h3_to_poly)
+    hexes = gpd.GeoDataFrame(peaks, geometry="polygons", crs=params["crs"])
+    return hexes
+
+
+def h3_to_poly(h: int) -> Polygon:
+    return Polygon(h3.h3_to_geo_boundary(h, geo_json=False))
 
 
 def aggregate_regional_loads(

@@ -99,9 +99,9 @@ charging_sessions_sampled:
   filepath: data/07_model_output/charging_sessions_sampled/
 
 # Evaluate impacts datasets
-hex_peaks:
-  type: pandas.CSVDataset
-  filepath: data/07_model_output/hex_peaks.csv
+report_by_hex:
+  type: geopandas.GeoJSONDataset
+  filepath: data/07_model_output/report_by_hex.json
 
 regional_loads:
   type: pandas.FeatherDataset

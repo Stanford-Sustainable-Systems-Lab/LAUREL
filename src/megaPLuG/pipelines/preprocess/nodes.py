@@ -4,14 +4,10 @@ generated using Kedro 0.19.1
 """
 
 import logging
-from functools import reduce
 
 import dask.dataframe as dd
-import geopandas as gpd
 import h3.api.numpy_int as h3
-import numpy as np
 import pandas as pd
-from shapely.geometry import Polygon
 
 logger = logging.getLogger(__name__)
 
@@ -42,21 +38,6 @@ def set_trips_index(trips, params):
     trips = trips.reset_index(drop=True)
     trips.index.name = params["index_column"]
     return trips
-
-
-def build_h3_polygons(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Build H3 Scale 8 polygons for all observed locations."""
-    hex_ls = [trips[c].unique() for c in params["hex_cols"]]
-    ids = reduce(np.intersect1d, hex_ls)
-    ids = pd.Series(ids, name="hex_id")
-
-    def h3_to_poly(h: int) -> Polygon:
-        return Polygon(h3.h3_to_geo_boundary(h, geo_json=True))
-
-    polys = ids.transform(h3_to_poly)
-
-    geos = gpd.GeoDataFrame(ids, geometry=polys, crs=params["crs"])
-    return geos
 
 
 def clean_vius(vius):

@@ -5,7 +5,7 @@ generated using Kedro 0.19.1
 
 from kedro.pipeline import Pipeline, node, pipeline
 
-from .nodes import build_h3_polygons, clean_vius, format_trips_columns, set_trips_index
+from .nodes import clean_vius, format_trips_columns, set_trips_index
 from .process_role_consumption import calc_energy_consump_rate
 from .process_role_energy import label_charging_sessions
 
@@ -24,12 +24,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["trips_formatted", "params:set_index"],
                 outputs="trips",
                 name="set_trips_index",
-            ),
-            node(
-                func=build_h3_polygons,
-                inputs=["trips", "params:build_hexes"],
-                outputs="h3_8_polygons",
-                name="build_h3_polygons",
             ),
             node(
                 func=clean_vius,
