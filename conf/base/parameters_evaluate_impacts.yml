@@ -31,4 +31,7 @@ load_profiles:
 
 report_by_hex:
   hex_col: hex_id
+
+add_geometries:
+  hex_col: hex_id
   crs: EPSG:4326

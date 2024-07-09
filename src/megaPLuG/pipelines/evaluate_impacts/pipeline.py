@@ -6,6 +6,7 @@ generated using Kedro 0.19.1
 from kedro.pipeline import Pipeline, node, pipeline
 
 from .nodes import (
+    add_geometries,
     aggregate_regional_loads,
     calc_derived_trip_cols,
     get_events_from_trips,
@@ -42,6 +43,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["load_profiles", "params:report_by_hex"],
                 outputs="report_by_hex",
                 name="report_by_hex",
+            ),
+            node(
+                func=add_geometries,
+                inputs=["report_by_hex", "params:add_geometries"],
+                outputs="report_by_hex_with_geoms",
+                name="add_geometries",
             ),
             node(
                 func=aggregate_regional_loads,

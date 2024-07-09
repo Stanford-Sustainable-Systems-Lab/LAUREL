@@ -100,6 +100,12 @@ charging_sessions_sampled:
 
 # Evaluate impacts datasets
 report_by_hex:
+  type: pandas.CSVDataset
+  filepath: data/07_model_output/report_by_hex.csv
+  save_args:
+    index: True
+
+report_by_hex_with_geoms:
   type: geopandas.GeoJSONDataset
   filepath: data/07_model_output/report_by_hex.json
 
