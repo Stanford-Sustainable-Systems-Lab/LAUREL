@@ -1,7 +1,7 @@
 # Raw datasets
 navistar:
   type: dask.ParquetDataset
-  filepath: data/01_raw/stanford_dataset/
+  filepath: data/01_raw/Navistar/stanford_dataset_v2/
 
 us_outline:
   type: geopandas.GeoJSONDataset
