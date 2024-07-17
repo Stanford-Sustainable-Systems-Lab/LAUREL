@@ -27,6 +27,9 @@ def calc_dwell_hrs(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
     if not trips.index.is_monotonic_increasing:
         raise RuntimeError("Index must already be monotonic increasing.")
 
+    # TODO: To use this within Dask (if datasets get bigger) then simply run the rest of
+    # this function within a dask.dataframe.map_partitions call. This would require
+    # earlier partitioning based on vehicle.
     trips["dwell_time_hrs"] = (
         trips.groupby(params["group_col_name"])["start_timestamp_utc"].shift(-1)
         - trips["end_timestamp_utc"]
