@@ -73,7 +73,7 @@ def simulate_charging_choice(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
                 charge_soc=params["charge_soc"],
             ),
             index=grp.index,
-            columns=["charge_kwh", "dwell_init_kwh"],
+            columns=["dwell_init_kwh", "charge_kwh"],
         )
     )
 
@@ -98,16 +98,24 @@ def charge_soc_fast(
     if not consumed_kwh.shape == avail_kw.shape == dwell_hrs.shape:
         raise RuntimeError("The three arrays must have the same shape.")
     energy_tracker = np.empty((consumed_kwh.shape[0], 2))
-    charge_kwh = 0
-    dwell_init_kwh = 1
+    charge_kwh = 1
+    dwell_init_kwh = 0
+    dead = False
     cur_energy = batt_cap * soc_init
     for i in np.arange(energy_tracker.shape[0]):
         cur_energy -= consumed_kwh[i]
         energy_tracker[i, dwell_init_kwh] = cur_energy
+        if cur_energy < 0:
+            dead = True
+            break
         if cur_energy / batt_cap <= charge_soc:
             chg = np.minimum(batt_cap - cur_energy, dwell_hrs[i] * avail_kw[i])
         else:
             chg = 0
         energy_tracker[i, charge_kwh] = chg
         cur_energy += chg
+
+    if dead:
+        energy_tracker[(i + 1) :, dwell_init_kwh] = np.NaN
+        energy_tracker[i:, charge_kwh] = np.NaN
     return energy_tracker
