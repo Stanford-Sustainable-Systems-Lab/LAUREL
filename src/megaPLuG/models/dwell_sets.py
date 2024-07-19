@@ -70,23 +70,39 @@ class DwellSet:
         else:
             self._reset = _return_if_present(reset)
         self.standardize_names()
+        self.seq_names = [
+            "dwell_start",
+            "dwell_end",
+        ]  # Should be used for the sequence of events
 
     def sort_by_veh_time(self) -> None:
         """Sort the DwellSet by vehicle and time."""
-        self.data = self.data.sort_values(
-            [self.veh, self.start]
-        )  # Test if this works if self.veh is already the index
-        cur_idx = self.data.index.name
-        if cur_idx != self.veh:
-            if cur_idx in self.get_tracked_cols():
-                drop = False
-            else:
-                drop = True
-            self.data = self.data.reset_index(drop=drop)
-            if isinstance(self.data, dd.DataFrame):
-                self.data = self.data.set_index(self.veh, sorted=True)
-            elif isinstance(self.data, pd.DataFrame):
-                self.data = self.data.set_index(self.veh)
+        if self.data.index.name in self.get_tracked_cols():
+            drop = False
+        else:
+            drop = True
+        self.data = DwellSet._sort_by_grp_time(
+            df=self.data, grp_col=self.veh, time_col=self.start, drop_cur_idx=drop
+        )
+
+    @staticmethod
+    def _sort_by_grp_time(
+        df: pd.DataFrame | dd.DataFrame,
+        grp_col: str,
+        time_col: str,
+        drop_cur_idx: bool = False,
+    ) -> pd.DataFrame | dd.DataFrame:
+        """Sort a dataframe by a group and a time, then set the index."""
+        df = df.sort_values(
+            [grp_col, time_col]
+        )  # Test if this works if grp_col is already the index
+        if df.index.name != grp_col:
+            df = df.reset_index(drop=drop_cur_idx)
+            if isinstance(df, dd.DataFrame):
+                df = df.set_index(grp_col, sorted=True)
+            elif isinstance(df, pd.DataFrame):
+                df = df.set_index(grp_col)
+        return df
 
     def filter_through(self, keep_col: str):
         """Filter out individual dwells while merging trips together.
@@ -198,8 +214,8 @@ class DwellSet:
     def standardize_names(self):
         """Standardize names of the tracked data columns."""
         self.veh = "veh_id"
-        self.start = "start_utc"
-        self.end = "end_utc"
+        self.start = "dwell_start_utc"
+        self.end = "dwell_end_utc"
         self.hex = "hex_id"
         self.dist = "dist_arriving"
         self.reset = "reset_state_before"
@@ -326,35 +342,48 @@ class DwellSet:
             drop = False
         else:
             drop = True
-        self.data = self.data.reset_index(drop=drop)
-        self.data.index = self.data.index.rename("part_trip_id")
 
-        id_cols = ["part_trip_id", self.veh, self.hex]
-        seq_names = ["dwell_start", "dwell_end"]
+        id_cols = [self.veh, self.hex]
         if isinstance(self.data, dd.DataFrame):
             events = self.data.map_partitions(
-                DwellSet._dwells_to_events_grp, id_cols=id_cols, seq_names=seq_names
+                DwellSet._dwells_to_events_grp,
+                id_cols=id_cols,
+                seq_names=self.seq_names,
+                drop_cur_idx=drop,
             )
         elif isinstance(self.data, pd.DataFrame):
             events = DwellSet._dwells_to_events_grp(
-                dw=self.data, id_cols=id_cols, seq_names=seq_names
+                dw=self.data,
+                id_cols=id_cols,
+                seq_names=self.seq_names,
+                drop_cur_idx=drop,
             )
+
+        # Sort by hexagon and time
+        tcol = DwellSet._get_seq_name_tail(self.seq_names[0], self.start)
+        events = DwellSet._sort_by_grp_time(
+            df=events, grp_col=self.hex, time_col=tcol, drop_cur_idx=True
+        )
         return events
 
     @staticmethod
     def _dwells_to_events_grp(
-        dw: pd.DataFrame, id_cols: list[str], seq_names: list[str]
+        dw: pd.DataFrame,
+        id_cols: list[str],
+        seq_names: list[str],
+        drop_cur_idx: bool = False,
     ) -> pd.DataFrame:
         """Convert one-dwell-per-row format to one-event-per-row format for a single
         pandas DataFrame.
         """
         # Set new column MultiIndex to prepare for stacking
-        dw.set_index(set(id_cols) - set(["part_trip_id"]), append=True)
+        dw = dw.reset_index(drop=drop_cur_idx)
+        dw.set_index(id_cols, inplace=True, append=True)
         keep_cols = []
         tups = []
         for i, s in enumerate(seq_names):
             orig = [col for col in dw.columns if s in col]
-            tails = [re.findall(f"(?<={s}_).+", c)[0] for c in orig]
+            tails = [DwellSet._get_seq_name_tail(s, c) for c in orig]
             tups.extend(product(tails, [s], [i]))
             keep_cols.extend(orig)
         idx = pd.MultiIndex.from_tuples(tups, names=["variable", "seq_name", "seq_id"])
@@ -363,9 +392,14 @@ class DwellSet:
 
         # Stack the dwells into events
         events = dw.stack(level=["seq_id", "seq_name"], future_stack=True)
-        events.index = events.index.droplevel("seq_id")
-        events["event_id"] = pd.RangeIndex(0, len(events))
-        events = events.set_index("event_id", append=True)
-        idx_names = ["event_id"] + id_cols + ["seq_name"]
-        events.index = events.index.reorder_levels(idx_names)
+        events = events.reset_index()
+        events.index = events.index.rename("event_id")
+        drop_cols = list(set(events.columns) - set(id_cols + tails))
+        events = events.drop(columns=drop_cols)
+        events.columns.name = None
         return events
+
+    @staticmethod
+    def _get_seq_name_tail(seq_name: str, col_name: str) -> str:
+        """Get the value part of a sequence name."""
+        return re.findall(f"(?<={seq_name}_).+", col_name)[0]
