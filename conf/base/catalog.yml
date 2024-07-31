@@ -24,9 +24,9 @@ role_gps:
   filepath: data/01_raw/ROLE/gps.csv
 
 # Preprocessed datasets
-trips:
+dwells:
   type: pandas.FeatherDataset
-  filepath: data/02_intermediate/trips.feather
+  filepath: data/02_intermediate/dwells.feather
   load_args:
     use_threads: True
 

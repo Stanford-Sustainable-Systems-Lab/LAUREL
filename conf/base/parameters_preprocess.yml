@@ -14,15 +14,27 @@ format_columns:
   h3_columns:
     - starting_h3_8
     - ending_h3_8
+  persist: True
 
-set_index:
+create_dwells:
   debug_subsample:
     active: False
     n: 1000
-  sort_column_order: # First listed column will iterate most slowly in the sorting
-    - vehicle_id
-    - start_timestamp_utc
-  index_column: veh_time_id
+  load_into_memory: True
+  drop_cols:
+    - starting_h3_8
+    - veh_type
+    - vin_gvw
+  col_renamer:
+    hex_id: ending_h3_8
+    veh_id: vehicle_id
+  from_trips_cols:
+    veh: veh_id
+    hex: hex_id
+    start_trip: start_timestamp_utc
+    end_trip: end_timestamp_utc
+    dist: trip_miles
+  persist: False
 
 consump_rate:
   coord_ref_sys: 4326

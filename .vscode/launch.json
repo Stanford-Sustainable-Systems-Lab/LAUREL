@@ -18,7 +18,7 @@
             "request": "launch",
             "console": "integratedTerminal",
             "module": "kedro",
-            "args": ["run", "--pipeline=preprocess", "--to-outputs=trips"]
+            "args": ["run", "--pipeline=preprocess", "--to-outputs=dwells"]
             // Any other arguments should be passed as a comma-seperated-list
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },

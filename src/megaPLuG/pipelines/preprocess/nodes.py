@@ -9,6 +9,8 @@ import dask.dataframe as dd
 import h3.api.numpy_int as h3
 import pandas as pd
 
+from megaPLuG.models.dwell_sets import DwellSet
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,6 +24,9 @@ def format_trips_columns(trips, params):
     for col in params["h3_columns"]:
         trips[col] = trips[col].map_partitions(str_to_h3, meta=(col, "int"))
 
+    if params["persist"]:
+        trips = trips.persist()
+
     return trips
 
 
@@ -29,15 +34,32 @@ def str_to_h3(s: pd.Series) -> pd.Series:
     return s.transform(h3.str_to_int)
 
 
-def set_trips_index(trips, params):
-    """Set index of trips data."""
+def create_dwells(trips, params):
+    """Create dwell data from trips data."""
     if params["debug_subsample"]["active"]:
         trips = trips.loc[0 : params["debug_subsample"]["n"]]
-    trips = trips.compute()
-    trips = trips.sort_values(by=params["sort_column_order"])
-    trips = trips.reset_index(drop=True)
-    trips.index.name = params["index_column"]
-    return trips
+
+    if params["load_into_memory"]:
+        logger.info("Loading dataset into memory")
+        trips = trips.compute()
+
+    logger.info("Converting to dwells from trips.")
+    trips = trips.drop(columns=params["drop_cols"])
+    trips = trips.rename(columns={v: k for k, v in params["col_renamer"].items()})
+    colnames = params["from_trips_cols"]
+    dw = DwellSet.from_trips(
+        trips=trips,
+        veh=colnames["veh"],
+        hex=colnames["hex"],
+        start_trip=colnames["start_trip"],
+        end_trip=colnames["end_trip"],
+        dist=colnames["dist"],
+    )
+
+    if params["persist"]:
+        dw.data = dw.data.persist()
+
+    return dw.data
 
 
 def clean_vius(vius):
