@@ -20,6 +20,7 @@ class DwellSet:
     _end = None
     _dist = None
     _reset = None
+    _seq_names = None
     data = None
     data_type = None
 
@@ -69,11 +70,6 @@ class DwellSet:
             self.set_default_reset_col()
         else:
             self._reset = _return_if_present(reset)
-        self.standardize_names()
-        self.seq_names = [
-            "dwell_start",
-            "dwell_end",
-        ]  # Should be used for the sequence of events
 
     def sort_by_veh_time(self) -> None:
         """Sort the DwellSet by vehicle and time."""
@@ -220,15 +216,6 @@ class DwellSet:
         else:
             return False
 
-    def standardize_names(self):
-        """Standardize names of the tracked data columns."""
-        self.veh = "veh_id"
-        self.start = "dwell_start_utc"
-        self.end = "dwell_end_utc"
-        self.hex = "hex_id"
-        self.dist = "dist_arriving"
-        self.reset = "reset_state_before"
-
     @property
     def veh(self):
         return self._veh
@@ -283,6 +270,24 @@ class DwellSet:
         self._rename_idx_col(value, self._reset)
         self._reset = value
 
+    @property
+    def seq_names(self):
+        return self._seq_names
+
+    @seq_names.setter
+    def seq_names(self, value):
+        # Check that all values in seq_names are used at least once as a prefix, else issue a warning
+        if not (isinstance(value, list | tuple)):
+            raise RuntimeError(
+                "Sequence names must be passed as a non-string iterable, like a list or tuple."
+            )
+        col_names = self.data.columns + [self.data.index.name]
+        for s in value:
+            present = any(s in col for col in col_names)
+            if not present:
+                raise RuntimeError(f"Sequence name {s} not found in columns.")
+        self._seq_names = value
+
     def _rename_idx_col(self, new: str, old: str):
         if self.data.index.name == old:
             self.data.index = self.data.index.rename(new)
@@ -314,7 +319,6 @@ class DwellSet:
             end=start_trip,  # This is almost true, since the dwell end is the shifted start_trip
             dist=dist,
         )
-        dw.standardize_names()
         if not sorted:
             dw.sort_by_veh_time()
 
@@ -352,6 +356,12 @@ class DwellSet:
         else:
             drop = True
 
+        if self.seq_names is None:
+            raise RuntimeError(
+                "Sequence names must be set before calling 'to_hex_profiles'."
+            )
+        tcol = DwellSet._get_seq_name_tail(self.seq_names[0], self.start)
+
         id_cols = [self.veh, self.hex]
         if isinstance(self.data, dd.DataFrame):
             events = self.data.map_partitions(
@@ -369,7 +379,6 @@ class DwellSet:
             )
 
         # Sort by hexagon and time
-        tcol = DwellSet._get_seq_name_tail(self.seq_names[0], self.start)
         events = DwellSet._sort_by_grp_time(
             df=events, grp_col=self.hex, time_col=tcol, drop_cur_idx=True
         )
@@ -411,4 +420,7 @@ class DwellSet:
     @staticmethod
     def _get_seq_name_tail(seq_name: str, col_name: str) -> str:
         """Get the value part of a sequence name."""
-        return re.findall(f"(?<={seq_name}_).+", col_name)[0]
+        matches = re.findall(f"(?<={seq_name}_).+", col_name)
+        if len(matches) == 0:
+            raise RuntimeError("The column does not include the desired sequence name.")
+        return matches[0]
