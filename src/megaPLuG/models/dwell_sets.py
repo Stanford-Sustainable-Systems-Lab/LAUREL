@@ -132,13 +132,20 @@ class DwellSet:
 
     @staticmethod
     def _filter_through_grp(
-        grp: pd.DataFrame, keep_col: str, dist_col: str
+        grp: pd.DataFrame, keep_col: str, reset_col: str, dist_col: str
     ) -> pd.DataFrame:
         dist_cum = grp[dist_col].cumsum()
-        base = dist_cum * grp[keep_col]
-        base = base / grp[keep_col]
-        base = base.ffill().shift(1).fillna(0)
-        grp[dist_col] = dist_cum - base
+        reset_cum = grp[reset_col].cumsum()
+        mask = np.logical_or(grp[keep_col], grp[reset_col].shift(-1, fill_value=False))
+
+        def _filter_through_col(cum: pd.Series, mask: np.ndarray) -> np.ndarray:
+            base = cum * mask
+            base = base / mask
+            base = base.ffill().shift(1, fill_value=0)
+            return cum - base
+
+        grp[dist_col] = _filter_through_col(dist_cum, mask)
+        grp[reset_col] = _filter_through_col(reset_cum, mask).astype(bool)
         return grp
 
     def filter_reset(self, keep_col: str):
