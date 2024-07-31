@@ -117,6 +117,7 @@ class DwellSet:
             self.data = self.data.groupby(self.veh, group_keys=False).apply(
                 DwellSet._filter_through_grp,
                 keep_col=keep_col,
+                reset_col=self.reset,
                 dist_col=self.dist,
                 meta=dd.utils.make_meta(self.data),
             )
@@ -124,6 +125,7 @@ class DwellSet:
             self.data = self.data.groupby(self.veh, group_keys=False).apply(
                 DwellSet._filter_through_grp,
                 keep_col=keep_col,
+                reset_col=self.reset,
                 dist_col=self.dist,
             )
         self.data[keep_col] = self.data[keep_col].replace(False, np.NaN)
