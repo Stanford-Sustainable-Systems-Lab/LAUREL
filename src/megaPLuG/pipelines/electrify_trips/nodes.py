@@ -7,8 +7,8 @@ import logging
 
 import numpy as np
 import pandas as pd
-from numba import njit
 
+from megaPLuG.models.charging_algorithms import charge_soc_thresh
 from megaPLuG.models.dwell_sets import DwellSet
 
 logger = logging.getLogger(__name__)
@@ -26,9 +26,7 @@ def set_charging_availability(dw: DwellSet, vehs: dict, locs: dict) -> DwellSet:
         dw.data[dw.end] - dw.data[dw.start]
     ).dt.total_seconds() / 3600
     dw.data["long_dwells"] = dw.data["dwell_time_hrs"] > locs["min_dwell_time_hrs"]
-    dw.filter_through(
-        "long_dwells"
-    )  # This is introducing NaNs in the first element of trip_miles of some groups, and is shockingly slow. Let's fix both of those.
+    dw.filter_through("long_dwells")
     dw.data["max_power_kw"] = vehs["charging_rate_kw"]
     return dw
 
@@ -48,60 +46,16 @@ def simulate_charging_choice(dw: DwellSet, params: dict) -> DwellSet:
     soc_inits = pd.Series(data=soc_inits, index=veh_ids)
 
     logger.info("Conduct charging simulation through groupby-apply")
-    charges = dw.data.groupby(dw.veh, group_keys=False).apply(
-        lambda grp: pd.DataFrame(
-            charge_soc_fast(
-                consumed_kwh=grp["energy_use_kwh"].values,
-                avail_kw=grp["max_power_kw"].values,
-                dwell_hrs=grp["dwell_time_hrs"].values,
-                batt_cap=params["battery_capacity_kwh"],
-                soc_init=soc_inits[grp.name],
-                charge_soc=params["charge_soc_thresh"],
-            ),
-            index=grp.index,
-            columns=["dwell_init_kwh", "charge_kwh"],
-        )
+    # Allocate columns to fill in, which avoids merging
+    dw.data["dwell_init_kwh"] = np.NaN
+    dw.data["charge_kwh"] = np.NaN
+    dw.data = dw.data.groupby(dw.veh, group_keys=False).apply(
+        charge_soc_thresh,
+        consumed_kwh_col="energy_use_kwh",
+        avail_kw_col="max_power_kw",
+        dwell_hrs_col="dwell_time_hrs",
+        batt_cap_kwh=params["battery_capacity_kwh"],
+        soc_inits=soc_inits,
+        charge_soc=params["charge_soc_thresh"],
     )
-
-    logger.info("Merge charging simulation results back onto dwells")
-    if np.all(dw.data.index == charges.index):
-        dw.data = pd.concat([dw.data, charges], axis=1)
-    else:
-        dw.data = dw.data.merge(charges, how="left", left_index=True, right_index=True)
     return dw
-
-
-@njit
-def charge_soc_fast(
-    consumed_kwh: np.ndarray,
-    avail_kw: np.ndarray,
-    dwell_hrs: np.ndarray,
-    batt_cap: float,
-    soc_init: float,
-    charge_soc: float,
-) -> np.ndarray:
-    """Execute the charging strategy of charging below an SoC threshold."""
-    if not consumed_kwh.shape == avail_kw.shape == dwell_hrs.shape:
-        raise RuntimeError("The three arrays must have the same shape.")
-    energy_tracker = np.empty((consumed_kwh.shape[0], 2))
-    charge_kwh = 1
-    dwell_init_kwh = 0
-    dead = False
-    cur_energy = batt_cap * soc_init
-    for i in np.arange(energy_tracker.shape[0]):
-        cur_energy -= consumed_kwh[i]
-        energy_tracker[i, dwell_init_kwh] = cur_energy
-        if cur_energy < 0:
-            dead = True
-            break
-        if cur_energy / batt_cap <= charge_soc:
-            chg = np.minimum(batt_cap - cur_energy, dwell_hrs[i] * avail_kw[i])
-        else:
-            chg = 0
-        energy_tracker[i, charge_kwh] = chg
-        cur_energy += chg
-
-    if dead:
-        energy_tracker[(i + 1) :, dwell_init_kwh] = np.NaN
-        energy_tracker[i:, charge_kwh] = np.NaN
-    return energy_tracker
