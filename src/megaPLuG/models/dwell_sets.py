@@ -4,6 +4,7 @@ from itertools import product
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
+from numba import njit
 
 DEFAULT_COLUMN_NAMES = {
     "veh": "veh_id",
@@ -120,7 +121,7 @@ class DwellSet:
         """
         if isinstance(self.data, dd.DataFrame):
             self.data = self.data.groupby(self.veh, group_keys=False).apply(
-                DwellSet._filter_through_grp,
+                DwellSet._filter_through_grp_wrapper,
                 keep_col=keep_col,
                 reset_col=self.reset,
                 dist_col=self.dist,
@@ -128,7 +129,7 @@ class DwellSet:
             )
         elif isinstance(self.data, pd.DataFrame):
             self.data = self.data.groupby(self.veh, group_keys=False).apply(
-                DwellSet._filter_through_grp,
+                DwellSet._filter_through_grp_wrapper,
                 keep_col=keep_col,
                 reset_col=self.reset,
                 dist_col=self.dist,
@@ -138,21 +139,53 @@ class DwellSet:
         self.data = self.data.drop(columns=keep_col)
 
     @staticmethod
+    @njit
     def _filter_through_grp(
+        keep: np.ndarray, reset: np.ndarray, dist: np.ndarray
+    ) -> pd.DataFrame:
+        if not keep.shape == reset.shape == dist.shape:
+            raise RuntimeError("The three arrays must have the same shape.")
+        N = keep.shape[0]
+        arr = np.empty((N, 2))
+        dist_col = 0
+        res_col = 1
+
+        cum_dist = 0
+        cum_res = False
+        for i in np.arange(N):
+            if keep[i]:
+                if reset[i]:
+                    new_dist = dist[i]
+                    new_res = True
+                else:
+                    new_dist = dist[i] + cum_dist
+                    new_res = cum_res
+                cum_dist = 0
+                cum_res = False
+            else:
+                new_dist = np.NaN
+                new_res = False
+                if reset[i]:
+                    cum_dist = dist[i]
+                    cum_res = True
+                else:
+                    cum_dist = dist[i] + cum_dist
+                    # cum_res will just reassign to itself, since the current reset is False
+            arr[i, dist_col] = new_dist
+            arr[i, res_col] = new_res
+        return arr
+
+    @staticmethod
+    def _filter_through_grp_wrapper(
         grp: pd.DataFrame, keep_col: str, reset_col: str, dist_col: str
     ) -> pd.DataFrame:
-        dist_cum = grp[dist_col].cumsum()
-        reset_cum = grp[reset_col].cumsum()
-        mask = np.logical_or(grp[keep_col], grp[reset_col].shift(-1, fill_value=False))
-
-        def _filter_through_col(cum: pd.Series, mask: np.ndarray) -> np.ndarray:
-            base = cum * mask
-            base = base / mask
-            base = base.ffill().shift(1, fill_value=0)
-            return cum - base
-
-        grp[dist_col] = _filter_through_col(dist_cum, mask)
-        grp[reset_col] = _filter_through_col(reset_cum, mask).astype(bool)
+        arr = DwellSet._filter_through_grp(
+            keep=grp[keep_col].values,
+            reset=grp[reset_col].values,
+            dist=grp[dist_col].values,
+        )
+        grp[dist_col] = arr[:, 0]
+        grp[reset_col] = arr[:, 1].astype(bool)
         return grp
 
     def filter_reset(self, keep_col: str):
@@ -435,3 +468,13 @@ class DwellSet:
         if len(matches) == 0:
             raise RuntimeError("The column does not include the desired sequence name.")
         return matches[0]
+
+
+def load_dwell_set(dwells: pd.DataFrame, params: dict) -> DwellSet:
+    """Load the dwell set from disk with column name parameters."""
+    dw = DwellSet(data=dwells, **params)
+    return dw
+
+
+def save_dwell_set(dw: DwellSet) -> pd.DataFrame:
+    return dw.data
