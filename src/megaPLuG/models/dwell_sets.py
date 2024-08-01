@@ -145,36 +145,24 @@ class DwellSet:
     ) -> pd.DataFrame:
         if not keep.shape == reset.shape == dist.shape:
             raise RuntimeError("The three arrays must have the same shape.")
-        N = keep.shape[0]
-        arr = np.empty(
-            (N, 2), dtype=np.float64
-        )  # Idea: pre-populate here with original values
+        arr = np.vstack((dist, reset)).T
 
         cum_dist = 0
         cum_res = False
-        for i in range(N):
+        for i in range(keep.shape[0]):
             if keep[i]:
-                if reset[i]:
-                    new_dist = dist[
-                        i
-                    ]  # Then we could get rid of this simple copy over, already done
-                    new_res = True
-                else:
-                    new_dist = dist[i] + cum_dist
-                    new_res = cum_res
+                # If we do reset, then the operation is just a copy of the original
+                if not reset[i]:  # With no reset, we apply accumulation
+                    arr[i, 0] = dist[i] + cum_dist
+                    arr[i, 1] = cum_res
                 cum_dist = 0
                 cum_res = False
+            elif reset[i]:  # Implicitly, this is reset and not keep
+                cum_dist = dist[i]
+                cum_res = True
             else:
-                new_dist = 0  # Used as a 'sentinel' value instead of np.NaN
-                new_res = False  # We could leave out these sentinels
-                if reset[i]:
-                    cum_dist = dist[i]
-                    cum_res = True
-                else:
-                    cum_dist = dist[i] + cum_dist
-                    # cum_res will just reassign to itself, since the current reset is False
-            arr[i, 0] = new_dist
-            arr[i, 1] = new_res
+                cum_dist = dist[i] + cum_dist
+                # cum_res will just reassign to itself, since the current reset is False
         return arr
 
     @staticmethod
@@ -186,8 +174,8 @@ class DwellSet:
             reset=grp[reset_col].values,
             dist=grp[dist_col].values,
         )
-        grp[dist_col] = arr[:, 0]
-        grp[reset_col] = arr[:, 1].astype(bool)
+        grp.loc[:, dist_col] = arr[:, 0]
+        grp.loc[:, reset_col] = arr[:, 1].astype(bool)
         return grp
 
     def filter_reset(self, keep_col: str):
