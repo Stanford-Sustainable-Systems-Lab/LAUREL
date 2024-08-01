@@ -49,9 +49,9 @@ energy_consumption:
     index: True
 
 # Electrification simulation datasets
-trips_with_charging:
+dwells_with_charging:
   type: pandas.FeatherDataset
-  filepath: data/04_feature/trips_with_charging.feather
+  filepath: data/04_feature/dwells_with_charging.feather
   load_args:
     use_threads: True
   

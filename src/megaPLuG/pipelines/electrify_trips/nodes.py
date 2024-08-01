@@ -9,60 +9,46 @@ import numpy as np
 import pandas as pd
 from numba import njit
 
+from megaPLuG.models.dwell_sets import DwellSet
+
 logger = logging.getLogger(__name__)
 
 
-def calc_energy_use(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
+def calc_energy_use(dw: DwellSet, params: dict) -> DwellSet:
     """Calculate energy use for all trips."""
-    trips["energy_use_kwh"] = (
-        trips[params["dist_col"]] * params["consump_rate_kwh_per_mi"]
-    )
-    return trips
+    dw.data["energy_use_kwh"] = dw.data[dw.dist] * params["consump_rate_kwh_per_mi"]
+    return dw
 
 
-def calc_dwell_hrs(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Calculate the length of time at each dwell."""
-    if trips.index.name != params["index_name"]:
-        raise RuntimeError("Index name does not match the name from the config.")
-    if not trips.index.is_monotonic_increasing:
-        raise RuntimeError("Index must already be monotonic increasing.")
-
-    # TODO: To use this within Dask (if datasets get bigger) then simply run the rest of
-    # this function within a dask.dataframe.map_partitions call. This would require
-    # earlier partitioning based on vehicle.
-    trips["dwell_time_hrs"] = (
-        trips.groupby(params["group_col_name"])["start_timestamp_utc"].shift(-1)
-        - trips["end_timestamp_utc"]
-    )
-    trips["dwell_time_hrs"] = trips["dwell_time_hrs"].dt.total_seconds() / 3600
-    drop_idx = trips[trips["dwell_time_hrs"].isna()].index
-    trips = trips.drop(index=drop_idx)  # To get rid of NaT value from shift
-    return trips
-
-
-def set_charging_availability(trips: pd.DataFrame) -> pd.DataFrame:
+def set_charging_availability(dw: DwellSet, vehs: dict, locs: dict) -> DwellSet:
     """Set the charging availability for each session."""
-    trips["max_power_kw"] = 350
-    return trips
+    dw.data["dwell_time_hrs"] = (
+        dw.data[dw.end] - dw.data[dw.start]
+    ).dt.total_seconds() / 3600
+    dw.data["long_dwells"] = dw.data["dwell_time_hrs"] > locs["min_dwell_time_hrs"]
+    dw.filter_through(
+        "long_dwells"
+    )  # This is introducing NaNs in the first element of trip_miles of some groups, and is shockingly slow. Let's fix both of those.
+    dw.data["max_power_kw"] = vehs["charging_rate_kw"]
+    return dw
 
 
-def simulate_charging_choice(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
+def simulate_charging_choice(dw: DwellSet, params: dict) -> DwellSet:
     """Simulate the charging choices of each vehicle."""
-    if trips.index.name != params["index_name"]:
-        raise RuntimeError("Index name does not match the name from the config.")
-    if not trips.index.is_monotonic_increasing:
-        raise RuntimeError("Index must already be monotonic increasing.")
-
+    # TODO: It may be important later to create a function which checks for groupby monotonic increasing.
     logger.info("Sample initial states of charge")
     soc_pars = params["initial_soc"]
     rng = np.random.default_rng(seed=soc_pars["seed"])
-    veh_ids = trips["vehicle_id"].unique()
+    if dw.data.index.name != dw.veh:
+        raise RuntimeError(
+            "The vehicle ID must be the index column for this operation."
+        )
+    veh_ids = dw.data.index.unique()
     soc_inits = rng.beta(a=soc_pars["alpha"], b=soc_pars["beta"], size=veh_ids.shape[0])
     soc_inits = pd.Series(data=soc_inits, index=veh_ids)
 
-    # Switch trips index to vehicle_id (already sorted) to speed up groupby
     logger.info("Conduct charging simulation through groupby-apply")
-    charges = trips.groupby(params["veh_id_col"], group_keys=False).apply(
+    charges = dw.data.groupby(dw.veh, group_keys=False).apply(
         lambda grp: pd.DataFrame(
             charge_soc_fast(
                 consumed_kwh=grp["energy_use_kwh"].values,
@@ -70,19 +56,19 @@ def simulate_charging_choice(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
                 dwell_hrs=grp["dwell_time_hrs"].values,
                 batt_cap=params["battery_capacity_kwh"],
                 soc_init=soc_inits[grp.name],
-                charge_soc=params["charge_soc"],
+                charge_soc=params["charge_soc_thresh"],
             ),
             index=grp.index,
             columns=["dwell_init_kwh", "charge_kwh"],
         )
     )
 
-    logger.info("Merge charging simulation results back onto trips")
-    if np.all(trips.index == charges.index):
-        trips = pd.concat([trips, charges], axis=1)
+    logger.info("Merge charging simulation results back onto dwells")
+    if np.all(dw.data.index == charges.index):
+        dw.data = pd.concat([dw.data, charges], axis=1)
     else:
-        trips = trips.merge(charges, how="left", left_index=True, right_index=True)
-    return trips
+        dw.data = dw.data.merge(charges, how="left", left_index=True, right_index=True)
+    return dw
 
 
 @njit
