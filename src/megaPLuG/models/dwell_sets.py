@@ -5,6 +5,15 @@ import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 
+DEFAULT_COLUMN_NAMES = {
+    "veh": "veh_id",
+    "hex": "hex_id",
+    "start": "dwell_start_time",
+    "end": "dwell_end_time",
+    "dist": "distance",
+    "reset": "reset_state_before",
+}
+
 
 class DwellSet:
     """The DwellSet represents tours taken by one or more vehicles.
@@ -66,7 +75,7 @@ class DwellSet:
         self._end = _return_if_present(end)
         self._dist = _return_if_present(dist)
         if reset is None:
-            self._reset = "reset_state_before"
+            self._reset = DEFAULT_COLUMN_NAMES["reset"]
             self.set_default_reset_col()
         else:
             self._reset = _return_if_present(reset)
@@ -347,6 +356,8 @@ class DwellSet:
         ]
         extra_cols = [col for col in dw.data.columns if col not in non_idx_cols]
         dw.data = dw.data.loc[:, non_idx_cols + extra_cols]
+        dw.start = DEFAULT_COLUMN_NAMES["start"]
+        dw.end = DEFAULT_COLUMN_NAMES["end"]
         return dw
 
     def to_hex_profiles(self) -> dd.DataFrame | pd.DataFrame:
