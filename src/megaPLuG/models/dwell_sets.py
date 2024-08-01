@@ -119,6 +119,14 @@ class DwellSet:
         Note: This can take a very long time if records for a vehicle cross
         partition boundaries
         """
+        # Force numba compilation
+        _ = DwellSet._filter_through_grp(
+            grp=self.data.head(5),
+            keep_col=keep_col,
+            reset_col=self.reset,
+            dist_col=self.dist,
+        )
+
         if isinstance(self.data, dd.DataFrame):
             self.data = self.data.groupby(self.veh, group_keys=False).apply(
                 DwellSet._filter_through_grp,
