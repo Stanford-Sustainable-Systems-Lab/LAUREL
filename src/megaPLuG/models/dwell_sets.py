@@ -121,7 +121,7 @@ class DwellSet:
         """
         if isinstance(self.data, dd.DataFrame):
             self.data = self.data.groupby(self.veh, group_keys=False).apply(
-                DwellSet._filter_through_grp_wrapper,
+                DwellSet._filter_through_grp,
                 keep_col=keep_col,
                 reset_col=self.reset,
                 dist_col=self.dist,
@@ -129,7 +129,7 @@ class DwellSet:
             )
         elif isinstance(self.data, pd.DataFrame):
             self.data = self.data.groupby(self.veh, group_keys=False).apply(
-                DwellSet._filter_through_grp_wrapper,
+                DwellSet._filter_through_grp,
                 keep_col=keep_col,
                 reset_col=self.reset,
                 dist_col=self.dist,
@@ -140,22 +140,24 @@ class DwellSet:
 
     @staticmethod
     @njit
-    def _filter_through_grp(
+    def _filter_through_grp_core(
         keep: np.ndarray, reset: np.ndarray, dist: np.ndarray
     ) -> pd.DataFrame:
         if not keep.shape == reset.shape == dist.shape:
             raise RuntimeError("The three arrays must have the same shape.")
         N = keep.shape[0]
-        arr = np.empty((N, 2))
-        dist_col = 0
-        res_col = 1
+        arr = np.empty(
+            (N, 2), dtype=np.float64
+        )  # Idea: pre-populate here with original values
 
         cum_dist = 0
         cum_res = False
-        for i in np.arange(N):
+        for i in range(N):
             if keep[i]:
                 if reset[i]:
-                    new_dist = dist[i]
+                    new_dist = dist[
+                        i
+                    ]  # Then we could get rid of this simple copy over, already done
                     new_res = True
                 else:
                     new_dist = dist[i] + cum_dist
@@ -163,23 +165,23 @@ class DwellSet:
                 cum_dist = 0
                 cum_res = False
             else:
-                new_dist = np.NaN
-                new_res = False
+                new_dist = 0  # Used as a 'sentinel' value instead of np.NaN
+                new_res = False  # We could leave out these sentinels
                 if reset[i]:
                     cum_dist = dist[i]
                     cum_res = True
                 else:
                     cum_dist = dist[i] + cum_dist
                     # cum_res will just reassign to itself, since the current reset is False
-            arr[i, dist_col] = new_dist
-            arr[i, res_col] = new_res
+            arr[i, 0] = new_dist
+            arr[i, 1] = new_res
         return arr
 
     @staticmethod
-    def _filter_through_grp_wrapper(
+    def _filter_through_grp(
         grp: pd.DataFrame, keep_col: str, reset_col: str, dist_col: str
     ) -> pd.DataFrame:
-        arr = DwellSet._filter_through_grp(
+        arr = DwellSet._filter_through_grp_core(
             keep=grp[keep_col].values,
             reset=grp[reset_col].values,
             dist=grp[dist_col].values,
