@@ -120,6 +120,8 @@ class DwellSet:
 
         Note: This can take a very long time if records for a vehicle cross
         partition boundaries
+
+        Note: This function operates inplace for efficiency.
         """
         # Force numba compilation
         _ = DwellSet._filter_through_grp(
@@ -190,7 +192,10 @@ class DwellSet:
         return grp
 
     def filter_reset(self, keep_col: str):
-        """Filter out individual dwells while forcing a reset in the new gaps."""
+        """Filter out individual dwells while forcing a reset in the new gaps.
+
+        Note: This function operates inplace for efficiency.
+        """
         # Force numba compilation
         _ = DwellSet._filter_reset_grp(
             grp=deepcopy(self.data.head(5)),  # copy needed to prevent double-processing
