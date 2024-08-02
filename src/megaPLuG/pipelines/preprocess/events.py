@@ -59,7 +59,8 @@ def get_events(
         if meas_ser.index.get_level_values("grp").nunique() > 1:
             raise Exception("meas_ser contains more than one grouping.")
 
-        obs_out_event = lambda x: np.logical_not(obs_in_event(x))
+        def obs_out_event(x):
+            return np.logical_not(obs_in_event(x))
 
         not_in_event_ser = meas_ser.transform(obs_out_event)
         event_id_ser = not_in_event_ser.cumsum() + 1
@@ -70,7 +71,9 @@ def get_events(
             return event_df["event_id"].values
         else:
             # Group events that are near to one another in time
-            increment_event_id_group = lambda x: (x > max_time_elapsed) | np.isnan(x)
+            def increment_event_id_group(x):
+                return (x > max_time_elapsed) | np.isnan(x)
+
             group_df = (
                 event_df.query("event_id > 0")
                 .groupby("event_id", as_index=False)
