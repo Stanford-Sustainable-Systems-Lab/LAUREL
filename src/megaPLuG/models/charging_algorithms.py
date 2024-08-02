@@ -21,7 +21,7 @@ def charge_soc_thresh(
         soc_init=soc_inits[grp.name],  # This assumes the result of a groupby
         charge_soc=charge_soc,
     )
-    grp.loc[:, "dwell_init_kwh"] = arr[:, 0]
+    grp.loc[:, "dwell_start_kwh"] = arr[:, 0]
     grp.loc[:, "charge_kwh"] = arr[:, 1]
     return grp
 

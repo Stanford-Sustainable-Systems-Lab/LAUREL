@@ -48,7 +48,7 @@ def simulate_charging_choice(dw: DwellSet, params: dict) -> DwellSet:
 
     logger.info("Conduct charging simulation through groupby-apply")
     # Allocate columns to fill in, which avoids merging
-    dw.data["dwell_init_kwh"] = np.NaN
+    dw.data["dwell_start_kwh"] = np.NaN
     dw.data["charge_kwh"] = np.NaN
     tqdm.pandas()
     dw.data = dw.data.groupby(dw.veh, group_keys=False).progress_apply(
