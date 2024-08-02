@@ -1,4 +1,5 @@
 import re
+from copy import deepcopy
 from itertools import product
 
 import dask.dataframe as dd
@@ -122,7 +123,7 @@ class DwellSet:
         """
         # Force numba compilation
         _ = DwellSet._filter_through_grp(
-            grp=self.data.head(5),
+            grp=deepcopy(self.data.head(5)),  # copy needed to prevent double-processing
             keep_col=keep_col,
             reset_col=self.reset,
             dist_col=self.dist,
@@ -192,7 +193,7 @@ class DwellSet:
         """Filter out individual dwells while forcing a reset in the new gaps."""
         # Force numba compilation
         _ = DwellSet._filter_reset_grp(
-            grp=self.data.head(5),
+            grp=deepcopy(self.data.head(5)),  # copy needed to prevent double-processing
             keep_col=keep_col,
             reset_col=self.reset,
         )
