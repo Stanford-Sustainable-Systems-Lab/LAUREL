@@ -22,8 +22,8 @@ vehicles:
   initial_soc:
     alpha: 5
     beta: 5
-    seed: 42
   charge_soc_thresh: 1.0
+  seed: 42
 
 locations:
   min_dwell_time_hrs: 0.25

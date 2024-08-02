@@ -6,7 +6,6 @@ generated using Kedro 0.19.1
 import logging
 
 import numpy as np
-import pandas as pd
 from tqdm import tqdm
 
 from megaPLuG.models.charging_algorithms import charge_soc_thresh
@@ -35,16 +34,15 @@ def set_charging_availability(dw: DwellSet, vehs: dict, locs: dict) -> DwellSet:
 def simulate_charging_choice(dw: DwellSet, params: dict) -> DwellSet:
     """Simulate the charging choices of each vehicle."""
     # TODO: It may be important later to create a function which checks for groupby monotonic increasing.
-    logger.info("Sample initial states of charge")
-    soc_pars = params["initial_soc"]
-    rng = np.random.default_rng(seed=soc_pars["seed"])
+    logger.info("Set independent, controlled random seeds for each vehicle")
     if dw.data.index.name != dw.veh:
         raise RuntimeError(
             "The vehicle ID must be the index column for this operation."
         )
     veh_ids = dw.data.index.unique()
-    soc_inits = rng.beta(a=soc_pars["alpha"], b=soc_pars["beta"], size=veh_ids.shape[0])
-    soc_inits = pd.Series(data=soc_inits, index=veh_ids)
+    # Seed is based on master seed and vehicle's id to ensure that vehicles are
+    # individually controllable without impacting all other vehicles.
+    veh_rngs = {id: np.random.default_rng(seed=params["seed"] + id) for id in veh_ids}
 
     logger.info("Conduct charging simulation through groupby-apply")
     # Allocate columns to fill in, which avoids merging
@@ -56,8 +54,10 @@ def simulate_charging_choice(dw: DwellSet, params: dict) -> DwellSet:
         consumed_kwh_col="energy_use_kwh",
         avail_kw_col="max_power_kw",
         dwell_hrs_col="dwell_time_hrs",
+        reset_col=dw.reset,
         batt_cap_kwh=params["battery_capacity_kwh"],
-        soc_inits=soc_inits,
+        soc_pars=params["initial_soc"],
         charge_soc=params["charge_soc_thresh"],
+        rngs=veh_rngs,
     )
     return dw
