@@ -65,4 +65,4 @@ select = [
     "I",  # isort
     "PL", # Pylint
 ]
-ignore = ["E501"]  # Don't report line-too-long
+ignore = ["E501", "PLR0913"]  # Don't report line-too-long
