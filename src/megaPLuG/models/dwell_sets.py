@@ -190,6 +190,13 @@ class DwellSet:
 
     def filter_reset(self, keep_col: str):
         """Filter out individual dwells while forcing a reset in the new gaps."""
+        # Force numba compilation
+        _ = DwellSet._filter_reset_grp(
+            grp=self.data.head(5),
+            keep_col=keep_col,
+            reset_col=self.reset,
+        )
+
         if isinstance(self.data, dd.DataFrame):
             self.data = self.data.groupby(self.veh, group_keys=False).apply(
                 DwellSet._filter_reset_grp,
@@ -198,7 +205,8 @@ class DwellSet:
                 meta=dd.utils.make_meta(self.data),
             )
         elif isinstance(self.data, pd.DataFrame):
-            self.data = self.data.groupby(self.veh, group_keys=False).apply(
+            tqdm.pandas()
+            self.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
                 DwellSet._filter_reset_grp,
                 keep_col=keep_col,
                 reset_col=self.reset,
@@ -211,12 +219,24 @@ class DwellSet:
     def _filter_reset_grp(
         grp: pd.DataFrame, keep_col: str, reset_col: str
     ) -> pd.DataFrame:
-        keep_diff = (
-            grp[keep_col].astype(float).diff().fillna(1)
-        )  # Perhaps could get speedup here by removing casting, but I need to think more about validity.
-        keep_diff = np.maximum(0, keep_diff).astype(bool)
-        grp[reset_col] = np.logical_or(keep_diff, grp[reset_col])
+        grp.loc[:, reset_col] = DwellSet._filter_reset_grp_core(
+            keep=grp[keep_col].values,
+            reset=grp[reset_col].values,
+        )
         return grp
+
+    @staticmethod
+    @njit
+    def _filter_reset_grp_core(keep: np.ndarray, reset: np.ndarray) -> np.ndarray:
+        if not keep.shape == reset.shape:
+            raise RuntimeError("The two arrays must have the same shape.")
+        prev_keep = False
+        for i in range(keep.shape[0]):
+            start_keep = np.logical_and(keep[i], np.logical_not(prev_keep))
+            prev_keep = keep[i]
+            if start_keep and not reset[i]:
+                reset[i] = True
+        return reset
 
     def set_default_reset_col(self):
         """Set the default reset_state_before column to assuming that only the first
