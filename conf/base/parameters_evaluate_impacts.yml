@@ -6,31 +6,18 @@
 
 derived_cols:
   initial_rename:
-    veh_time_id: trip_id
-    vehicle_id: veh_id
-    ending_h3_8: hex_id
-    dwell_init_kwh: dwell_start_veh_kwh
-    end_timestamp_utc: dwell_start_timestamp_utc
+    dwell_start_kwh: dwell_start_veh_kwh
 
-events_from_trips:
-  id_cols:
-    - trip_id
-    - veh_id
-    - hex_id
+events_from_dwells:
   seq_names:
     - dwell_start
     - dwell_end
 
-load_profiles:
+report_by_hex:
   id_cols:
     location: hex_id
     time: timestamp_utc
   event_col: hex_kw_diff
-  drop_cols:
-    - veh_kwh
-
-report_by_hex:
-  hex_col: hex_id
 
 add_geometries:
   hex_col: hex_id
