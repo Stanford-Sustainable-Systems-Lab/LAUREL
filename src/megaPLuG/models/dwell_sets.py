@@ -223,22 +223,25 @@ class DwellSet:
         dwell for each vehicle requires a reset before.
         """
         self.data[self.reset] = False
+        reset_col_idx = self.data.columns.get_loc(self.reset)
         if isinstance(self.data, dd.DataFrame):
             self.data = self.data.groupby(self.veh, group_keys=False).apply(
                 DwellSet._set_default_reset_col_grp,
-                reset_col=self.reset,
+                reset_col_idx=reset_col_idx,
                 meta=dd.utils.make_meta(self.data),
             )
         elif isinstance(self.data, pd.DataFrame):
             tqdm.pandas()
             self.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
                 DwellSet._set_default_reset_col_grp,
-                reset_col=self.reset,
+                reset_col_idx=reset_col_idx,
             )
 
     @staticmethod
-    def _set_default_reset_col_grp(grp: pd.DataFrame, reset_col: str) -> pd.DataFrame:
-        grp.loc[grp.index[0], reset_col] = True
+    def _set_default_reset_col_grp(
+        grp: pd.DataFrame, reset_col_idx: int
+    ) -> pd.DataFrame:
+        grp.iat[0, reset_col_idx] = True
         return grp
 
     def is_sorted(self) -> bool:
@@ -364,6 +367,7 @@ class DwellSet:
         )
         if not sorted:
             dw.sort_by_veh_time()
+            dw.set_default_reset_col()
 
         def _shift_by_grp(grp: pd.DataFrame, src: str, tgt: str) -> pd.DataFrame:
             grp[tgt] = grp[src].shift(-1)
