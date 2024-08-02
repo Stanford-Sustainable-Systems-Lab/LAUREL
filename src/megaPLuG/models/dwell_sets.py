@@ -5,6 +5,7 @@ import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 from numba import njit
+from tqdm import tqdm
 
 DEFAULT_COLUMN_NAMES = {
     "veh": "veh_id",
@@ -136,7 +137,8 @@ class DwellSet:
                 meta=dd.utils.make_meta(self.data),
             )
         elif isinstance(self.data, pd.DataFrame):
-            self.data = self.data.groupby(self.veh, group_keys=False).apply(
+            tqdm.pandas()
+            self.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
                 DwellSet._filter_through_grp,
                 keep_col=keep_col,
                 reset_col=self.reset,
@@ -228,7 +230,8 @@ class DwellSet:
                 meta=dd.utils.make_meta(self.data),
             )
         elif isinstance(self.data, pd.DataFrame):
-            self.data = self.data.groupby(self.veh, group_keys=False).apply(
+            tqdm.pandas()
+            self.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
                 DwellSet._set_default_reset_col_grp,
                 reset_col=self.reset,
             )

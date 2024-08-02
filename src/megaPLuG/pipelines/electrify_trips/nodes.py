@@ -7,6 +7,7 @@ import logging
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from megaPLuG.models.charging_algorithms import charge_soc_thresh
 from megaPLuG.models.dwell_sets import DwellSet
@@ -49,7 +50,8 @@ def simulate_charging_choice(dw: DwellSet, params: dict) -> DwellSet:
     # Allocate columns to fill in, which avoids merging
     dw.data["dwell_init_kwh"] = np.NaN
     dw.data["charge_kwh"] = np.NaN
-    dw.data = dw.data.groupby(dw.veh, group_keys=False).apply(
+    tqdm.pandas()
+    dw.data = dw.data.groupby(dw.veh, group_keys=False).progress_apply(
         charge_soc_thresh,
         consumed_kwh_col="energy_use_kwh",
         avail_kw_col="max_power_kw",
