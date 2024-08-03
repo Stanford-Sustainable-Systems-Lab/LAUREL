@@ -65,9 +65,4 @@ def simulate_charging_choice(dw: DwellSet, params: dict) -> DwellSet:
         charge_soc=params["charge_soc_thresh"],
         rngs=veh_rngs,
     )
-    n_vehs = veh_ids.shape[0]
-    n_dead = dw.data.groupby(dw.veh)["dwell_start_kwh"].last(skipna=False).isna().sum()
-    n_elect = n_vehs - n_dead
-    pct_elect = round(n_elect / n_vehs * 100, 1)
-    logger.info(f"Electrifiable vehicles: {n_elect}, {pct_elect}%")
     return dw
