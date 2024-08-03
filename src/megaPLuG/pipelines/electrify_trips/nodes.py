@@ -26,7 +26,12 @@ def set_charging_availability(dw: DwellSet, vehs: dict, locs: dict) -> DwellSet:
         dw.data[dw.end] - dw.data[dw.start]
     ).dt.total_seconds() / 3600
     dw.data["long_dwells"] = dw.data["dwell_time_hrs"] > locs["min_dwell_time_hrs"]
+
+    logger.info("Filter by accumulating through")
+    old_len = dw.data.shape[0]
     dw.filter_through("long_dwells")
+    new_len = dw.data.shape[0]
+    logger.info(f"Rows dropped: {old_len - new_len}, {round(new_len/old_len*100, 1)}%")
     dw.data["max_power_kw"] = vehs["charging_rate_kw"]
     return dw
 
@@ -60,4 +65,9 @@ def simulate_charging_choice(dw: DwellSet, params: dict) -> DwellSet:
         charge_soc=params["charge_soc_thresh"],
         rngs=veh_rngs,
     )
+    n_vehs = veh_ids.shape[0]
+    n_dead = dw.data.groupby(dw.veh)["dwell_start_kwh"].last(skipna=False).isna().sum()
+    n_elect = n_vehs - n_dead
+    pct_elect = round(n_elect / n_vehs * 100, 1)
+    logger.info(f"Electrifiable vehicles: {n_elect}, {pct_elect}%")
     return dw
