@@ -106,8 +106,8 @@ report_by_hex:
     index: True
 
 report_by_hex_with_geoms:
-  type: geopandas.GeoJSONDataset
-  filepath: data/07_model_output/report_by_hex.json
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/07_model_output/report_by_hex.gpkg
 
 regional_loads:
   type: pandas.FeatherDataset
