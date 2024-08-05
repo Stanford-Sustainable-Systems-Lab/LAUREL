@@ -9,12 +9,9 @@ from megaPLuG.models.dwell_sets import load_dwell_set
 
 from .nodes import (
     add_geometries,
-    aggregate_regional_loads,
     calc_derived_dwell_cols,
     drop_vehicles,
     get_hex_events_from_dwells,
-    plot_hourly_load,
-    plot_peak_load_evolution,
     report_by_hex,
 )
 
@@ -57,24 +54,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["report_by_hex", "params:add_geometries"],
                 outputs="report_by_hex_with_geoms",
                 name="add_geometries",
-            ),
-            node(
-                func=aggregate_regional_loads,
-                inputs=["charging_sessions_sampled", "grid_regions"],
-                outputs="regional_loads",
-                name="aggregate_regional_loads",
-            ),
-            node(
-                func=plot_peak_load_evolution,
-                inputs=["regional_loads", "baseline_load"],
-                outputs="peak_load_evolution",
-                name="plot_peak_load_evolution",
-            ),
-            node(
-                func=plot_hourly_load,
-                inputs=["regional_loads", "baseline_load"],
-                outputs="hourly_load",
-                name="plot_hourly_load",
             ),
         ],
     )

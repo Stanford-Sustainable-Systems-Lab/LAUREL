@@ -5,11 +5,9 @@ generated using Kedro 0.19.1
 
 import logging
 
-import dask.dataframe as dd
 import geopandas as gpd
 import h3.api.numpy_int as h3
 import pandas as pd
-from matplotlib.figure import Figure
 from shapely.geometry import Polygon
 
 from megaPLuG.models.dwell_sets import DwellSet
@@ -84,27 +82,3 @@ def h3_to_poly(h: int) -> Polygon:
     bnd_flip = [(x, y) for y, x in bnd]
     poly = Polygon(bnd_flip)
     return poly
-
-
-def aggregate_regional_loads(
-    sessions: dd.DataFrame,
-    grid_regions: gpd.GeoDataFrame,
-) -> pd.DataFrame:
-    """Aggregate loads within grid impact regions."""
-    raise NotImplementedError()
-
-
-def plot_peak_load_evolution(
-    vehicle_load: pd.DataFrame,
-    baseline_load: pd.DataFrame,
-) -> Figure:
-    """Plot baseline loads compared to baseline plus vehicles loads."""
-    raise NotImplementedError()
-
-
-def plot_hourly_load(
-    vehicle_load: pd.DataFrame,
-    baseline_load: pd.DataFrame,
-) -> Figure:
-    """Plot baseline loads compared to baseline plus vehicles loads."""
-    raise NotImplementedError()
