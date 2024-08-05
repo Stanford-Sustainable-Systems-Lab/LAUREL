@@ -58,7 +58,7 @@
             "request": "launch",
             "console": "integratedTerminal",
             "module": "kedro",
-            "args": ["run", "--async", "--pipeline=evaluate_impacts", "--to-outputs=report_by_hex_with_geoms"]
+            "args": ["run", "--async", "--pipeline=evaluate_impacts"]
             // Any other arguments should be passed as a comma-seperated-list
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
