@@ -71,6 +71,7 @@ cattrs==23.2.3
     # via pygls
 certifi==2024.2.2
     # via fiona
+    # via pyogrio
     # via pyproj
     # via requests
 cffi==1.16.0
@@ -410,6 +411,7 @@ numpy==1.26.4
     # via osqp
     # via pandas
     # via pyarrow
+    # via pyogrio
     # via qdldl
     # via scikit-learn
     # via scipy
@@ -449,6 +451,7 @@ packaging==23.2
     # via matplotlib
     # via nbconvert
     # via plotly
+    # via pyogrio
     # via pytoolconfig
     # via qtconsole
     # via qtpy
@@ -529,6 +532,8 @@ pygments==2.17.2
     # via qtconsole
     # via rich
     # via sphinx
+pyogrio==0.9.0
+    # via megaplug
 pyparsing==3.1.2
     # via matplotlib
 pyproj==3.6.1
