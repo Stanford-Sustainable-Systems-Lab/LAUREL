@@ -13,7 +13,7 @@
             "justMyCode": true
         },
         {
-            "name": "Python: Kedro Run Preprocess",
+            "name": "Kedro: Preprocess",
             "type": "debugpy",
             "request": "launch",
             "console": "integratedTerminal",
@@ -23,7 +23,7 @@
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
         {
-            "name": "Python: Kedro Run Electrify Trips",
+            "name": "Kedro: Electrify Trips",
             "type": "debugpy",
             "request": "launch",
             "console": "integratedTerminal",
@@ -33,7 +33,7 @@
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
         {
-            "name": "Python: Kedro Run Train",
+            "name": "Kedro: Train",
             "type": "debugpy",
             "request": "launch",
             "console": "integratedTerminal",
@@ -43,7 +43,7 @@
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
         {
-            "name": "Python: Kedro Run Sample Charging",
+            "name": "Kedro: Sample Charging",
             "type": "debugpy",
             "request": "launch",
             "console": "integratedTerminal",
@@ -53,7 +53,7 @@
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
         {
-            "name": "Python: Kedro Run Evaluate Impacts",
+            "name": "Kedro: Evaluate Impacts",
             "type": "debugpy",
             "request": "launch",
             "console": "integratedTerminal",
