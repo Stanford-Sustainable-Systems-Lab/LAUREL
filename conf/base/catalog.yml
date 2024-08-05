@@ -108,17 +108,3 @@ report_by_hex:
 report_by_hex_with_geoms:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
   filepath: data/07_model_output/report_by_hex.gpkg
-
-regional_loads:
-  type: pandas.FeatherDataset
-  filepath: data/07_model_output/regional_loads.feather
-
-peak_load_evolution:
-  type: matplotlib.MatplotlibWriter
-  filepath: data/08_reporting/peak_load_evolution.png
-  versioned: true
-
-hourly_load:
-  type: matplotlib.MatplotlibWriter
-  filepath: data/08_reporting/hourly_load.png
-  versioned: true
