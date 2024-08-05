@@ -6,10 +6,9 @@ generated using Kedro 0.19.1
 import logging
 
 import dask.dataframe as dd
-import h3.api.numpy_int as h3
-import pandas as pd
 
 from megaPLuG.models.dwell_sets import DwellSet
+from megaPLuG.utils.h3 import str_to_h3
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +29,17 @@ def format_trips_columns(trips, params):
     return trips
 
 
-def str_to_h3(s: pd.Series) -> pd.Series:
-    return s.transform(h3.str_to_int)
+def calc_derived_trip_cols(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
+    """Calculate derived variables which are needed for events."""
+    trips["trip_hrs"] = (
+        trips[params["time_cols"]["trip_end"]]
+        - trips[params["time_cols"]["trip_start"]]
+    ).dt.total_seconds() / 3600
+    trips["trip_avg_speed_mph"] = trips["trip_miles"] / trips["trip_hrs"]
+
+    if params["persist"]:
+        trips = trips.persist()
+    return trips
 
 
 def create_dwells(trips, params):

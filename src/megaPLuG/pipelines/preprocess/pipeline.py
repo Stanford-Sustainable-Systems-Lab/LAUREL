@@ -5,7 +5,12 @@ generated using Kedro 0.19.1
 
 from kedro.pipeline import Pipeline, node, pipeline
 
-from .nodes import clean_vius, create_dwells, format_trips_columns
+from .nodes import (
+    calc_derived_trip_cols,
+    clean_vius,
+    create_dwells,
+    format_trips_columns,
+)
 from .process_role_consumption import calc_energy_consump_rate
 from .process_role_energy import label_charging_sessions
 
@@ -20,8 +25,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="format_trips_columns",
             ),
             node(
+                func=calc_derived_trip_cols,
+                inputs=["trips_formatted", "params:trip_derived_cols"],
+                outputs="trips_derived",
+                name="calc_derived_trip_cols",
+            ),
+            node(
                 func=create_dwells,
-                inputs=["trips_formatted", "params:create_dwells"],
+                inputs=["trips_derived", "params:create_dwells"],
                 outputs="dwells",
                 name="create_dwells",
             ),

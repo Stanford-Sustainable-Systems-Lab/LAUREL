@@ -6,11 +6,10 @@ generated using Kedro 0.19.1
 import logging
 
 import geopandas as gpd
-import h3.api.numpy_int as h3
 import pandas as pd
-from shapely.geometry import Polygon
 
 from megaPLuG.models.dwell_sets import DwellSet
+from megaPLuG.utils.h3 import h3_to_poly
 
 logger = logging.getLogger(__name__)
 
@@ -74,11 +73,3 @@ def add_geometries(df: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
     df["polygons"] = id_ser.transform(h3_to_poly)
     hexes = gpd.GeoDataFrame(df, geometry="polygons", crs=params["crs"])
     return hexes
-
-
-def h3_to_poly(h: int) -> Polygon:
-    bnd = h3.cell_to_boundary(h)
-    # h3 outputs geometries in lat-lon format, but the convention in WGS84 is lon-lat
-    bnd_flip = [(x, y) for y, x in bnd]
-    poly = Polygon(bnd_flip)
-    return poly
