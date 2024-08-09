@@ -118,11 +118,14 @@ cycler==0.12.1
     # via matplotlib
 dask==2024.5.2
     # via dask-expr
+    # via dask-geopandas
     # via distributed
     # via kedro-datasets
     # via megaplug
 dask-expr==1.1.2
     # via dask
+dask-geopandas==0.4.1
+    # via megaplug
 debugpy==1.8.1
     # via ipykernel
 decorator==5.1.1
@@ -134,6 +137,7 @@ distlib==0.3.8
     # via virtualenv
 distributed==2024.5.2
     # via dask
+    # via dask-geopandas
 dm-tree==0.1.8
     # via arviz
     # via tensorflow-probability
@@ -171,6 +175,7 @@ fsspec==2024.3.1
 gast==0.5.4
     # via tensorflow-probability
 geopandas==0.14.4
+    # via dask-geopandas
     # via megaplug
 gitdb==4.0.11
     # via gitpython
@@ -439,6 +444,7 @@ packaging==23.2
     # via bokeh
     # via build
     # via dask
+    # via dask-geopandas
     # via distributed
     # via geopandas
     # via h5netcdf
@@ -638,6 +644,7 @@ setuptools==69.2.0
     # via fs
     # via nodeenv
 shapely==2.0.3
+    # via dask-geopandas
     # via geopandas
 six==1.16.0
     # via asttokens
