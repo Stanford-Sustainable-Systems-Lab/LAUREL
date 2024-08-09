@@ -1,10 +1,14 @@
 import re
+from collections.abc import Callable
 from copy import deepcopy
 from itertools import product
 
 import dask.dataframe as dd
+import dask_geopandas
+import geopandas as gpd
 import numpy as np
 import pandas as pd
+from megaPLuG.utils.h3 import cells_to_points, cells_to_polygons
 from numba import njit
 from tqdm import tqdm
 
@@ -499,6 +503,76 @@ class DwellSet:
         if len(matches) == 0:
             raise RuntimeError("The column does not include the desired sequence name.")
         return matches[0]
+
+    def to_geodataframe(self, geom_type: str = "point"):
+        """Convert the underlying dataset into a GeoDataFrame."""
+        if geom_type == "point":
+            f = cells_to_points
+        elif geom_type == "polygon":
+            f = cells_to_polygons
+        else:
+            raise RuntimeError("Only 'point' and 'polygon' geometries are supported.")
+
+        if isinstance(self.data, dd.DataFrame):
+            self.data = dask_geopandas.from_dask_dataframe(df=self.data, geometry=None)
+            self.data = self.data.map_partitions(
+                DwellSet._cells_to_geom_wrapper,
+                f=f,
+                hex_col=self.hex,
+            )
+        elif isinstance(self.data, pd.DataFrame):
+            self.data = gpd.GeoDataFrame(data=self.data, geometry=None)
+            self.data = DwellSet._cells_to_geom_wrapper(
+                gdf=self.data,
+                f=f,
+                hex_col=self.hex,
+            )
+        else:
+            raise RuntimeError("Only pandas and dask dataframes are supported.")
+
+    @staticmethod
+    def _cells_to_geom_wrapper(
+        gdf: gpd.GeoDataFrame, f: Callable[[pd.Series], gpd.GeoSeries], hex_col: str
+    ) -> pd.DataFrame:
+        """Convert a Pandas DataFrame to a GeoDataFrame using its hexagon column."""
+        if not isinstance(gdf, gpd.GeoDataFrame):
+            raise RuntimeError("Incoming data is not a GeoDataFrame")
+
+        if hex_col in gdf.columns:
+            hexes = gdf[hex_col]
+        elif hex_col in gdf.index.names:
+            hexes = gdf.index.get_level_values(hex_col).to_series()
+        else:
+            raise RuntimeError(f"'{hex_col}' not found in DataFrame columns or index.")
+
+        geoms = f(hexes)
+        gdf = gdf.set_geometry(geoms)
+        return gdf
+
+    def find_time_weighted_centers(self, weight_col: str) -> pd.DataFrame:
+        """Find time-weighted center of a set of dwells."""
+        if not hasattr(self.data, "crs"):
+            raise RuntimeError("The DwellSet's underlying dataset is not geographic.")
+        else:
+            crs = self.data.crs
+            if not crs.is_projected:
+                raise RuntimeError(
+                    "The DwellSet's underlying dataset is not in projected coordinates."
+                )
+
+        self.data["easting_wt"] = self.data.geometry.x * self.data[weight_col]
+        self.data["northing_wt"] = self.data.geometry.y * self.data[weight_col]
+        centers = self.data.groupby(self.veh).agg(
+            {"easting_wt": "sum", "northing_wt": "sum", weight_col: "sum"}
+        )
+        self.data = self.data.drop(columns=["easting_wt", "northing_wt"])
+        centers["easting"] = centers["easting_wt"] / centers[weight_col]
+        centers["northing"] = centers["northing_wt"] / centers[weight_col]
+        geoms = gpd.GeoSeries.from_xy(
+            x=centers["easting"], y=centers["northing"], crs=crs
+        )
+        centers = gpd.GeoDataFrame(index=centers.index, geometry=geoms.values)
+        return centers
 
 
 def load_dwell_set(dwells: pd.DataFrame, params: dict) -> DwellSet:
