@@ -6,12 +6,23 @@ generated using Kedro 0.19.1
 import logging
 
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 
 from megaPLuG.models.charging_algorithms import charge_soc_thresh
 from megaPLuG.models.dwell_sets import DwellSet
 
 logger = logging.getLogger(__name__)
+
+
+def filter_vehicles(dw: DwellSet, vehicles: pd.DataFrame) -> DwellSet:
+    """Filter out vehicles that we're not considering."""
+    # TODO: Ensure that this is Dask compatible
+    dw.data["veh_excluded"] = ~dw.data.index.isin(vehicles[dw.veh])
+    idx_excluded = dw.data.loc[dw.data["veh_excluded"], :].index.unique()
+    dw.data = dw.data.drop(index=idx_excluded)
+    dw.data = dw.data.drop(columns=["veh_excluded"])
+    return dw
 
 
 def calc_energy_use(dw: DwellSet, params: dict) -> DwellSet:

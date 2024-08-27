@@ -9,6 +9,7 @@ from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
 
 from .nodes import (
     calc_energy_use,
+    filter_vehicles,
     set_charging_availability,
     simulate_charging_choice,
 )
@@ -24,8 +25,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="load_dwell_set",
             ),
             node(
+                func=filter_vehicles,
+                inputs=["dwell_obj", "vehicles"],
+                outputs="dwell_obj_filtered",
+                name="filter_vehicles",
+            ),
+            node(
                 func=calc_energy_use,
-                inputs=["dwell_obj", "params:vehicles"],
+                inputs=["dwell_obj_filtered", "params:vehicles"],
                 outputs="dwell_obj_w_energy",
                 name="calc_energy_use",
             ),

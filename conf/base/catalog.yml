@@ -48,6 +48,10 @@ energy_consumption:
   save_args:
     index: True
 
+vehicles:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/vehicles.feather
+
 # Electrification simulation datasets
 dwells_with_charging:
   type: pandas.FeatherDataset
@@ -110,3 +114,31 @@ report_by_hex_with_geoms:
   filepath: data/07_model_output/report_by_hex.gpkg
   save_args:
     layer: peak_kw
+
+# Test datasets
+vehicle_representative_points:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/07_model_output/veh_rep_pts.gpkg
+  save_args:
+    index: True
+    layer: vehicle_representative_points
+
+vehicle_dwells:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/07_model_output/veh_dwells.gpkg
+  save_args:
+    index: True
+    layer: vehicle_dwells
+
+vehicle_depots:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/vehicle_depots.feather
+
+vehicle_depots_geoms:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/07_model_output/vehicle_depots.gpkg
+  save_args:
+    index: True
+    layer: vehicle_depots
+  load_args:
+    layer: vehicle_depots
