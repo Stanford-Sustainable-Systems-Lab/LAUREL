@@ -13,9 +13,9 @@ load_dwell_set:
   reset: reset_state_before
 
 vehicles:
-  battery_capacity_kwh: 750
+  battery_capacity_kwh: 1000
   charging_rate_kw: 350
-  consump_rate_kwh_per_mi: 1.9
+  consump_rate_kwh_per_mi: 2.5
   charging_delays:
     plug_in_mins: 10
     plug_out_mins: 10
