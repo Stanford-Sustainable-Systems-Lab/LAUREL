@@ -16,12 +16,16 @@ cluster_veh_loc_pairs:
     active: False
     n: 10000
     seed: 42
-  drop_cols:
-    - tot_dwell_hrs
-    - n_visits
-  merge_cols:
-    - veh_id
-    - hex_id
+  feature_cols:
+    - mean_inter_miles
+    - med_inter_miles
+    - max_inter_miles
+    - mean_inter_times
+    - med_inter_times
+    - max_inter_times
+    - med_dwell_hrs
+    - dwell_hrs_ratio
+    - visits_ratio
   cluster_col: cluster
 
 label_veh_loc_pairs:

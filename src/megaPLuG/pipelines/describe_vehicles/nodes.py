@@ -84,27 +84,39 @@ def cluster_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Cluster vehicle-location pairs to uncover latent groups."""
     # Prepare for clustering by standardizing variables
     clusterable = deepcopy(veh_locs.dropna(axis=0))
-    clusterable = clusterable.drop(columns=params["drop_cols"])
+    drop_cols = np.setdiff1d(clusterable.columns, params["feature_cols"])
+    clusterable = clusterable.drop(columns=drop_cols)
+
     spars = params["sample"]
     if spars["active"]:
         clusterable = clusterable.sample(n=spars["n"], random_state=spars["seed"])
 
-    ratio_cols = [col for col in clusterable.columns if not col.endswith("_ratio")]
-    for col in ratio_cols:
-        clusterable.loc[:, col] = clusterable[col] + 1
+    for col in clusterable.columns:
+        if not col.endswith("_ratio"):
+            # Ratio columns would not benefit from spread reduction of log1p
+            clusterable.loc[:, col] = clusterable[col] + 1
+    clusterable = np.log10(clusterable)
     scaler = StandardScaler()
-    X = scaler.fit_transform(np.log10(clusterable.values))
+    clusterable = pd.DataFrame(
+        data=scaler.fit_transform(clusterable),
+        index=clusterable.index,
+        columns=clusterable.columns,
+    )
 
     # Perform clustering
-    n_obs = X.shape[0]
+    n_obs = len(clusterable)
     logger.info(f"Beginning clustering on {n_obs} observations")
     min_clust_size = int(n_obs / params["min_cluster_size_denom"])
     clusterer = HDBSCAN(min_cluster_size=min_clust_size)
-    clcol = params["cluster_col"]
-    clusterable[clcol] = pd.Categorical(clusterer.fit_predict(X))
+    clusterer = clusterer.fit(clusterable.values)
 
     # Merge results back on to original dataframe
-    veh_locs = veh_locs.merge(clusterable.loc[:, [clcol]], on=params["merge_cols"])
+    clusters = pd.DataFrame(
+        data=clusterer.labels_,
+        index=clusterable.index,
+        columns=[params["cluster_col"]],
+    )
+    veh_locs = veh_locs.merge(clusters, left_index=True, right_index=True)
     return veh_locs
 
 
@@ -116,5 +128,8 @@ def label_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
     cl_loc_cor[corpars["cols"]["location"]] = pd.Categorical(
         cl_loc_cor[corpars["cols"]["location"]]
     )
+    orig_idx = veh_locs.index.names
+    veh_locs = veh_locs.reset_index()
     veh_locs = veh_locs.merge(cl_loc_cor, how="left", on=corpars["cols"]["cluster"])
+    veh_locs = veh_locs.set_index(orig_idx)
     return veh_locs
