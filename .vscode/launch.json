@@ -68,7 +68,7 @@
             "request": "launch",
             "console": "integratedTerminal",
             "module": "kedro",
-            "args": ["run", "--async", "--pipeline=describe_vehicles", "--from-inputs=vehicle_location_pairs"]
+            "args": ["run", "--async", "--pipeline=describe_vehicles"]
             // Any other arguments should be passed as a comma-seperated-list
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
