@@ -62,5 +62,15 @@
             // Any other arguments should be passed as a comma-seperated-list
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
+        {
+            "name": "Kedro: Describe Vehicles",
+            "type": "debugpy",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "module": "kedro",
+            "args": ["run", "--async", "--pipeline=describe_vehicles", "--from-inputs=vehicle_location_pairs"]
+            // Any other arguments should be passed as a comma-seperated-list
+            // e.g "args": ["run", "--pipeline", "pipeline_name"]
+        },
     ]
 }
