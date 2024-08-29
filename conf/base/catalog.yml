@@ -56,6 +56,14 @@ vehicles:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vehicles.feather
 
+vehicle_location_pairs:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/vehicle_location_pairs.feather
+
+vehicle_location_pairs_labelled:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/vehicle_location_pairs_labelled.feather
+
 # Electrification simulation datasets
 dwells_with_charging:
   type: pandas.FeatherDataset

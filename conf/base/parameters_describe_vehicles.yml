@@ -3,3 +3,22 @@
 #
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.3/configuration/parameters.html
+
+substantial_dwells:
+  thresh_hrs: 4
+  drop_cols:
+    - trip_hrs
+    - trip_avg_speed_mph
+
+cluster_veh_loc_pairs:
+  min_cluster_size_denom: 200 # [n_obs]/[this number] gives the minimum cluster size 
+  sample:
+    active: False
+    n: 10000
+    seed: 42
+  drop_cols:
+    - tot_dwell_hrs
+    - n_visits
+  merge_cols:
+    - veh_id
+    - hex_id
