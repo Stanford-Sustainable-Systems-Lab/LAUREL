@@ -13,6 +13,7 @@ from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
+from megaPLuG.utils.params import build_df_from_dict
 
 logger = logging.getLogger(__name__)
 
@@ -99,8 +100,21 @@ def cluster_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
     logger.info(f"Beginning clustering on {n_obs} observations")
     min_clust_size = int(n_obs / params["min_cluster_size_denom"])
     clusterer = HDBSCAN(min_cluster_size=min_clust_size)
-    clusterable["cluster"] = pd.Categorical(clusterer.fit_predict(X))
+    clcol = params["cluster_col"]
+    clusterable[clcol] = pd.Categorical(clusterer.fit_predict(X))
 
     # Merge results back on to original dataframe
-    veh_locs = veh_locs.merge(clusterable.loc[:, ["cluster"]], on=params["merge_cols"])
+    veh_locs = veh_locs.merge(clusterable.loc[:, [clcol]], on=params["merge_cols"])
+    return veh_locs
+
+
+def label_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Set the vehicles' important locations, like home base, if one exists."""
+    corpars = params["cluster_location_corresp"]
+    col_ls = list(corpars["cols"].values())
+    cl_loc_cor = build_df_from_dict(d=corpars["vals"], cols=col_ls)
+    cl_loc_cor[corpars["cols"]["location"]] = pd.Categorical(
+        cl_loc_cor[corpars["cols"]["location"]]
+    )
+    veh_locs = veh_locs.merge(cl_loc_cor, how="left", on=corpars["cols"]["cluster"])
     return veh_locs

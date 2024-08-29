@@ -60,6 +60,10 @@ vehicle_location_pairs:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vehicle_location_pairs.feather
 
+vehicle_location_pairs_clustered:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/vehicle_location_pairs_clustered.feather
+
 vehicle_location_pairs_labelled:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vehicle_location_pairs_labelled.feather

@@ -22,3 +22,12 @@ cluster_veh_loc_pairs:
   merge_cols:
     - veh_id
     - hex_id
+  cluster_col: cluster
+
+label_veh_loc_pairs:
+  cluster_location_corresp:
+    cols:
+      cluster: cluster
+      location: location
+    vals:
+      2: home_base
