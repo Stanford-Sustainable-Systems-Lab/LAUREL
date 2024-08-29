@@ -48,6 +48,10 @@ energy_consumption:
   save_args:
     index: True
 
+vehicles_raw:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/vehicles_raw.feather
+
 vehicles:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vehicles.feather

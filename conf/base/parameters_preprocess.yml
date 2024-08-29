@@ -16,6 +16,15 @@ format_columns:
     - ending_h3_8
   persist: True
 
+strip_vehicle_attrs:
+  col_renamer:
+    veh_id: vehicle_id
+  veh_id_col: veh_id
+  veh_attr_cols:
+    - veh_type
+    - vin_gvw
+  persist: True
+
 trip_derived_cols:
   time_cols:
     trip_start: start_timestamp_utc
@@ -29,11 +38,8 @@ create_dwells:
   load_into_memory: True
   drop_cols:
     - starting_h3_8
-    - veh_type
-    - vin_gvw
   col_renamer:
     hex_id: ending_h3_8
-    veh_id: vehicle_id
   from_trips_cols:
     veh: veh_id
     hex: hex_id

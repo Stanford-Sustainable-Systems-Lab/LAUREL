@@ -10,6 +10,7 @@ from .nodes import (
     clean_vius,
     create_dwells,
     format_trips_columns,
+    strip_vehicle_attrs,
 )
 from .process_role_consumption import calc_energy_consump_rate
 from .process_role_energy import label_charging_sessions
@@ -25,8 +26,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="format_trips_columns",
             ),
             node(
+                func=strip_vehicle_attrs,
+                inputs=["trips_formatted", "params:strip_vehicle_attrs"],
+                outputs=["trips_stripped", "vehicles_raw"],
+                name="strip_vehicle_attrs",
+            ),
+            node(
                 func=calc_derived_trip_cols,
-                inputs=["trips_formatted", "params:trip_derived_cols"],
+                inputs=["trips_stripped", "params:trip_derived_cols"],
                 outputs="trips_derived",
                 name="calc_derived_trip_cols",
             ),

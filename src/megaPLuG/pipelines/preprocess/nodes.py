@@ -6,6 +6,7 @@ generated using Kedro 0.19.1
 import logging
 
 import dask.dataframe as dd
+import pandas as pd
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.utils.h3 import str_to_h3
@@ -29,6 +30,26 @@ def format_trips_columns(trips, params):
     return trips
 
 
+def strip_vehicle_attrs(
+    trips: dd.DataFrame, params: dict
+) -> tuple[dd.DataFrame, pd.DataFrame]:
+    """Get vehicle-specific attributes which stay constant."""
+    trips = trips.rename(columns={v: k for k, v in params["col_renamer"].items()})
+
+    vehs = (
+        trips.loc[:, [params["veh_id_col"]] + params["veh_attr_cols"]]
+        .drop_duplicates()
+        .compute()
+    )
+    vehs = vehs.set_index(params["veh_id_col"]).sort_index()
+
+    trips = trips.drop(columns=params["veh_attr_cols"])
+    if params["persist"]:
+        trips = trips.persist()
+
+    return (trips, vehs)
+
+
 def calc_derived_trip_cols(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
     """Calculate derived variables which are needed for events."""
     trips["trip_hrs"] = (
@@ -42,7 +63,7 @@ def calc_derived_trip_cols(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
     return trips
 
 
-def create_dwells(trips, params):
+def create_dwells(trips: dd.DataFrame, params: dict) -> dd.DataFrame | pd.DataFrame:
     """Create dwell data from trips data."""
     if params["debug_subsample"]["active"]:
         trips = trips.loc[0 : params["debug_subsample"]["n"]]
