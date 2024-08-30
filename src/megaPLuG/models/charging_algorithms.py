@@ -56,17 +56,18 @@ def _charge_soc_thresh_core(
             cur_energy = batt_cap * soc
         cur_energy -= consumed_kwh[i]
         energy_tracker[i, dwell_init_kwh] = cur_energy
-        if cur_energy < 0:
-            dead = True
-            break
-        if cur_energy / batt_cap <= charge_soc:
-            chg = np.minimum(batt_cap - cur_energy, dwell_hrs[i] * avail_kw[i])
+        avail_kwh = dwell_hrs[i] * avail_kw[i]
+        if np.isnan(cur_energy) or cur_energy < 0:  # Currently dead
+            if avail_kwh >= batt_cap:  # If full recharge is possible, then refresh
+                cur_energy = 0
+                chg = batt_cap
+            else:  # If not, then become/stay dead
+                chg = np.NaN
+        elif cur_energy / batt_cap <= charge_soc:
+            chg = np.minimum(batt_cap - cur_energy, avail_kwh)
         else:
             chg = 0
         energy_tracker[i, charge_kwh] = chg
         cur_energy += chg
 
-    if dead:
-        energy_tracker[(i + 1) :, dwell_init_kwh] = np.NaN
-        energy_tracker[i:, charge_kwh] = np.NaN
     return energy_tracker
