@@ -15,17 +15,14 @@ def charge_soc_thresh(
     rngs: dict[int, np.random.Generator],
 ) -> pd.DataFrame:
     """Execute the charging strategy of charging below an SoC threshold."""
-    rng = rngs[grp.name]  # This assumes the result of a groupby
-    n = grp[reset_col].sum()
-    soc_inits = rng.beta(a=soc_pars["alpha"], b=soc_pars["beta"], size=n)
-
     arr = _charge_soc_thresh_core(
         consumed_kwh=grp[consumed_kwh_col].values,
         avail_kw=grp[avail_kw_col].values,
         dwell_hrs=grp[dwell_hrs_col].values,
         reset=grp[reset_col].values,
         batt_cap=batt_cap_kwh,
-        soc_inits=soc_inits,
+        rng=rngs[grp.name],  # This assumes the result of a groupby
+        rng_params=np.array([soc_pars["alpha"], soc_pars["beta"]]),
         charge_soc=charge_soc,
     )
     grp.loc[:, "dwell_start_kwh"] = arr[:, 0]
@@ -40,7 +37,8 @@ def _charge_soc_thresh_core(
     dwell_hrs: np.ndarray[float],
     reset: np.ndarray[bool],
     batt_cap: float,
-    soc_inits: np.ndarray[float],
+    rng: np.random.Generator,
+    rng_params: np.ndarray[float],
     charge_soc: float,
 ) -> np.ndarray:
     """Execute the charging strategy of charging below an SoC threshold."""
@@ -52,11 +50,10 @@ def _charge_soc_thresh_core(
     charge_kwh = 1
     dwell_init_kwh = 0
     dead = False
-    soc_used_idx = 0
     for i in range(energy_tracker.shape[0]):
         if reset[i]:
-            cur_energy = batt_cap * soc_inits[soc_used_idx]
-            soc_used_idx += 1
+            soc = rng.beta(a=rng_params[0], b=rng_params[1])
+            cur_energy = batt_cap * soc
         cur_energy -= consumed_kwh[i]
         energy_tracker[i, dwell_init_kwh] = cur_energy
         if cur_energy < 0:
