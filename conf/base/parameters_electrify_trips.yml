@@ -12,17 +12,25 @@ load_dwell_set:
   dist: trip_miles
   reset: reset_state_before
 
+filter_dwells:
+  drop_cols:
+    - trip_hrs
+    - trip_avg_speed_mph
+
 mark_locations:
   veh_loc_cols:
     - location
 
 veh_days:
-
-crit_days:
+  loc_col: location
+  veh_day_col: veh_day_id
+  refresh_locations:
+    - home_base
+  refresh_col: is_refresh
+  crit_col: is_crit_day
 
 vehicles:
   battery_capacity_kwh: 1000
-  charging_rate_kw: 350
   consump_rate_kwh_per_mi: 2.5
   charging_delays:
     plug_in_mins: 10
@@ -35,3 +43,4 @@ vehicles:
 
 locations:
   min_dwell_time_hrs: 0.25
+  charging_rate_kw: 350

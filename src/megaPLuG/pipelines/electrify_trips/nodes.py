@@ -4,6 +4,7 @@ generated using Kedro 0.19.1
 """
 
 import logging
+from copy import deepcopy
 
 import numpy as np
 import pandas as pd
@@ -14,11 +15,32 @@ from megaPLuG.models.dwell_sets import DwellSet
 
 logger = logging.getLogger(__name__)
 
+SECS_PER_HOUR = 3600
+
 
 def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
     """Filter out vehicles that we're not considering."""
     keep_idx = vehs.loc[vehs["has_home_base"], :].index.values
+    logger.info("Filter by vehicles by direct dropping")
+    old_len = len(dw.data)
     dw.data = dw.data.loc[keep_idx, :]
+    new_len = len(dw.data)
+    logger.info(f"Rows dropped: {old_len - new_len}, {round(new_len/old_len*100, 1)}%")
+    return dw
+
+
+def filter_dwells(dw: DwellSet, locs: dict, params: dict) -> DwellSet:
+    """Set the charging availability for each session."""
+    dwell_hrs = dw.data[dw.end] - dw.data[dw.start]
+    dw.data["dwell_hrs"] = dwell_hrs.dt.total_seconds() / SECS_PER_HOUR
+    dw.data["long_dwells"] = dw.data["dwell_hrs"] > locs["min_dwell_time_hrs"]
+
+    logger.info("Filter by dwells by accumulating through")
+    old_len = len(dw.data)
+    dw.data = dw.data.drop(columns=params["drop_cols"])  # Not accumulated
+    dw.filter_through("long_dwells")
+    new_len = len(dw.data)
+    logger.info(f"Rows dropped: {old_len - new_len}, {round(new_len/old_len*100, 1)}%")
     return dw
 
 
@@ -37,12 +59,49 @@ def mark_vehicle_days(dw: DwellSet, params: dict) -> DwellSet:
 
     For vehicles with a home base, these would be times between visits to the home base.
     """
-    pass
+    dw.data[params["refresh_col"]] = dw.data[params["loc_col"]].isin(
+        params["refresh_locations"]
+    )
+    dw.data[params["veh_day_col"]] = dw.data.groupby(dw.veh)[
+        params["refresh_col"]
+    ].transform(lambda ser: ser.shift(1, fill_value=False).cumsum())
+    return dw
 
 
-def mark_critical_days(dw: DwellSet, params: dict) -> DwellSet:
+def mark_critical_days(dw: DwellSet, veh_pars: dict, params: dict) -> DwellSet:
     """Mark critical days, vehicle-days which cannot be achieved on a single charge."""
-    pass
+    crit_days = deepcopy(dw)
+    crit_days.filter_through(params["refresh_col"])
+    # TODO: Consider switching this to vehicle-specific parameters
+    implied_range = (
+        veh_pars["battery_capacity_kwh"] / veh_pars["consump_rate_kwh_per_mi"]
+    )
+    crcol = params["crit_col"]
+    crit_days.data[crcol] = crit_days.data[crit_days.dist] > implied_range
+
+    vdcol = params["veh_day_col"]
+    crit_days_merge = crit_days.data.loc[:, [vdcol, crcol]]
+    dw.data = dw.data.merge(crit_days_merge, how="left", on=[dw.veh, vdcol])
+    # Assume a critical day for partial days, since the point of the critical days
+    # assumption is to reduce public charging on days when we're sure it's unnecessary
+    crit_na = dw.data[crcol].isna()
+    dw.data.loc[crit_na, crcol] = True
+    dw.data[crcol] = dw.data[crcol].astype(bool)
+    return dw
+
+
+def filter_noncritical_dwells(dw: DwellSet, params: dict) -> DwellSet:
+    """Filter out the en-route dwells on non-critical days."""
+    dw.data["keep_dwells"] = (
+        dw.data[params["refresh_col"]] | dw.data[params["crit_col"]]
+    )
+
+    logger.info("Filter by dwells by accumulating through")
+    old_len = len(dw.data)
+    dw.filter_through("keep_dwells")
+    new_len = len(dw.data)
+    logger.info(f"Rows dropped: {old_len - new_len}, {round(new_len/old_len*100, 1)}%")
+    return dw
 
 
 def calc_energy_use(dw: DwellSet, params: dict) -> DwellSet:
@@ -51,19 +110,9 @@ def calc_energy_use(dw: DwellSet, params: dict) -> DwellSet:
     return dw
 
 
-def set_charging_availability(dw: DwellSet, vehs: dict, locs: dict) -> DwellSet:
+def set_charging_availability(dw: DwellSet, locs: dict) -> DwellSet:
     """Set the charging availability for each session."""
-    dw.data["dwell_time_hrs"] = (
-        dw.data[dw.end] - dw.data[dw.start]
-    ).dt.total_seconds() / 3600
-    dw.data["long_dwells"] = dw.data["dwell_time_hrs"] > locs["min_dwell_time_hrs"]
-
-    logger.info("Filter by accumulating through")
-    old_len = dw.data.shape[0]
-    dw.filter_through("long_dwells")
-    new_len = dw.data.shape[0]
-    logger.info(f"Rows dropped: {old_len - new_len}, {round(new_len/old_len*100, 1)}%")
-    dw.data["max_power_kw"] = vehs["charging_rate_kw"]
+    dw.data["max_power_kw"] = locs["charging_rate_kw"]
     return dw
 
 
@@ -89,7 +138,7 @@ def simulate_charging_choice(dw: DwellSet, params: dict) -> DwellSet:
         charge_soc_thresh,
         consumed_kwh_col="energy_use_kwh",
         avail_kw_col="max_power_kw",
-        dwell_hrs_col="dwell_time_hrs",
+        dwell_hrs_col="dwell_hrs",
         reset_col=dw.reset,
         batt_cap_kwh=params["battery_capacity_kwh"],
         soc_pars=params["initial_soc"],
