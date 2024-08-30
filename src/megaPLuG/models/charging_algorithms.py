@@ -42,15 +42,15 @@ def _charge_soc_thresh_core(
     charge_soc: float,
 ) -> np.ndarray:
     """Execute the charging strategy of charging below an SoC threshold."""
-    if not consumed_kwh.shape == avail_kw.shape == dwell_hrs.shape:
-        raise RuntimeError("The three arrays must have the same shape.")
+    nsteps = consumed_kwh.shape[0]
+    if not nsteps == avail_kw.shape[0] == dwell_hrs.shape[0]:
+        raise RuntimeError("The three arrays must have the same first dimension shape.")
     if not reset[0]:
         raise RuntimeError("The first observation must have an SoC reset.")
-    energy_tracker = np.empty((consumed_kwh.shape[0], 2))
+    energy_tracker = np.empty((nsteps, 2))
     charge_kwh = 1
     dwell_init_kwh = 0
-    dead = False
-    for i in range(energy_tracker.shape[0]):
+    for i in range(nsteps):
         if reset[i]:
             soc = rng.beta(a=rng_params[0], b=rng_params[1])
             cur_energy = batt_cap * soc
