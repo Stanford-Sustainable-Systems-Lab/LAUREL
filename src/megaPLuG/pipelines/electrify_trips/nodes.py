@@ -32,8 +32,8 @@ def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
 def filter_dwells(dw: DwellSet, locs: dict, params: dict) -> DwellSet:
     """Set the charging availability for each session."""
     dwell_hrs = dw.data[dw.end] - dw.data[dw.start]
-    dw.data["dwell_hrs"] = dwell_hrs.dt.total_seconds() / SECS_PER_HOUR
-    dw.data["long_dwells"] = dw.data["dwell_hrs"] > locs["min_dwell_time_hrs"]
+    dw.data["dwell_time_hrs"] = dwell_hrs.dt.total_seconds() / SECS_PER_HOUR
+    dw.data["long_dwells"] = dw.data["dwell_time_hrs"] > locs["min_dwell_time_hrs"]
 
     logger.info("Filter by dwells by accumulating through")
     old_len = len(dw.data)
@@ -138,7 +138,7 @@ def simulate_charging_choice(dw: DwellSet, params: dict) -> DwellSet:
         charge_soc_thresh,
         consumed_kwh_col="energy_use_kwh",
         avail_kw_col="max_power_kw",
-        dwell_hrs_col="dwell_hrs",
+        dwell_hrs_col="dwell_time_hrs",
         reset_col=dw.reset,
         batt_cap_kwh=params["battery_capacity_kwh"],
         soc_pars=params["initial_soc"],
