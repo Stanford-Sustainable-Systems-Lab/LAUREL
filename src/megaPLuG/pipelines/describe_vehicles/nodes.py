@@ -133,3 +133,18 @@ def label_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
     veh_locs = veh_locs.merge(cl_loc_cor, how="left", on=corpars["cols"]["cluster"])
     veh_locs = veh_locs.set_index(orig_idx)
     return veh_locs
+
+
+def classify_vehicles(
+    vehs: pd.DataFrame, veh_locs: pd.DataFrame, params: dict
+) -> pd.DataFrame:
+    """Classify vehicles by their route type, home base status, etc."""
+    veh_loc_cts = veh_locs.groupby(params["veh_col"])[params["loc_col"]].value_counts()
+    veh_loc_cts = veh_loc_cts.unstack(params["loc_col"])
+    veh_loc_cts["has_home_base"] = veh_loc_cts["home_base"] > 0
+    vehs = vehs.merge(
+        veh_loc_cts.loc[:, ["has_home_base"]], how="left", on=params["veh_col"]
+    )
+    vehs.loc[vehs["has_home_base"].isna(), "has_home_base"] = False
+    vehs["has_home_base"] = vehs["has_home_base"].astype(bool)
+    return vehs

@@ -9,6 +9,7 @@ from megaPLuG.models.dwell_sets import load_dwell_set
 
 from .nodes import (
     calc_inter_visit_stats,
+    classify_vehicles,
     cluster_veh_loc_pairs,
     describe_veh_loc_pairs,
     filter_substantial_dwells,
@@ -57,6 +58,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="vehicle_location_pairs_labelled",
                 name="label_veh_loc_pairs",
+            ),
+            node(
+                func=classify_vehicles,
+                inputs=[
+                    "vehicles",
+                    "vehicle_location_pairs_labelled",
+                    "params:classify_vehicles",
+                ],
+                outputs="vehicles_labelled",
+                name="classify_vehicles",
             ),
         ]
     )

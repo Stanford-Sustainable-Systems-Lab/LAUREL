@@ -12,6 +12,14 @@ load_dwell_set:
   dist: trip_miles
   reset: reset_state_before
 
+mark_locations:
+  veh_loc_cols:
+    - location
+
+veh_days:
+
+crit_days:
+
 vehicles:
   battery_capacity_kwh: 1000
   charging_rate_kw: 350

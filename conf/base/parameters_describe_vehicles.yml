@@ -35,3 +35,7 @@ label_veh_loc_pairs:
       location: location
     vals:
       2: home_base
+
+classify_vehicles:
+  veh_col: veh_id
+  loc_col: location

@@ -15,14 +15,34 @@ from megaPLuG.models.dwell_sets import DwellSet
 logger = logging.getLogger(__name__)
 
 
-def filter_vehicles(dw: DwellSet, vehicles: pd.DataFrame) -> DwellSet:
+def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
     """Filter out vehicles that we're not considering."""
-    # TODO: Ensure that this is Dask compatible
-    dw.data["veh_excluded"] = ~dw.data.index.isin(vehicles[dw.veh])
-    idx_excluded = dw.data.loc[dw.data["veh_excluded"], :].index.unique()
-    dw.data = dw.data.drop(index=idx_excluded)
-    dw.data = dw.data.drop(columns=["veh_excluded"])
+    keep_idx = vehs.loc[vehs["has_home_base"], :].index.values
+    dw.data = dw.data.loc[keep_idx, :]
     return dw
+
+
+def mark_locations(dw: DwellSet, veh_locs: pd.DataFrame, params: dict) -> DwellSet:
+    """Mark locations-of-interest for each vehicle (e.g. home base)."""
+    veh_loc_merge = veh_locs.loc[:, params["veh_loc_cols"]]
+    # TODO: Modify this code so that it works with Dask, using a single merge column
+    # Achieve this using an encoding function e.g. id1 * set1_size + id2, or a hash
+    # Pandas almost surely does this internally, but Dask doesn't presume.
+    dw.data = dw.data.merge(veh_loc_merge, how="left", on=[dw.veh, dw.hex])
+    return dw
+
+
+def mark_vehicle_days(dw: DwellSet, params: dict) -> DwellSet:
+    """Mark out vehicle-days, the periods between human-intuitive-resets.
+
+    For vehicles with a home base, these would be times between visits to the home base.
+    """
+    pass
+
+
+def mark_critical_days(dw: DwellSet, params: dict) -> DwellSet:
+    """Mark critical days, vehicle-days which cannot be achieved on a single charge."""
+    pass
 
 
 def calc_energy_use(dw: DwellSet, params: dict) -> DwellSet:
