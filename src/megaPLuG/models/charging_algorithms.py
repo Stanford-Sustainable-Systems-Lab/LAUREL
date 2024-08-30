@@ -45,8 +45,7 @@ def _charge_soc_thresh_core(
     nsteps = consumed_kwh.shape[0]
     if not nsteps == avail_kw.shape[0] == dwell_hrs.shape[0]:
         raise RuntimeError("The three arrays must have the same first dimension shape.")
-    if not reset[0]:
-        raise RuntimeError("The first observation must have an SoC reset.")
+    cur_energy = np.NaN
     energy_tracker = np.empty((nsteps, 2))
     charge_kwh = 1
     dwell_init_kwh = 0
