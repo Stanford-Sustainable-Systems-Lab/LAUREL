@@ -10,7 +10,6 @@ from megaPLuG.models.dwell_sets import load_dwell_set
 from .nodes import (
     add_geometries,
     calc_derived_dwell_cols,
-    drop_vehicles,
     get_hex_events_from_dwells,
     report_by_hex,
 )
@@ -26,14 +25,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="load_dwell_set_again",
             ),
             node(
-                func=drop_vehicles,
-                inputs=["dwell_obj_loaded", "params:drop_vehicles"],
-                outputs="dwells_dropped",
-                name="drop_vehicles",
-            ),
-            node(
                 func=calc_derived_dwell_cols,
-                inputs=["dwells_dropped", "params:derived_cols"],
+                inputs=["dwell_obj_loaded", "params:derived_cols"],
                 outputs="dwells_derived",
                 name="calc_derived_dwell_cols",
             ),
