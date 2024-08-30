@@ -9,21 +9,21 @@ def charge_soc_thresh(
     avail_kw_col: str,
     dwell_hrs_col: str,
     reset_col: str,
-    batt_cap_kwh: float,
-    soc_pars: dict,
-    charge_soc: float,
-    rngs: dict[int, np.random.Generator],
+    veh_params: pd.DataFrame,
+    soc_params: dict,
 ) -> pd.DataFrame:
     """Execute the charging strategy of charging below an SoC threshold."""
+    cur_veh = veh_params.loc[grp.name]
+    cur_rng = np.random.default_rng(seed=cur_veh["random_seed"])
     arr = _charge_soc_thresh_core(
         consumed_kwh=grp[consumed_kwh_col].values,
         avail_kw=grp[avail_kw_col].values,
         dwell_hrs=grp[dwell_hrs_col].values,
         reset=grp[reset_col].values,
-        batt_cap=batt_cap_kwh,
-        rng=rngs[grp.name],  # This assumes the result of a groupby
-        rng_params=np.array([soc_pars["alpha"], soc_pars["beta"]]),
-        charge_soc=charge_soc,
+        batt_cap=cur_veh["battery_capacity_kwh"],
+        charge_soc=cur_veh["charge_soc_thresh"],
+        rng=cur_rng,
+        rng_params=np.array([soc_params["alpha"], soc_params["beta"]]),
     )
     grp.loc[:, "dwell_start_kwh"] = arr[:, 0]
     grp.loc[:, "charge_kwh"] = arr[:, 1]
@@ -37,9 +37,9 @@ def _charge_soc_thresh_core(
     dwell_hrs: np.ndarray[float],
     reset: np.ndarray[bool],
     batt_cap: float,
+    charge_soc: float,
     rng: np.random.Generator,
     rng_params: np.ndarray[float],
-    charge_soc: float,
 ) -> np.ndarray:
     """Execute the charging strategy of charging below an SoC threshold."""
     nsteps = consumed_kwh.shape[0]

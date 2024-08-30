@@ -39,7 +39,7 @@ vehicles:
     alpha: 5
     beta: 5
   charge_soc_thresh: 1.0
-  seed: 42
+  master_seed: 42 # Each vehicle gets their own seed based on this one and their ID
 
 locations:
   min_dwell_time_hrs: 0.25

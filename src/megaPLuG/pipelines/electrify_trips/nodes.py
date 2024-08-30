@@ -18,6 +18,21 @@ logger = logging.getLogger(__name__)
 SECS_PER_HOUR = 3600
 
 
+def set_vehicle_params(vehs: pd.DataFrame, veh_pars: dict, params: dict) -> DwellSet:
+    """Set vehicle parameters in advance of simulation."""
+    # Seed is based on master seed and vehicle's id to ensure that vehicles are
+    # individually controllable without impacting all other vehicles.
+    if vehs.index.name == params["veh"]:
+        ids = vehs.index.values
+    else:
+        ids = vehs[params["veh"]]
+
+    vehs["random_seed"] = ids + veh_pars["master_seed"]
+    vehs["battery_capacity_kwh"] = veh_pars["battery_capacity_kwh"]
+    vehs["charge_soc_thresh"] = veh_pars["charge_soc_thresh"]
+    return vehs
+
+
 def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
     """Filter out vehicles that we're not considering."""
     keep_idx = vehs.loc[vehs["has_home_base"], :].index.values
@@ -116,20 +131,16 @@ def set_charging_availability(dw: DwellSet, locs: dict) -> DwellSet:
     return dw
 
 
-def simulate_charging_choice(dw: DwellSet, params: dict) -> DwellSet:
+def simulate_charging_choice(
+    dw: DwellSet, vehs: pd.DataFrame, params: dict
+) -> DwellSet:
     """Simulate the charging choices of each vehicle."""
     # TODO: It may be important later to create a function which checks for groupby monotonic increasing.
-    logger.info("Set independent, controlled random seeds for each vehicle")
     if dw.data.index.name != dw.veh:
         raise RuntimeError(
             "The vehicle ID must be the index column for this operation."
         )
-    veh_ids = dw.data.index.unique()
-    # Seed is based on master seed and vehicle's id to ensure that vehicles are
-    # individually controllable without impacting all other vehicles.
-    veh_rngs = {id: np.random.default_rng(seed=params["seed"] + id) for id in veh_ids}
 
-    logger.info("Conduct charging simulation through groupby-apply")
     # Allocate columns to fill in, which avoids merging
     dw.data["dwell_start_kwh"] = np.NaN
     dw.data["charge_kwh"] = np.NaN
@@ -140,9 +151,7 @@ def simulate_charging_choice(dw: DwellSet, params: dict) -> DwellSet:
         avail_kw_col="max_power_kw",
         dwell_hrs_col="dwell_time_hrs",
         reset_col=dw.reset,
-        batt_cap_kwh=params["battery_capacity_kwh"],
-        soc_pars=params["initial_soc"],
-        charge_soc=params["charge_soc_thresh"],
-        rngs=veh_rngs,
+        veh_params=vehs,
+        soc_params=params["initial_soc"],
     )
     return dw

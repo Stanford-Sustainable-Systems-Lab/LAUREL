@@ -16,6 +16,7 @@ from .nodes import (
     mark_locations,
     mark_vehicle_days,
     set_charging_availability,
+    set_vehicle_params,
     simulate_charging_choice,
 )
 
@@ -24,6 +25,16 @@ def create_pipeline(**kwargs) -> Pipeline:
     pipe = pipeline(
         [
             node(
+                func=set_vehicle_params,
+                inputs=[
+                    "vehicles_labelled",
+                    "params:vehicles",
+                    "params:load_dwell_set",
+                ],
+                outputs="vehicles_with_params",
+                name="set_vehicle_params",
+            ),
+            node(
                 func=load_dwell_set,
                 inputs=["dwells", "params:load_dwell_set"],
                 outputs="dwell_obj",
@@ -31,7 +42,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             node(
                 func=filter_vehicles,
-                inputs=["dwell_obj", "vehicles_labelled"],
+                inputs=["dwell_obj", "vehicles_with_params"],
                 outputs="dwell_obj_filtered_vehs",
                 name="filter_vehicles",
             ),
@@ -87,7 +98,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             node(
                 func=simulate_charging_choice,
-                inputs=["dwell_obj_w_avail", "params:vehicles"],
+                inputs=["dwell_obj_w_avail", "vehicles_with_params", "params:vehicles"],
                 outputs="dwell_obj_w_charging",
                 name="simulate_charging_choice",
             ),
