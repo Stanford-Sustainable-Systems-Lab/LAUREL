@@ -4,11 +4,6 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.1/configuration/parameters.html
 
-events_from_dwells:
-  seq_names:
-    - dwell_start
-    - dwell_end
-
 report_by_hex:
   id_cols:
     location: hex_id

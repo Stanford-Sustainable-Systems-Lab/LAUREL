@@ -8,22 +8,9 @@ import logging
 import geopandas as gpd
 import pandas as pd
 
-from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.utils.h3 import h3_to_poly
 
 logger = logging.getLogger(__name__)
-
-
-def get_hex_events_from_dwells(dw: DwellSet, params: dict) -> pd.DataFrame:
-    """Convert vehicle dwells to hexagon events."""
-    hex_kw_cols = [f"{seqn}_hex_kw_diff" for seqn in params["seq_names"]]
-    dw.data[hex_kw_cols[0]] = dw.data["charge_kwh"] / dw.data["dwell_time_hrs"]
-    dw.data[hex_kw_cols[1]] = -dw.data[hex_kw_cols[0]]
-
-    dw.data = dw.data.dropna(subset=hex_kw_cols)
-    dw.seq_names = params["seq_names"]
-    events = dw.to_hex_profiles()
-    return events
 
 
 def report_by_hex(events: pd.DataFrame, params: dict) -> pd.DataFrame:

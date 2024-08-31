@@ -13,6 +13,7 @@ from .nodes import (
     filter_dwells,
     filter_noncritical_dwells,
     filter_vehicles,
+    get_hex_events_from_dwells,
     mark_critical_days,
     mark_locations,
     mark_vehicle_days,
@@ -128,6 +129,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="vehicles_evaluated",
                 name="summarize_vehicles",
+            ),
+            node(
+                func=get_hex_events_from_dwells,
+                inputs=["dwell_obj_w_charging", "params:events_from_dwells"],
+                outputs="events",
+                name="get_hex_events_from_dwells",
             ),
             node(
                 func=write_scenario_partition,

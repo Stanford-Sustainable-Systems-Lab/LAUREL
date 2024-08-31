@@ -47,3 +47,8 @@ locations:
 
 summarize_vehicles:
   dead_energy_col: dwell_start_kwh
+
+events_from_dwells:
+  seq_names:
+    - dwell_start
+    - dwell_end
