@@ -4,10 +4,6 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.1/configuration/parameters.html
 
-derived_cols:
-  initial_rename:
-    dwell_start_kwh: dwell_start_veh_kwh
-
 events_from_dwells:
   seq_names:
     - dwell_start

@@ -14,21 +14,13 @@ from megaPLuG.utils.h3 import h3_to_poly
 logger = logging.getLogger(__name__)
 
 
-def calc_derived_dwell_cols(dw: DwellSet, params: dict) -> DwellSet:
-    """Calculate derived variables which are needed for events."""
-    dw.data = dw.data.rename(columns=params["initial_rename"])
-    dw.data["dwell_end_veh_kwh"] = (
-        dw.data["dwell_start_veh_kwh"] + dw.data["charge_kwh"]
-    )
-    dw.data["dwell_start_hex_kw_diff"] = (
-        dw.data["charge_kwh"] / dw.data["dwell_time_hrs"]
-    )
-    dw.data["dwell_end_hex_kw_diff"] = -dw.data["dwell_start_hex_kw_diff"]
-    return dw
-
-
 def get_hex_events_from_dwells(dw: DwellSet, params: dict) -> pd.DataFrame:
-    """Sort events by hex instead of by vehicle."""
+    """Convert vehicle dwells to hexagon events."""
+    hex_kw_cols = [f"{seqn}_hex_kw_diff" for seqn in params["seq_names"]]
+    dw.data[hex_kw_cols[0]] = dw.data["charge_kwh"] / dw.data["dwell_time_hrs"]
+    dw.data[hex_kw_cols[1]] = -dw.data[hex_kw_cols[0]]
+
+    dw.data = dw.data.dropna(subset=hex_kw_cols)
     dw.seq_names = params["seq_names"]
     events = dw.to_hex_profiles()
     return events
