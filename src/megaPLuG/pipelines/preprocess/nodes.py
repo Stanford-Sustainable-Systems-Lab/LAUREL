@@ -89,8 +89,3 @@ def create_dwells(trips: dd.DataFrame, params: dict) -> dd.DataFrame | pd.DataFr
         dw.data = dw.data.persist()
 
     return dw.data
-
-
-def clean_vius(vius):
-    """Remove unnecessary VIUS columns and calculate new ones, if necessary."""
-    raise NotImplementedError()
