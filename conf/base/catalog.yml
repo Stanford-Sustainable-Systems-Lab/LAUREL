@@ -119,6 +119,10 @@ charging_sessions_sampled:
   filepath: data/07_model_output/charging_sessions_sampled/
 
 # Evaluate impacts datasets
+vehicles_evaluated:
+  type: pandas.FeatherDataset
+  filepath: data/07_model_output/vehicles_evaluated.feather
+
 report_by_hex:
   type: pandas.CSVDataset
   filepath: data/07_model_output/report_by_hex.csv

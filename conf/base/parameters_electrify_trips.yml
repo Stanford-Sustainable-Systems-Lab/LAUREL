@@ -44,3 +44,6 @@ vehicles:
 locations:
   min_dwell_time_hrs: 0.25
   charging_rate_kw: 350
+
+summarize_vehicles:
+  dead_energy_col: dwell_start_kwh

@@ -18,6 +18,7 @@ from .nodes import (
     set_charging_availability,
     set_vehicle_params,
     simulate_charging_choice,
+    summarize_vehicles,
 )
 
 
@@ -107,6 +108,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs="dwell_obj_w_charging",
                 outputs="dwells_with_charging",
                 name="save_dwell_set",
+            ),
+            node(
+                func=summarize_vehicles,
+                inputs=[
+                    "dwell_obj_w_charging",
+                    "vehicles_with_params",
+                    "params:summarize_vehicles",
+                ],
+                outputs="vehicles_evaluated",
+                name="summarize_vehicles",
             ),
         ],
     )

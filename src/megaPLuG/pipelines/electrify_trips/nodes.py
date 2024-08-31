@@ -155,3 +155,15 @@ def simulate_charging_choice(
         soc_params=params["initial_soc"],
     )
     return dw
+
+
+def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Drop vehicles which are excluded, for example those which weren't electrifiable"""
+    dw.data["is_death"] = dw.data[params["dead_energy_col"]] < 0
+    n_deaths = dw.data.groupby(dw.veh)["is_death"].sum()
+    n_deaths.name = "n_deaths"
+    vehs = vehs.merge(n_deaths, how="inner", on=dw.veh)
+
+    logger.info("Deaths per vehicle:")
+    logger.info(n_deaths.describe())
+    return vehs
