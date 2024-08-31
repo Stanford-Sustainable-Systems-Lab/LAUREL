@@ -62,7 +62,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=classify_vehicles,
                 inputs=[
-                    "vehicles",
+                    "vehicles_raw",
                     "vehicle_location_pairs_labelled",
                     "params:classify_vehicles",
                 ],
