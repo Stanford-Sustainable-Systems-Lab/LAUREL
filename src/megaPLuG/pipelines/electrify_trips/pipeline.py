@@ -106,21 +106,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="simulate_charging_choice",
             ),
             node(
-                func=save_dwell_set,
-                inputs="dwell_obj_w_charging",
-                outputs="dwells_with_charging",
-                name="save_dwell_set",
-            ),
-            node(
-                func=write_scenario_partition,
-                inputs=[
-                    "dwells_with_charging",
-                    "params:results_partition",
-                ],
-                outputs="dwells_with_charging_partition",
-                name="write_scenario_partition_dwells",
-            ),
-            node(
                 func=summarize_vehicles,
                 inputs=[
                     "dwell_obj_w_charging",
@@ -136,6 +121,22 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="events",
                 name="get_hex_events_from_dwells",
             ),
+            # From here down is saving out the results
+            node(
+                func=save_dwell_set,
+                inputs="dwell_obj_w_charging",
+                outputs="dwells_with_charging",
+                name="save_dwell_set",
+            ),
+            node(
+                func=write_scenario_partition,
+                inputs=[
+                    "dwells_with_charging",
+                    "params:results_partition",
+                ],
+                outputs="dwells_with_charging_partition",
+                name="write_scenario_partition_dwells",
+            ),
             node(
                 func=write_scenario_partition,
                 inputs=[
@@ -144,6 +145,15 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="vehicles_evaluated_partition",
                 name="write_scenario_partition_vehicles",
+            ),
+            node(
+                func=write_scenario_partition,
+                inputs=[
+                    "events",
+                    "params:results_partition",
+                ],
+                outputs="events_partition",
+                name="write_scenario_partition_events",
             ),
         ],
     )
