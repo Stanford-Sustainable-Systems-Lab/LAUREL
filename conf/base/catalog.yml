@@ -162,3 +162,19 @@ vehicle_depots_geoms:
     layer: vehicle_depots
   load_args:
     layer: vehicle_depots
+
+### Scenario configurations
+scenario_configs:
+  type: partitions.PartitionedDataset
+  path: conf/scenarios
+  dataset:
+    type: yaml.YAMLDataset
+  filename_suffix: ".yml"
+
+### Slurm batch scripts
+scenario_slurm_script:
+  type: partitions.PartitionedDataset
+  path: src/runners
+  dataset:
+    type: text.TextDataset
+  filename_suffix: ".sh"
