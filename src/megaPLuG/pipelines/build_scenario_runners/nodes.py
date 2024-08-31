@@ -5,7 +5,7 @@ generated using Kedro 0.18.13
 
 from pathlib import Path
 
-from .manage_scenarios import generate_configs
+from megaPLuG.scenarios.manage_scenarios import generate_configs
 
 
 @generate_configs
