@@ -123,6 +123,20 @@ vehicles_evaluated:
   type: pandas.FeatherDataset
   filepath: data/07_model_output/vehicles_evaluated.feather
 
+vehicles_evaluated_partition:
+  type: partitions.PartitionedDataset
+  path: data/07_model_output/vehicles_evaluated
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
+
+dwells_with_charging_partition:
+  type: partitions.PartitionedDataset
+  path: data/07_model_output/dwells_with_charging
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
+
 report_by_hex:
   type: pandas.CSVDataset
   filepath: data/07_model_output/report_by_hex.csv
