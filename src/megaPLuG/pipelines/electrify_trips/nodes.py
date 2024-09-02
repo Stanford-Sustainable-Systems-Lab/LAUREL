@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 from megaPLuG.models.charging_algorithms import charge_soc_thresh
 from megaPLuG.models.dwell_sets import DwellSet
+from megaPLuG.utils.params import build_df_from_dict, flatten_dict
 
 logger = logging.getLogger(__name__)
 
@@ -22,14 +23,26 @@ def set_vehicle_params(vehs: pd.DataFrame, veh_pars: dict, params: dict) -> Dwel
     """Set vehicle parameters in advance of simulation."""
     # Seed is based on master seed and vehicle's id to ensure that vehicles are
     # individually controllable without impacting all other vehicles.
-    if vehs.index.name == params["veh"]:
-        ids = vehs.index.values
-    else:
-        ids = vehs[params["veh"]]
+    orig_idx = vehs.index.names
+    vehs = vehs.reset_index()
 
-    vehs["random_seed"] = ids + veh_pars["master_seed"]
-    vehs["battery_capacity_kwh"] = veh_pars["battery_capacity_kwh"]
-    vehs["charge_soc_thresh"] = veh_pars["charge_soc_thresh"]
+    for k, v in veh_pars.items():
+        if isinstance(v, dict) and set(v.keys()) == {"id_columns", "values"}:
+            # If this is a merge-type param, sensitive to already-defined parameters
+            par_df = build_df_from_dict(
+                d=v["values"], id_cols=v["id_columns"], value_col=k
+            )
+            vehs = vehs.merge(par_df, how="left", on=v["id_columns"])
+        elif k == "master_seed":
+            # Each vehicle gets its own independent seed controlled by the master
+            vehs["random_seed"] = vehs["veh_id"] + v
+        else:
+            # If this is a parameter with the same value across vehicles
+            flat = flatten_dict({k: v})
+            for col, val in flat.items():
+                vehs[col] = val
+
+    vehs = vehs.set_index(orig_idx)
     return vehs
 
 

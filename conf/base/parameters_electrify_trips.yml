@@ -30,11 +30,36 @@ veh_days:
   crit_col: is_crit_day
 
 vehicles:
-  battery_capacity_kwh: 1000
-  consump_rate_kwh_per_mi: 2.5
-  charging_delays:
-    plug_in_mins: 10
-    plug_out_mins: 10
+  battery_capacity_kwh:
+    id_columns:
+      - has_home_base
+      - vin_gvw
+    values:
+      True:
+        6: 400
+        7: 400
+        8: 600
+      False:
+        6: 600
+        7: 600
+        8: 1200
+  consump_rate_kwh_per_mi:
+    id_columns:
+      - has_home_base
+      - vin_gvw
+    values:
+      True:
+        6: 1.25
+        7: 1.25
+        8: 2.08
+      False:
+        6: 3.06
+        7: 3.06
+        8: 3.12
+  minimum_time_to_charge:
+    plug_in_mins: 5
+    plug_out_mins: 5
+    charge_time_mins: 15
   initial_soc:
     alpha: 5
     beta: 5
