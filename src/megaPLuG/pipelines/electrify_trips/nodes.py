@@ -64,23 +64,43 @@ def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
     return dw
 
 
+def set_charging_availability(dw: DwellSet, locs: dict) -> DwellSet:
+    """Set the charging availability for each session."""
+    dw.data["max_power_kw"] = locs["charging_rate_kw"]
+    return dw
+
+
 def filter_dwells(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
     """Set the charging availability for each session."""
-    dwell_hrs = dw.data[dw.end] - dw.data[dw.start]
+    pcols = params["veh_param_cols"]
+    for col, unit in params["time_cols_w_unit"].items():
+        vehs[col] = pd.to_timedelta(vehs[col], unit=unit)
+    dw.data = dw.data.merge(vehs.loc[:, list(pcols.values())], how="left", on=dw.veh)
+
+    # Adjust dwell start and end times to allow time for vehicle to plug in and out
+    dw.data[dw.end] = dw.data[dw.end] - dw.data[pcols["plug_out"]]
+    dw.data[dw.start] = dw.data[dw.start] + dw.data[pcols["plug_in"]]
+
+    # Get remaining time in hours
+    def timedelta_to_hrs(s: pd.Series) -> pd.Series:
+        return s.dt.total_seconds() / SECS_PER_HOUR
+
     dwell_time_col = params["dwell_time_col"]
-    dw.data[dwell_time_col] = dwell_hrs.dt.total_seconds() / SECS_PER_HOUR
+    dw.data[dwell_time_col] = timedelta_to_hrs(dw.data[dw.end] - dw.data[dw.start])
 
-    vehs["min_charge_time_hrs"] = vehs[params["thresh_col"]] / MINS_PER_HOUR
-
-    dw.data = dw.data.merge(vehs.loc[:, ["min_charge_time_hrs"]], how="left", on=dw.veh)
-
-    dw.data["long_dwells"] = dw.data[dwell_time_col] > dw.data["min_charge_time_hrs"]
-    dw.data = dw.data.drop(columns=["min_charge_time_hrs"])
+    # Calculate potential SoC increase of this dwell
+    dw.data["soc_boost_potential"] = (
+        dw.data[params["max_power_col"]]
+        * dw.data[dwell_time_col]
+        / dw.data[pcols["batt_cap"]]
+    )
+    dw.data["big_boost"] = dw.data["soc_boost_potential"] > dw.data[pcols["soc_boost"]]
 
     logger.info("Filter by dwells by accumulating through")
     old_len = len(dw.data)
-    dw.data = dw.data.drop(columns=params["drop_cols"])  # Not accumulated
-    dw.filter_through("long_dwells")
+    drop_cols = params["drop_cols"] + list(pcols.values()) + ["soc_boost_potential"]
+    dw.data = dw.data.drop(columns=drop_cols)  # Not accumulated
+    dw.filter_through("big_boost")
     new_len = len(dw.data)
     logger.info(f"Rows dropped: {old_len - new_len}, {round(new_len/old_len*100, 1)}%")
     return dw
@@ -146,12 +166,6 @@ def calc_energy_use(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
     dw.data = dw.data.merge(vehs.loc[:, [params["consump_col"]]], how="left", on=dw.veh)
     dw.data[params["energy_col"]] = dw.data[dw.dist] * dw.data[params["consump_col"]]
     dw.data = dw.data.drop(columns=[params["consump_col"]])
-    return dw
-
-
-def set_charging_availability(dw: DwellSet, locs: dict) -> DwellSet:
-    """Set the charging availability for each session."""
-    dw.data["max_power_kw"] = locs["charging_rate_kw"]
     return dw
 
 

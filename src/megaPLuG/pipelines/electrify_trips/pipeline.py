@@ -45,9 +45,15 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="filter_vehicles",
             ),
             node(
+                func=set_charging_availability,
+                inputs=["dwell_obj_filtered_vehs", "params:locations"],
+                outputs="dwell_obj_w_avail",
+                name="set_charging_availability",
+            ),
+            node(
                 func=filter_dwells,
                 inputs=[
-                    "dwell_obj_filtered_vehs",
+                    "dwell_obj_w_avail",
                     "vehicles_with_params",
                     "params:filter_dwells",
                 ],
@@ -87,15 +93,9 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="calc_energy_use",
             ),
             node(
-                func=set_charging_availability,
-                inputs=["dwell_obj_w_energy", "params:locations"],
-                outputs="dwell_obj_w_avail",
-                name="set_charging_availability",
-            ),
-            node(
                 func=simulate_charging_choice,
                 inputs=[
-                    "dwell_obj_w_avail",
+                    "dwell_obj_w_energy",
                     "vehicles_with_params",
                     "params:simulate_charging_choice",
                 ],

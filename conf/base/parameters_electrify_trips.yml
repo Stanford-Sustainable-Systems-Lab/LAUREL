@@ -16,7 +16,15 @@ filter_dwells:
   drop_cols:
     - trip_hrs
     - trip_avg_speed_mph
-  thresh_col: minimum_time_to_charge_charge_time_mins
+  veh_param_cols:
+    plug_in: minimum_times_plug_in_mins
+    plug_out: minimum_times_plug_out_mins
+    batt_cap: battery_capacity_kwh
+    soc_boost: dwell_min_soc_boost_frac
+  max_power_col: max_power_kw
+  time_cols_w_unit:
+    minimum_times_plug_in_mins: minute
+    minimum_times_plug_out_mins: minute
   dwell_time_col: dwell_time_hrs
 
 veh_days:
@@ -56,10 +64,10 @@ vehicles:
         6: 3.06
         7: 3.06
         8: 3.12
-  minimum_time_to_charge:
+  minimum_times:
     plug_in_mins: 5
     plug_out_mins: 5
-    charge_time_mins: 15
+  dwell_min_soc_boost_frac: 0.1
   initial_soc:
     alpha: 5
     beta: 5
