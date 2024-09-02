@@ -156,5 +156,6 @@ def mark_locations(dw: DwellSet, veh_locs: pd.DataFrame, params: dict) -> DwellS
     # TODO: Modify this code so that it works with Dask, using a single merge column
     # Achieve this using an encoding function e.g. id1 * set1_size + id2, or a hash
     # Pandas almost surely does this internally, but Dask doesn't presume.
+    # TODO: Also ensure that this preserves ordering
     dw.data = dw.data.merge(veh_loc_merge, how="left", on=[dw.veh, dw.hex])
     return dw
