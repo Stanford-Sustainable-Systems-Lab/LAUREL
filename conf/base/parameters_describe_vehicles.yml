@@ -39,3 +39,7 @@ label_veh_loc_pairs:
 classify_vehicles:
   veh_col: veh_id
   loc_col: location
+
+mark_locations:
+  veh_loc_cols:
+    - location

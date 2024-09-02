@@ -148,3 +148,13 @@ def classify_vehicles(
     vehs.loc[vehs["has_home_base"].isna(), "has_home_base"] = False
     vehs["has_home_base"] = vehs["has_home_base"].astype(bool)
     return vehs
+
+
+def mark_locations(dw: DwellSet, veh_locs: pd.DataFrame, params: dict) -> DwellSet:
+    """Mark locations-of-interest for each vehicle (e.g. home base)."""
+    veh_loc_merge = veh_locs.loc[:, params["veh_loc_cols"]]
+    # TODO: Modify this code so that it works with Dask, using a single merge column
+    # Achieve this using an encoding function e.g. id1 * set1_size + id2, or a hash
+    # Pandas almost surely does this internally, but Dask doesn't presume.
+    dw.data = dw.data.merge(veh_loc_merge, how="left", on=[dw.veh, dw.hex])
+    return dw

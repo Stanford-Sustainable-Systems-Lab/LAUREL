@@ -72,16 +72,6 @@ def filter_dwells(dw: DwellSet, locs: dict, params: dict) -> DwellSet:
     return dw
 
 
-def mark_locations(dw: DwellSet, veh_locs: pd.DataFrame, params: dict) -> DwellSet:
-    """Mark locations-of-interest for each vehicle (e.g. home base)."""
-    veh_loc_merge = veh_locs.loc[:, params["veh_loc_cols"]]
-    # TODO: Modify this code so that it works with Dask, using a single merge column
-    # Achieve this using an encoding function e.g. id1 * set1_size + id2, or a hash
-    # Pandas almost surely does this internally, but Dask doesn't presume.
-    dw.data = dw.data.merge(veh_loc_merge, how="left", on=[dw.veh, dw.hex])
-    return dw
-
-
 def mark_vehicle_days(dw: DwellSet, params: dict) -> DwellSet:
     """Mark out vehicle-days, the periods between human-intuitive-resets.
 

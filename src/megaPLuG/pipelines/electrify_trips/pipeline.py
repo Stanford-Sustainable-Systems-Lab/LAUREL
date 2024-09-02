@@ -15,7 +15,6 @@ from .nodes import (
     filter_vehicles,
     get_hex_events_from_dwells,
     mark_critical_days,
-    mark_locations,
     mark_vehicle_days,
     set_charging_availability,
     set_vehicle_params,
@@ -35,7 +34,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             node(
                 func=load_dwell_set,
-                inputs=["dwells", "params:load_dwell_set"],
+                inputs=["dwells_with_locations", "params:load_dwell_set"],
                 outputs="dwell_obj",
                 name="load_dwell_set",
             ),
@@ -56,18 +55,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="filter_dwells",
             ),
             node(
-                func=mark_locations,
-                inputs=[
-                    "dwell_obj_filtered_dwells",
-                    "vehicle_location_pairs_labelled",
-                    "params:mark_locations",
-                ],
-                outputs="dwell_obj_marked_loc",
-                name="mark_locations",
-            ),
-            node(
                 func=mark_vehicle_days,
-                inputs=["dwell_obj_marked_loc", "params:veh_days"],
+                inputs=["dwell_obj_filtered_dwells", "params:veh_days"],
                 outputs="dwell_obj_veh_days",
                 name="mark_vehicle_days",
             ),

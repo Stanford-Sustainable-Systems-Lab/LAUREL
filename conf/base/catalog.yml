@@ -8,6 +8,10 @@ dwells:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/dwells.feather
 
+dwells_with_locations:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/dwells_with_locations.feather
+
 vehicles_raw:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vehicles_raw.feather

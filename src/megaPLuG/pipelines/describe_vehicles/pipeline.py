@@ -5,7 +5,7 @@ generated using Kedro 0.19.3
 
 from kedro.pipeline import Pipeline, node, pipeline
 
-from megaPLuG.models.dwell_sets import load_dwell_set
+from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
 
 from .nodes import (
     calc_inter_visit_stats,
@@ -14,6 +14,7 @@ from .nodes import (
     describe_veh_loc_pairs,
     filter_substantial_dwells,
     label_veh_loc_pairs,
+    mark_locations,
 )
 
 
@@ -68,6 +69,22 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="vehicles_labelled",
                 name="classify_vehicles",
+            ),
+            node(
+                func=mark_locations,
+                inputs=[
+                    "dwell_obj_desc_vehs",
+                    "vehicle_location_pairs_labelled",
+                    "params:mark_locations",
+                ],
+                outputs="dwell_obj_with_locations_desc_vehs",
+                name="mark_locations",
+            ),
+            node(
+                func=save_dwell_set,
+                inputs="dwell_obj_with_locations_desc_vehs",
+                outputs="dwells_with_locations",
+                name="save_dwell_set_desc_vehs",
             ),
         ]
     )

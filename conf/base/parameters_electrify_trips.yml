@@ -17,10 +17,6 @@ filter_dwells:
     - trip_hrs
     - trip_avg_speed_mph
 
-mark_locations:
-  veh_loc_cols:
-    - location
-
 veh_days:
   loc_col: location
   veh_day_col: veh_day_id
