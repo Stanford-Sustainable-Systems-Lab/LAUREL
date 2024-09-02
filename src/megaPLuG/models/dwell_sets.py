@@ -1,7 +1,8 @@
+import copy
 import re
 from collections.abc import Callable
-from copy import deepcopy
 from itertools import product
+from typing import Self
 
 import dask.dataframe as dd
 import dask_geopandas
@@ -87,6 +88,13 @@ class DwellSet:
         else:
             self._reset = _return_if_present(reset)
 
+    def copy_without_data(self: Self) -> Self:
+        """Copy the DwellSet without its underlying data. This is used for filtering."""
+        new = copy.copy(self)
+        new.data = None
+        newer = copy.deepcopy(new)
+        return newer
+
     def sort_by_veh_time(self) -> None:
         """Sort the DwellSet by vehicle and time."""
         if self.data.index.name in self.get_tracked_cols():
@@ -116,7 +124,7 @@ class DwellSet:
                 df = df.set_index(grp_col)
         return df
 
-    def filter_through(self, keep_col: str):
+    def filter_through(self, keep_col: str, inplace: bool = False) -> Self | None:
         """Filter out individual dwells while merging trips together.
 
         Merging trips together means summing the distances traveled of the trips on
@@ -129,14 +137,18 @@ class DwellSet:
         """
         # Force numba compilation
         _ = DwellSet._filter_through_grp(
-            grp=deepcopy(self.data.head(5)),  # copy needed to prevent double-processing
+            grp=copy.deepcopy(self.data.head(5)),  # copy to prevent double-processing
             keep_col=keep_col,
             reset_col=self.reset,
             dist_col=self.dist,
         )
+        if inplace:
+            new = self
+        else:
+            new = self.copy_without_data()
 
         if isinstance(self.data, dd.DataFrame):
-            self.data = self.data.groupby(self.veh, group_keys=False).apply(
+            new.data = self.data.groupby(self.veh, group_keys=False).apply(
                 DwellSet._filter_through_grp,
                 keep_col=keep_col,
                 reset_col=self.reset,
@@ -145,15 +157,19 @@ class DwellSet:
             )
         elif isinstance(self.data, pd.DataFrame):
             tqdm.pandas()
-            self.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
+            new.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
                 DwellSet._filter_through_grp,
                 keep_col=keep_col,
                 reset_col=self.reset,
                 dist_col=self.dist,
             )
-        self.data[keep_col] = self.data[keep_col].replace(False, np.NaN)
-        self.data = self.data.dropna(subset=keep_col)
-        self.data = self.data.drop(columns=keep_col)
+        new.data[keep_col] = new.data[keep_col].replace(False, np.NaN)
+        new.data.dropna(subset=keep_col, inplace=True)
+        new.data.drop(columns=keep_col, inplace=True)
+        if inplace:
+            return None
+        else:
+            return new
 
     @staticmethod
     @njit
@@ -195,20 +211,25 @@ class DwellSet:
         grp.loc[:, reset_col] = arr[:, 1].astype(bool)
         return grp
 
-    def filter_reset(self, keep_col: str):
+    def filter_reset(self, keep_col: str, inplace: bool = False) -> Self | None:
         """Filter out individual dwells while forcing a reset in the new gaps.
 
         Note: This function operates inplace for efficiency.
         """
         # Force numba compilation
         _ = DwellSet._filter_reset_grp(
-            grp=deepcopy(self.data.head(5)),  # copy needed to prevent double-processing
+            grp=copy.deepcopy(self.data.head(5)),  # copy to prevent double-processing
             keep_col=keep_col,
             reset_col=self.reset,
         )
 
+        if inplace:
+            new = self
+        else:
+            new = self.copy_without_data()
+
         if isinstance(self.data, dd.DataFrame):
-            self.data = self.data.groupby(self.veh, group_keys=False).apply(
+            new.data = self.data.groupby(self.veh, group_keys=False).apply(
                 DwellSet._filter_reset_grp,
                 keep_col=keep_col,
                 reset_col=self.reset,
@@ -216,14 +237,18 @@ class DwellSet:
             )
         elif isinstance(self.data, pd.DataFrame):
             tqdm.pandas()
-            self.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
+            new.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
                 DwellSet._filter_reset_grp,
                 keep_col=keep_col,
                 reset_col=self.reset,
             )
-        self.data[keep_col] = self.data[keep_col].replace(False, np.NaN)
-        self.data = self.data.dropna(subset=keep_col)
-        self.data = self.data.drop(columns=keep_col)
+        new.data[keep_col] = new.data[keep_col].replace(False, np.NaN)
+        new.data.dropna(subset=keep_col, inplace=True)
+        new.data.drop(columns=keep_col, inplace=True)
+        if inplace:
+            return None
+        else:
+            return new
 
     @staticmethod
     def _filter_reset_grp(

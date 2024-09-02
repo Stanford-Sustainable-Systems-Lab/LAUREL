@@ -4,7 +4,6 @@ generated using Kedro 0.19.1
 """
 
 import logging
-from copy import deepcopy
 
 import numpy as np
 import pandas as pd
@@ -100,7 +99,7 @@ def filter_dwells(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
     old_len = len(dw.data)
     drop_cols = params["drop_cols"] + list(pcols.values()) + ["soc_boost_potential"]
     dw.data = dw.data.drop(columns=drop_cols)  # Not accumulated
-    dw.filter_through("big_boost")
+    dw.filter_through("big_boost", inplace=True)
     new_len = len(dw.data)
     logger.info(f"Rows dropped: {old_len - new_len}, {round(new_len/old_len*100, 1)}%")
     return dw
@@ -122,8 +121,7 @@ def mark_vehicle_days(dw: DwellSet, params: dict) -> DwellSet:
 
 def mark_critical_days(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
     """Mark critical days, vehicle-days which cannot be achieved on a single charge."""
-    crit_days = deepcopy(dw)
-    crit_days.filter_through(params["refresh_col"])
+    crit_days = dw.filter_through(params["refresh_col"])
 
     # Apply vehicle-specific estimated range
     vehs["range_estim"] = vehs[params["batt_cap_col"]] / vehs[params["consump_col"]]
@@ -155,7 +153,7 @@ def filter_noncritical_dwells(dw: DwellSet, params: dict) -> DwellSet:
 
     logger.info("Filter by dwells by accumulating through")
     old_len = len(dw.data)
-    dw.filter_through("keep_dwells")
+    dw.filter_through("keep_dwells", inplace=True)
     new_len = len(dw.data)
     logger.info(f"Rows dropped: {old_len - new_len}, {round(new_len/old_len*100, 1)}%")
     return dw

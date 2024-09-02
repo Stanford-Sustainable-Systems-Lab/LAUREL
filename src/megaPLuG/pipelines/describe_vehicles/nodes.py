@@ -24,7 +24,7 @@ def filter_substantial_dwells(dw: DwellSet, params: dict) -> DwellSet:
         dw.data[dw.end] - dw.data[dw.start]
     ).dt.total_seconds() / 3600
     dw.data["long_enough"] = dw.data["dwell_hrs"] > params["thresh_hrs"]
-    dw.filter_through("long_enough")
+    dw.filter_through("long_enough", inplace=True)
     dw.data = dw.data.drop(
         columns=params["drop_cols"]
     )  # Since these aren't accumulated by filter_through
