@@ -10,11 +10,12 @@ def charge_soc_thresh(
     dwell_hrs_col: str,
     reset_col: str,
     veh_params: pd.DataFrame,
-    soc_params: dict,
+    out_cols: list[str],
 ) -> pd.DataFrame:
     """Execute the charging strategy of charging below an SoC threshold."""
     cur_veh = veh_params.loc[grp.name]
     cur_rng = np.random.default_rng(seed=cur_veh["random_seed"])
+    rng_params = np.array([cur_veh["initial_soc_alpha"], cur_veh["initial_soc_beta"]])
     arr = _charge_soc_thresh_core(
         consumed_kwh=grp[consumed_kwh_col].values,
         avail_kw=grp[avail_kw_col].values,
@@ -23,10 +24,10 @@ def charge_soc_thresh(
         batt_cap=cur_veh["battery_capacity_kwh"],
         charge_soc=cur_veh["charge_soc_thresh"],
         rng=cur_rng,
-        rng_params=np.array([soc_params["alpha"], soc_params["beta"]]),
+        rng_params=rng_params,
     )
-    grp.loc[:, "dwell_start_kwh"] = arr[:, 0]
-    grp.loc[:, "charge_kwh"] = arr[:, 1]
+    for i, col in enumerate(out_cols):
+        grp.loc[:, col] = arr[:, i]
     return grp
 
 

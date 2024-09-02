@@ -48,7 +48,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=filter_dwells,
                 inputs=[
                     "dwell_obj_filtered_vehs",
-                    "params:locations",
+                    "vehicles_with_params",
                     "params:filter_dwells",
                 ],
                 outputs="dwell_obj_filtered_dwells",
@@ -62,7 +62,11 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             node(
                 func=mark_critical_days,
-                inputs=["dwell_obj_veh_days", "params:vehicles", "params:veh_days"],
+                inputs=[
+                    "dwell_obj_veh_days",
+                    "vehicles_with_params",
+                    "params:veh_days",
+                ],
                 outputs="dwell_obj_crit_days",
                 name="mark_critical_days",
             ),
@@ -74,7 +78,11 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             node(
                 func=calc_energy_use,
-                inputs=["dwell_obj_crit_dwells", "params:vehicles"],
+                inputs=[
+                    "dwell_obj_crit_dwells",
+                    "vehicles_with_params",
+                    "params:calc_energy_use",
+                ],
                 outputs="dwell_obj_w_energy",
                 name="calc_energy_use",
             ),
@@ -86,7 +94,11 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             node(
                 func=simulate_charging_choice,
-                inputs=["dwell_obj_w_avail", "vehicles_with_params", "params:vehicles"],
+                inputs=[
+                    "dwell_obj_w_avail",
+                    "vehicles_with_params",
+                    "params:simulate_charging_choice",
+                ],
                 outputs="dwell_obj_w_charging",
                 name="simulate_charging_choice",
             ),

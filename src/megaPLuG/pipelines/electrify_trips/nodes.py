@@ -17,6 +17,7 @@ from megaPLuG.utils.params import build_df_from_dict, flatten_dict
 logger = logging.getLogger(__name__)
 
 SECS_PER_HOUR = 3600
+MINS_PER_HOUR = 60
 
 
 def set_vehicle_params(vehs: pd.DataFrame, params: dict) -> DwellSet:
@@ -57,11 +58,18 @@ def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
     return dw
 
 
-def filter_dwells(dw: DwellSet, locs: dict, params: dict) -> DwellSet:
+def filter_dwells(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
     """Set the charging availability for each session."""
     dwell_hrs = dw.data[dw.end] - dw.data[dw.start]
-    dw.data["dwell_time_hrs"] = dwell_hrs.dt.total_seconds() / SECS_PER_HOUR
-    dw.data["long_dwells"] = dw.data["dwell_time_hrs"] > locs["min_dwell_time_hrs"]
+    dwell_time_col = params["dwell_time_col"]
+    dw.data[dwell_time_col] = dwell_hrs.dt.total_seconds() / SECS_PER_HOUR
+
+    vehs["min_charge_time_hrs"] = vehs[params["thresh_col"]] / MINS_PER_HOUR
+
+    dw.data = dw.data.merge(vehs.loc[:, ["min_charge_time_hrs"]], how="left", on=dw.veh)
+
+    dw.data["long_dwells"] = dw.data[dwell_time_col] > dw.data["min_charge_time_hrs"]
+    dw.data = dw.data.drop(columns=["min_charge_time_hrs"])
 
     logger.info("Filter by dwells by accumulating through")
     old_len = len(dw.data)
@@ -86,16 +94,21 @@ def mark_vehicle_days(dw: DwellSet, params: dict) -> DwellSet:
     return dw
 
 
-def mark_critical_days(dw: DwellSet, veh_pars: dict, params: dict) -> DwellSet:
+def mark_critical_days(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
     """Mark critical days, vehicle-days which cannot be achieved on a single charge."""
     crit_days = deepcopy(dw)
     crit_days.filter_through(params["refresh_col"])
-    # TODO: Consider switching this to vehicle-specific parameters
-    implied_range = (
-        veh_pars["battery_capacity_kwh"] / veh_pars["consump_rate_kwh_per_mi"]
+
+    # Apply vehicle-specific estimated range
+    vehs["range_estim"] = vehs[params["batt_cap_col"]] / vehs[params["consump_col"]]
+    crit_days.data = crit_days.data.merge(
+        vehs.loc[:, ["range_estim"]], how="left", on=crit_days.veh
     )
+
     crcol = params["crit_col"]
-    crit_days.data[crcol] = crit_days.data[crit_days.dist] > implied_range
+    crit_days.data[crcol] = (
+        crit_days.data[crit_days.dist] > crit_days.data["range_estim"]
+    )
 
     vdcol = params["veh_day_col"]
     crit_days_merge = crit_days.data.loc[:, [vdcol, crcol]]
@@ -122,9 +135,11 @@ def filter_noncritical_dwells(dw: DwellSet, params: dict) -> DwellSet:
     return dw
 
 
-def calc_energy_use(dw: DwellSet, params: dict) -> DwellSet:
+def calc_energy_use(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
     """Calculate energy use for all trips."""
-    dw.data["energy_use_kwh"] = dw.data[dw.dist] * params["consump_rate_kwh_per_mi"]
+    dw.data = dw.data.merge(vehs.loc[:, [params["consump_col"]]], how="left", on=dw.veh)
+    dw.data[params["energy_col"]] = dw.data[dw.dist] * dw.data[params["consump_col"]]
+    dw.data = dw.data.drop(columns=[params["consump_col"]])
     return dw
 
 
@@ -138,24 +153,19 @@ def simulate_charging_choice(
     dw: DwellSet, vehs: pd.DataFrame, params: dict
 ) -> DwellSet:
     """Simulate the charging choices of each vehicle."""
-    # TODO: It may be important later to create a function which checks for groupby monotonic increasing.
-    if dw.data.index.name != dw.veh:
-        raise RuntimeError(
-            "The vehicle ID must be the index column for this operation."
-        )
-
-    # Allocate columns to fill in, which avoids merging
-    dw.data["dwell_start_kwh"] = np.NaN
-    dw.data["charge_kwh"] = np.NaN
+    # TODO: It may be important to check for groupby monotonic increasing.
+    icols = params["input_cols"]
+    for col in params["output_cols"]:
+        dw.data[col] = np.NaN  # Allocate columns to fill in, which avoids merging
     tqdm.pandas()
     dw.data = dw.data.groupby(dw.veh, group_keys=False).progress_apply(
         charge_soc_thresh,
-        consumed_kwh_col="energy_use_kwh",
-        avail_kw_col="max_power_kw",
-        dwell_hrs_col="dwell_time_hrs",
+        consumed_kwh_col=icols["consumed_kwh"],
+        avail_kw_col=icols["avail_kw"],
+        dwell_hrs_col=icols["dwell_hrs"],
         reset_col=dw.reset,
         veh_params=vehs,
-        soc_params=params["initial_soc"],
+        out_cols=params["output_cols"],
     )
     return dw
 

@@ -16,6 +16,8 @@ filter_dwells:
   drop_cols:
     - trip_hrs
     - trip_avg_speed_mph
+  thresh_col: minimum_time_to_charge_charge_time_mins
+  dwell_time_col: dwell_time_hrs
 
 veh_days:
   loc_col: location
@@ -24,6 +26,8 @@ veh_days:
     - home_base
   refresh_col: is_refresh
   crit_col: is_crit_day
+  batt_cap_col: battery_capacity_kwh
+  consump_col: consump_rate_kwh_per_mi
 
 vehicles:
   battery_capacity_kwh:
@@ -63,8 +67,20 @@ vehicles:
   master_seed: 42 # Each vehicle gets their own seed based on this one and their ID
 
 locations:
-  min_dwell_time_hrs: 0.25
   charging_rate_kw: 350
+
+calc_energy_use:
+  consump_col: consump_rate_kwh_per_mi
+  energy_col: energy_use_kwh
+
+simulate_charging_choice:
+  input_cols:
+    consumed_kwh: energy_use_kwh
+    avail_kw: max_power_kw
+    dwell_hrs: dwell_time_hrs
+  output_cols: # The order must match that of the numpy array output of the inner function
+    - dwell_start_kwh
+    - charge_kwh
 
 summarize_vehicles:
   dead_energy_col: dwell_start_kwh
