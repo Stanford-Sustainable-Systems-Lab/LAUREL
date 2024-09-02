@@ -19,14 +19,14 @@ logger = logging.getLogger(__name__)
 SECS_PER_HOUR = 3600
 
 
-def set_vehicle_params(vehs: pd.DataFrame, veh_pars: dict, params: dict) -> DwellSet:
+def set_vehicle_params(vehs: pd.DataFrame, params: dict) -> DwellSet:
     """Set vehicle parameters in advance of simulation."""
     # Seed is based on master seed and vehicle's id to ensure that vehicles are
     # individually controllable without impacting all other vehicles.
     orig_idx = vehs.index.names
     vehs = vehs.reset_index()
 
-    for k, v in veh_pars.items():
+    for k, v in params.items():
         if isinstance(v, dict) and set(v.keys()) == {"id_columns", "values"}:
             # If this is a merge-type param, sensitive to already-defined parameters
             par_df = build_df_from_dict(

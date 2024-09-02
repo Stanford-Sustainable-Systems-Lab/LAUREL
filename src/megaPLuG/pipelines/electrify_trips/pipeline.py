@@ -29,11 +29,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             node(
                 func=set_vehicle_params,
-                inputs=[
-                    "vehicles_labelled",
-                    "params:vehicles",
-                    "params:load_dwell_set",
-                ],
+                inputs=["vehicles_labelled", "params:vehicles"],
                 outputs="vehicles_with_params",
                 name="set_vehicle_params",
             ),
