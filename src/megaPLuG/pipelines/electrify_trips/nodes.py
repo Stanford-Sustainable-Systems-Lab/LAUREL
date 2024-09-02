@@ -33,7 +33,13 @@ def set_vehicle_params(vehs: pd.DataFrame, params: dict) -> DwellSet:
             par_df = build_df_from_dict(
                 d=v["values"], id_cols=v["id_columns"], value_col=k
             )
-            vehs = vehs.merge(par_df, how="left", on=v["id_columns"])
+            vehs = vehs.merge(par_df, how="left", on=v["id_columns"], indicator="_mrg")
+            if np.any(vehs["_mrg"] == "left_only"):
+                raise RuntimeError(
+                    f"Parameter values for {k} do not cover all vehicles."
+                )
+            else:
+                vehs = vehs.drop(columns=["_mrg"])
         elif k == "master_seed":
             # Each vehicle gets its own independent seed controlled by the master
             vehs["random_seed"] = vehs["veh_id"] + v
