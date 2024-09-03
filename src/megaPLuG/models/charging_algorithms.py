@@ -9,27 +9,25 @@ def charge_soc_thresh(
     avail_kw_col: str,
     dwell_hrs_col: str,
     reset_col: str,
-    batt_cap_kwh: float,
-    soc_pars: dict,
-    charge_soc: float,
-    rngs: dict[int, np.random.Generator],
+    veh_params: pd.DataFrame,
+    out_cols: list[str],
 ) -> pd.DataFrame:
     """Execute the charging strategy of charging below an SoC threshold."""
-    rng = rngs[grp.name]  # This assumes the result of a groupby
-    n = grp[reset_col].sum()
-    soc_inits = rng.beta(a=soc_pars["alpha"], b=soc_pars["beta"], size=n)
-
+    cur_veh = veh_params.loc[grp.name]
+    cur_rng = np.random.default_rng(seed=cur_veh["random_seed"])
+    rng_params = np.array([cur_veh["initial_soc_alpha"], cur_veh["initial_soc_beta"]])
     arr = _charge_soc_thresh_core(
         consumed_kwh=grp[consumed_kwh_col].values,
         avail_kw=grp[avail_kw_col].values,
         dwell_hrs=grp[dwell_hrs_col].values,
         reset=grp[reset_col].values,
-        batt_cap=batt_cap_kwh,
-        soc_inits=soc_inits,
-        charge_soc=charge_soc,
+        batt_cap=cur_veh["battery_capacity_kwh"],
+        charge_soc=cur_veh["charge_soc_thresh"],
+        rng=cur_rng,
+        rng_params=rng_params,
     )
-    grp.loc[:, "dwell_start_kwh"] = arr[:, 0]
-    grp.loc[:, "charge_kwh"] = arr[:, 1]
+    for i, col in enumerate(out_cols):
+        grp.loc[:, col] = arr[:, i]
     return grp
 
 
@@ -40,36 +38,33 @@ def _charge_soc_thresh_core(
     dwell_hrs: np.ndarray[float],
     reset: np.ndarray[bool],
     batt_cap: float,
-    soc_inits: np.ndarray[float],
     charge_soc: float,
+    rng: np.random.Generator,
+    rng_params: np.ndarray[float],
 ) -> np.ndarray:
     """Execute the charging strategy of charging below an SoC threshold."""
-    if not consumed_kwh.shape == avail_kw.shape == dwell_hrs.shape:
-        raise RuntimeError("The three arrays must have the same shape.")
-    if not reset[0]:
-        raise RuntimeError("The first observation must have an SoC reset.")
-    energy_tracker = np.empty((consumed_kwh.shape[0], 2))
-    charge_kwh = 1
-    dwell_init_kwh = 0
-    dead = False
-    soc_used_idx = 0
-    for i in range(energy_tracker.shape[0]):
+    nsteps = consumed_kwh.shape[0]
+    cur_energy = np.NaN
+    energy_tracker = np.empty((nsteps, 2))
+    dwell_init_kwh, charge_kwh = 0, 1  # Set energy tracker index names
+    for i in range(nsteps):
         if reset[i]:
-            cur_energy = batt_cap * soc_inits[soc_used_idx]
-            soc_used_idx += 1
+            soc = rng.beta(a=rng_params[0], b=rng_params[1])
+            cur_energy = batt_cap * soc
         cur_energy -= consumed_kwh[i]
         energy_tracker[i, dwell_init_kwh] = cur_energy
-        if cur_energy < 0:
-            dead = True
-            break
-        if cur_energy / batt_cap <= charge_soc:
-            chg = np.minimum(batt_cap - cur_energy, dwell_hrs[i] * avail_kw[i])
+        avail_kwh = dwell_hrs[i] * avail_kw[i]
+        if np.isnan(cur_energy) or cur_energy < 0:  # Currently dead
+            if avail_kwh >= batt_cap:  # If full recharge is possible, then refresh
+                cur_energy = 0
+                chg = batt_cap
+            else:  # If not, then become/stay dead
+                chg = np.NaN
+        elif cur_energy / batt_cap <= charge_soc:
+            chg = np.minimum(batt_cap - cur_energy, avail_kwh)
         else:
             chg = 0
         energy_tracker[i, charge_kwh] = chg
         cur_energy += chg
 
-    if dead:
-        energy_tracker[(i + 1) :, dwell_init_kwh] = np.NaN
-        energy_tracker[i:, charge_kwh] = np.NaN
     return energy_tracker

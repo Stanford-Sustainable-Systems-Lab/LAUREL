@@ -1,0 +1,45 @@
+# This is a boilerplate parameters config generated for pipeline 'describe_vehicles'
+# using Kedro 0.19.3.
+#
+# Documentation for this file format can be found in "Parameters"
+# Link: https://docs.kedro.org/en/0.19.3/configuration/parameters.html
+
+substantial_dwells:
+  thresh_hrs: 4
+  drop_cols:
+    - trip_hrs
+    - trip_avg_speed_mph
+
+cluster_veh_loc_pairs:
+  min_cluster_size_denom: 200 # [n_obs]/[this number] gives the minimum cluster size 
+  sample:
+    active: False
+    n: 10000
+    seed: 42
+  feature_cols:
+    - mean_inter_miles
+    - med_inter_miles
+    - max_inter_miles
+    - mean_inter_times
+    - med_inter_times
+    - max_inter_times
+    - med_dwell_hrs
+    - dwell_hrs_ratio
+    - visits_ratio
+  cluster_col: cluster
+
+label_veh_loc_pairs:
+  cluster_location_corresp:
+    cols:
+      cluster: cluster
+      location: location
+    vals:
+      2: home_base
+
+classify_vehicles:
+  veh_col: veh_id
+  loc_col: location
+
+mark_locations:
+  veh_loc_cols:
+    - location

@@ -23,32 +23,22 @@
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
         {
+            "name": "Kedro: Describe Vehicles",
+            "type": "debugpy",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "module": "kedro",
+            "args": ["run", "--async", "--pipeline=describe_vehicles"]
+            // Any other arguments should be passed as a comma-seperated-list
+            // e.g "args": ["run", "--pipeline", "pipeline_name"]
+        },
+        {
             "name": "Kedro: Electrify Trips",
             "type": "debugpy",
             "request": "launch",
             "console": "integratedTerminal",
             "module": "kedro",
             "args": ["run", "--pipeline=electrify_trips"]
-            // Any other arguments should be passed as a comma-seperated-list
-            // e.g "args": ["run", "--pipeline", "pipeline_name"]
-        },
-        {
-            "name": "Kedro: Train",
-            "type": "debugpy",
-            "request": "launch",
-            "console": "integratedTerminal",
-            "module": "kedro",
-            "args": ["run", "--pipeline", "train"]
-            // Any other arguments should be passed as a comma-seperated-list
-            // e.g "args": ["run", "--pipeline", "pipeline_name"]
-        },
-        {
-            "name": "Kedro: Sample Charging",
-            "type": "debugpy",
-            "request": "launch",
-            "console": "integratedTerminal",
-            "module": "kedro",
-            "args": ["run", "--pipeline", "sample_charging"]
             // Any other arguments should be passed as a comma-seperated-list
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },

@@ -3,115 +3,67 @@ navistar:
   type: dask.ParquetDataset
   filepath: data/01_raw/Navistar/stanford_dataset_v2/
 
-us_outline:
-  type: geopandas.GeoJSONDataset
-  filepath: data/01_raw/us_outline.json
-
-grid_regions:
-  type: geopandas.GeoJSONDataset
-  filepath: data/01_raw/grid_regions.json
-
-vius_raw:
-  type: pandas.CSVDataset
-  filepath: data/01_raw/VIUS/______.csv
-
-role_energy_readings:
-  type: pandas.CSVDataset
-  filepath: data/01_raw/ROLE/energyreading.csv
-
-role_gps:
-  type: pandas.CSVDataset
-  filepath: data/01_raw/ROLE/gps.csv
-
 # Preprocessed datasets
 dwells:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/dwells.feather
-  load_args:
-    use_threads: True
 
-h3_8_polygons:
-  type: geopandas.GeoJSONDataset
-  filepath: data/02_intermediate/h3_8_polygons.json
-
-vius_clean:
-  type: pandas.CSVDataset
-  filepath: data/02_intermediate/vius_clean.csv
-
-energy_sessions:
+dwells_with_locations:
   type: pandas.FeatherDataset
-  filepath: data/02_intermediate/energy_sessions.feather
+  filepath: data/02_intermediate/dwells_with_locations.feather
 
-energy_consumption:
-  type: pandas.CSVDataset
-  filepath: data/02_intermediate/energy_consumption_per_mile.csv
-  save_args:
-    index: True
-
-vehicles:
+vehicles_raw:
   type: pandas.FeatherDataset
-  filepath: data/02_intermediate/vehicles.feather
+  filepath: data/02_intermediate/vehicles_raw.feather
+
+vehicles_labelled:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/vehicles_labelled.feather
+
+vehicle_location_pairs:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/vehicle_location_pairs.feather
+
+vehicle_location_pairs_clustered:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/vehicle_location_pairs_clustered.feather
+
+vehicle_location_pairs_labelled:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/vehicle_location_pairs_labelled.feather
 
 # Electrification simulation datasets
-dwells_with_charging:
-  type: pandas.FeatherDataset
-  filepath: data/04_feature/dwells_with_charging.feather
-  load_args:
-    use_threads: True
-  
-events:
-  type: pandas.FeatherDataset
-  filepath: data/04_feature/events.feather
-  load_args:
-    use_threads: True
+vehicles_evaluated_partition:
+  type: partitions.PartitionedDataset
+  path: data/07_model_output/vehicles_evaluated
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
 
-load_profiles:
-  type: pandas.FeatherDataset
-  filepath: data/04_feature/load_profiles.feather
-  load_args:
-    use_threads: True
+dwells_with_charging_partition:
+  type: partitions.PartitionedDataset
+  path: data/07_model_output/dwells_with_charging
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
 
-# Model training
-pgm_trained:
-  type: pickle.PickleDataset
-  filepath: data/06_models/pgm_trained.pkl
-  versioned: true
+events_partition:
+  type: partitions.PartitionedDataset
+  path: data/07_model_output/events
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
 
-posterior_predictive:
-  type: pandas.CSVDataset
-  filepath: data/06_models/posterior_predictive.csv
-  versioned: true
-  save_args:
-    index: true
-
-eval_plot_single_vars:
-  type: matplotlib.MatplotlibWriter
-  filepath: data/08_reporting/train_eval_plot_single_vars.png
-  versioned: true
-
-# Sample charging datasets
-adoption_scenario:
-  type: pandas.CSVDataset
-  filepath: data/05_model_input/adoption_scenario.csv
-
-pgm_conditioning:
-  type: json.JSONDataset
-  filepath: data/05_model_input/pgm_conditioning.json
-
-charging_sessions_sampled:
-  type: dask.ParquetDataset
-  filepath: data/07_model_output/charging_sessions_sampled/
-
-# Evaluate impacts datasets
+# Reporting datasets
 report_by_hex:
   type: pandas.CSVDataset
-  filepath: data/07_model_output/report_by_hex.csv
+  filepath: data/08_reporting/report_by_hex.csv
   save_args:
     index: True
 
 report_by_hex_with_geoms:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
-  filepath: data/07_model_output/report_by_hex.gpkg
+  filepath: data/08_reporting/report_by_hex.gpkg
   save_args:
     layer: peak_kw
 
@@ -142,3 +94,19 @@ vehicle_depots_geoms:
     layer: vehicle_depots
   load_args:
     layer: vehicle_depots
+
+### Scenario configurations
+scenario_configs:
+  type: partitions.PartitionedDataset
+  path: conf/scenarios
+  dataset:
+    type: yaml.YAMLDataset
+  filename_suffix: ".yml"
+
+### Slurm batch scripts
+scenario_slurm_script:
+  type: partitions.PartitionedDataset
+  path: src/runners
+  dataset:
+    type: text.TextDataset
+  filename_suffix: ".sh"

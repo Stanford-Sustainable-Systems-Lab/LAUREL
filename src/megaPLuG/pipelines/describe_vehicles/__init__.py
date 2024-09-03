@@ -1,6 +1,6 @@
 """
-This is a boilerplate pipeline 'sample_charging'
-generated using Kedro 0.19.1
+This is a boilerplate pipeline 'describe_vehicles'
+generated using Kedro 0.19.3
 """
 
 from .pipeline import create_pipeline

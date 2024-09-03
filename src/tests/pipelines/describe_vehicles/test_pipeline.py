@@ -1,6 +1,6 @@
 """
-This is a boilerplate test file for pipeline 'sample_charging'
-generated using Kedro 0.19.1.
+This is a boilerplate test file for pipeline 'describe_vehicles'
+generated using Kedro 0.19.3.
 Please add your pipeline tests here.
 
 Kedro recommends using `pytest` framework, more info about it can be found
