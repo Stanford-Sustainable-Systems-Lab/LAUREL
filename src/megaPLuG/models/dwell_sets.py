@@ -201,7 +201,12 @@ class DwellSet:
         )
         return time_sorted
 
-    def filter_through(self, keep_col: str, inplace: bool = False) -> Self | None:
+    def filter_through(
+        self,
+        keep_mask_col: str,
+        sum_cols: str | list[str] | None = None,
+        inplace: bool = False,
+    ) -> Self | None:
         """Filter out individual dwells while merging trips together.
 
         Merging trips together means summing the distances traveled of the trips on
@@ -215,12 +220,22 @@ class DwellSet:
         if self.verify_sorting:
             self.sort_by_veh_time()
 
+        if sum_cols is None:
+            sum_cols = self.dist
+        if isinstance(sum_cols, str):
+            sum_cols = [sum_cols]
+
+        head = copy.deepcopy(self.data.head(5))
+        sums_master_dtype = head[sum_cols].values.dtype
+        for col in sum_cols:
+            self.data[col] = self.data[col].astype(sums_master_dtype)
+
         # Force numba compilation
         _ = DwellSet._filter_through_grp(
-            grp=copy.deepcopy(self.data.head(5)),  # copy to prevent double-processing
-            keep_col=keep_col,
+            grp=head,  # copy to prevent double-processing
+            keep_mask_col=keep_mask_col,
+            sum_cols=sum_cols,
             reset_col=self.reset,
-            dist_col=self.dist,
         )
         if inplace:
             new = self
@@ -230,65 +245,76 @@ class DwellSet:
         if isinstance(self.data, dd.DataFrame):
             new.data = self.data.groupby(self.veh, group_keys=False).apply(
                 DwellSet._filter_through_grp,
-                keep_col=keep_col,
+                keep_mask_col=keep_mask_col,
+                sum_cols=sum_cols,
                 reset_col=self.reset,
-                dist_col=self.dist,
                 meta=dd.utils.make_meta(self.data),
             )
         elif isinstance(self.data, pd.DataFrame):
             tqdm.pandas()
             new.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
                 DwellSet._filter_through_grp,
-                keep_col=keep_col,
+                keep_mask_col=keep_mask_col,
+                sum_cols=sum_cols,
                 reset_col=self.reset,
-                dist_col=self.dist,
             )
-        new.data[keep_col] = new.data[keep_col].replace(False, np.NaN)
-        new.data.dropna(subset=keep_col, inplace=True)
-        new.data.drop(columns=keep_col, inplace=True)
+        new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
+        new.data.dropna(subset=keep_mask_col, inplace=True)
+        new.data.drop(columns=keep_mask_col, inplace=True)
         if inplace:
             return None
         else:
             return new
 
     @staticmethod
-    @njit
+    # @njit
     def _filter_through_grp_core(
-        keep: np.ndarray, reset: np.ndarray, dist: np.ndarray
+        keep: np.ndarray,
+        sums: np.ndarray,
+        reset: np.ndarray,
     ) -> pd.DataFrame:
-        if not keep.shape == reset.shape == dist.shape:
-            raise RuntimeError("The three arrays must have the same shape.")
-        arr = np.vstack((dist, reset)).T
+        nsteps = keep.shape[0]
+        if not nsteps == reset.shape[0] == sums.shape[0]:
+            raise RuntimeError("The three arrays must have the same length.")
+        arr = np.hstack((sums, np.expand_dims(reset, axis=1)))
 
-        cum_dist = 0
+        cum_sums = np.zeros(sums.shape[1])
         cum_res = False
-        for i in range(keep.shape[0]):
+        for i in range(nsteps):
             if keep[i]:
                 # If we do reset, then the operation is just a copy of the original
                 if not reset[i]:  # With no reset, we apply accumulation
-                    arr[i, 0] = dist[i] + cum_dist
-                    arr[i, 1] = cum_res
-                cum_dist = 0
+                    arr[i, :-1] = sums[i, :] + cum_sums
+                    arr[i, -1] = cum_res
+                cum_sums = np.zeros(sums.shape[1])
                 cum_res = False
             elif reset[i]:  # Implicitly, this is reset and not keep
-                cum_dist = dist[i]
+                cum_sums = sums[i, :]
                 cum_res = True
             else:
-                cum_dist = dist[i] + cum_dist
+                cum_sums = sums[i, :] + cum_sums
                 # cum_res will just reassign to itself, since the current reset is False
         return arr
 
     @staticmethod
     def _filter_through_grp(
-        grp: pd.DataFrame, keep_col: str, reset_col: str, dist_col: str
+        grp: pd.DataFrame,
+        keep_mask_col: str,
+        sum_cols: str | list[str],
+        reset_col: str,
     ) -> pd.DataFrame:
+        if isinstance(sum_cols, str):
+            sum_cols = [sum_cols]
+
         arr = DwellSet._filter_through_grp_core(
-            keep=grp[keep_col].values,
+            keep=grp[keep_mask_col].values,
+            sums=grp[sum_cols].values,
             reset=grp[reset_col].values,
-            dist=grp[dist_col].values,
         )
-        grp.loc[:, dist_col] = arr[:, 0]
-        grp.loc[:, reset_col] = arr[:, 1].astype(bool)
+
+        for i, col in enumerate(sum_cols):
+            grp.loc[:, col] = arr[:, i]
+        grp.loc[:, reset_col] = arr[:, -1].astype(bool)
         return grp
 
     def filter_reset(self, keep_col: str, inplace: bool = False) -> Self | None:
