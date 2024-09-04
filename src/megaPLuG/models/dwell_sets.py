@@ -288,7 +288,7 @@ class DwellSet:
         return grp
 
     @staticmethod
-    # @njit
+    @njit
     def _filter_through_grp_core(
         keep: np.ndarray,
         sums: np.ndarray,
