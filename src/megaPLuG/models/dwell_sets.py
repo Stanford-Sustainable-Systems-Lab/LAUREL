@@ -267,6 +267,27 @@ class DwellSet:
             return new
 
     @staticmethod
+    def _filter_through_grp(
+        grp: pd.DataFrame,
+        keep_mask_col: str,
+        sum_cols: str | list[str],
+        reset_col: str,
+    ) -> pd.DataFrame:
+        if isinstance(sum_cols, str):
+            sum_cols = [sum_cols]
+
+        arr = DwellSet._filter_through_grp_core(
+            keep=grp[keep_mask_col].values,
+            sums=grp[sum_cols].values,
+            reset=grp[reset_col].values,
+        )
+
+        for i, col in enumerate(sum_cols):
+            grp.loc[:, col] = arr[:, i]
+        grp.loc[:, reset_col] = arr[:, -1].astype(bool)
+        return grp
+
+    @staticmethod
     # @njit
     def _filter_through_grp_core(
         keep: np.ndarray,
@@ -295,27 +316,6 @@ class DwellSet:
                 cum_sums = sums[i, :] + cum_sums
                 # cum_res will just reassign to itself, since the current reset is False
         return arr
-
-    @staticmethod
-    def _filter_through_grp(
-        grp: pd.DataFrame,
-        keep_mask_col: str,
-        sum_cols: str | list[str],
-        reset_col: str,
-    ) -> pd.DataFrame:
-        if isinstance(sum_cols, str):
-            sum_cols = [sum_cols]
-
-        arr = DwellSet._filter_through_grp_core(
-            keep=grp[keep_mask_col].values,
-            sums=grp[sum_cols].values,
-            reset=grp[reset_col].values,
-        )
-
-        for i, col in enumerate(sum_cols):
-            grp.loc[:, col] = arr[:, i]
-        grp.loc[:, reset_col] = arr[:, -1].astype(bool)
-        return grp
 
     def filter_reset(self, keep_col: str, inplace: bool = False) -> Self | None:
         """Filter out individual dwells while forcing a reset in the new gaps.
