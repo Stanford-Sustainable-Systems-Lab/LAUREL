@@ -13,8 +13,8 @@ from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
-from megaPLuG.utils.local_time import total_hours
 from megaPLuG.utils.params import build_df_from_dict
+from megaPLuG.utils.time import total_hours
 
 logger = logging.getLogger(__name__)
 

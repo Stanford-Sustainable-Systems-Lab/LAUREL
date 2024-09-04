@@ -10,7 +10,7 @@ import pandas as pd
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.utils.h3 import str_to_h3
-from megaPLuG.utils.local_time import total_hours
+from megaPLuG.utils.time import total_hours
 
 logger = logging.getLogger(__name__)
 
