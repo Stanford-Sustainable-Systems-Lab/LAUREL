@@ -1,4 +1,5 @@
 import copy
+import logging
 import re
 from collections.abc import Callable
 from itertools import product
@@ -12,6 +13,9 @@ import pandas as pd
 from megaPLuG.utils.h3 import cells_to_points, cells_to_polygons
 from numba import njit
 from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
+
 
 DEFAULT_COLUMN_NAMES = {
     "veh": "veh_id",
@@ -38,6 +42,7 @@ class DwellSet:
     _dist = None
     _reset = None
     _seq_names = None
+    _verify_sorting = None
     data = None
     data_type = None
 
@@ -50,6 +55,7 @@ class DwellSet:
         end: str,
         dist: str,
         reset: str = None,
+        verify_sorting: bool = True,
         *args,
         **kwargs,
     ):
@@ -88,6 +94,8 @@ class DwellSet:
         else:
             self._reset = _return_if_present(reset)
 
+        self.verify_sorting = verify_sorting
+
     def copy_without_data(self: Self) -> Self:
         """Copy the DwellSet without its underlying data. This is used for filtering."""
         new = copy.copy(self)
@@ -95,15 +103,22 @@ class DwellSet:
         newer = copy.deepcopy(new)
         return newer
 
-    def sort_by_veh_time(self) -> None:
+    def sort_by_veh_time(self, force: bool = False) -> None:
         """Sort the DwellSet by vehicle and time."""
-        if self.data.index.name in self.get_tracked_cols():
-            drop = False
-        else:
-            drop = True
-        self.data = DwellSet._sort_by_grp_time(
-            df=self.data, grp_col=self.veh, time_col=self.start, drop_cur_idx=drop
-        )
+        if not force:
+            logger.info("Checking if DwellSet is sorted by vehicle and time.")
+            is_sorted = self.is_sorted_by_veh_time()
+            if is_sorted:
+                logger.info("DwellSet is already sorted by vehicle and time.")
+        if force or not is_sorted:
+            logger.info("Sorting DwellSet by vehicle and time.")
+            if self.data.index.name in self.get_tracked_cols():
+                drop = False
+            else:
+                drop = True
+            self.data = DwellSet._sort_by_grp_time(
+                df=self.data, grp_col=self.veh, time_col=self.start, drop_cur_idx=drop
+            )
 
     @staticmethod
     def _sort_by_grp_time(
@@ -113,16 +128,78 @@ class DwellSet:
         drop_cur_idx: bool = False,
     ) -> pd.DataFrame | dd.DataFrame:
         """Sort a dataframe by a group and a time, then set the index."""
-        df = df.sort_values(
-            [grp_col, time_col]
-        )  # Test if this works if grp_col is already the index
-        if df.index.name != grp_col:
-            df = df.reset_index(drop=drop_cur_idx)
-            if isinstance(df, dd.DataFrame):
-                df = df.set_index(grp_col, sorted=True)
-            elif isinstance(df, pd.DataFrame):
+        if df.index.name == grp_col:
+            grp_is_idx = True
+            drop_cur_idx = False
+        else:
+            grp_is_idx = False
+
+        if isinstance(df, dd.DataFrame):
+            if not grp_is_idx:
                 df = df.set_index(grp_col)
+            else:
+                pass  # Assuming that Dask index is sorted already
+            df = df.groupby(grp_col, group_keys=False).apply(
+                lambda grp: grp.sort_values(time_col), meta=dd.utils.make_meta(df)
+            )
+        elif isinstance(df, pd.DataFrame):
+            df = df.reset_index(drop=drop_cur_idx)
+            df = df.sort_values([grp_col, time_col])
+            df = df.set_index(grp_col)
+
         return df
+
+    def is_sorted_by_veh_time(self: Self) -> bool:
+        """Check if the DwellSet is sorted by start time within each vehicle."""
+        return DwellSet._is_grp_time_structured(
+            self.data,
+            grp_col=self.veh,
+            time_col=self.start,
+        )
+
+    @staticmethod
+    def _is_grp_time_structured(
+        df: pd.DataFrame | dd.DataFrame,
+        grp_col: str,
+        time_col: str,
+    ) -> bool | np.ndarray:
+        """Check if the dataset is sorted by a time column within groups.
+
+        We assume here that the grouping column must be the index, since other
+        operations in the class depend on this, especially if using Dask as the backend
+        for speed.
+        """
+        # If group column isn't index, then no good
+        if df.index.name != grp_col:
+            return False
+
+        if isinstance(df, pd.DataFrame):
+            # If that index isn't sorted, then no good
+            grp_sorted = df.index.is_monotonic_increasing
+            if not grp_sorted:
+                return False
+            # If time isn't sorted within groups, then no good
+            time_sorted = DwellSet._groupby_increasing(
+                df=df, grp_col=grp_col, sort_col=time_col
+            )
+        elif isinstance(df, dd.DataFrame):
+            # Assuming that Dask index is group / sorted within partitions
+            time_sorted = df.map_partitions(
+                func=DwellSet._groupby_increasing,
+                grp_col=grp_col,
+                sort_col=time_col,
+            )
+        time_unsorted = ~time_sorted
+        any_unsorted = time_unsorted.any()
+        not_any_unsorted = ~any_unsorted
+        return not_any_unsorted
+
+    def _groupby_increasing(df: pd.DataFrame, grp_col: str, sort_col: str) -> pd.Series:
+        """Calculate if a dataframe is increasing on sort_col within each group."""
+        time_sorted = df.groupby(grp_col)[sort_col].agg(
+            lambda ser: ser.is_monotonic_increasing
+        )
+        return time_sorted
 
     def filter_through(self, keep_col: str, inplace: bool = False) -> Self | None:
         """Filter out individual dwells while merging trips together.
@@ -135,6 +212,9 @@ class DwellSet:
 
         Note: This function operates inplace for efficiency.
         """
+        if self.verify_sorting:
+            self.sort_by_veh_time()
+
         # Force numba compilation
         _ = DwellSet._filter_through_grp(
             grp=copy.deepcopy(self.data.head(5)),  # copy to prevent double-processing
@@ -216,6 +296,9 @@ class DwellSet:
 
         Note: This function operates inplace for efficiency.
         """
+        if self.verify_sorting:
+            self.sort_by_veh_time()
+
         # Force numba compilation
         _ = DwellSet._filter_reset_grp(
             grp=copy.deepcopy(self.data.head(5)),  # copy to prevent double-processing
@@ -370,6 +453,14 @@ class DwellSet:
     def reset(self, value):
         self._rename_idx_col(value, self._reset)
         self._reset = value
+
+    @property
+    def verify_sorting(self):
+        return self._verify_sorting
+
+    @verify_sorting.setter
+    def verify_sorting(self, value):
+        self._verify_sorting = value
 
     @property
     def seq_names(self):
