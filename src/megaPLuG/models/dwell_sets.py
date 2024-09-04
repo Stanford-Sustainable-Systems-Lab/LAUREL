@@ -299,7 +299,7 @@ class DwellSet:
             raise RuntimeError("The three arrays must have the same length.")
         arr = np.hstack((sums, np.expand_dims(reset, axis=1)))
 
-        cum_sums = np.zeros(sums.shape[1])
+        cum_sums = np.zeros(sums.shape[1], dtype=sums.dtype)
         cum_res = False
         for i in range(nsteps):
             if keep[i]:
@@ -307,7 +307,7 @@ class DwellSet:
                 if not reset[i]:  # With no reset, we apply accumulation
                     arr[i, :-1] = sums[i, :] + cum_sums
                     arr[i, -1] = cum_res
-                cum_sums = np.zeros(sums.shape[1])
+                cum_sums[:] = 0
                 cum_res = False
             elif reset[i]:  # Implicitly, this is reset and not keep
                 cum_sums = sums[i, :]
