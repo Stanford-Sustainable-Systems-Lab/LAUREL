@@ -574,31 +574,6 @@ class DwellSet:
         gdf = gdf.set_geometry(geoms)
         return gdf
 
-    def find_time_weighted_centers(self, weight_col: str) -> pd.DataFrame:
-        """Find time-weighted center of a set of dwells."""
-        if not hasattr(self.data, "crs"):
-            raise RuntimeError("The DwellSet's underlying dataset is not geographic.")
-        else:
-            crs = self.data.crs
-            if not crs.is_projected:
-                raise RuntimeError(
-                    "The DwellSet's underlying dataset is not in projected coordinates."
-                )
-
-        self.data["easting_wt"] = self.data.geometry.x * self.data[weight_col]
-        self.data["northing_wt"] = self.data.geometry.y * self.data[weight_col]
-        centers = self.data.groupby(self.veh).agg(
-            {"easting_wt": "sum", "northing_wt": "sum", weight_col: "sum"}
-        )
-        self.data = self.data.drop(columns=["easting_wt", "northing_wt"])
-        centers["easting"] = centers["easting_wt"] / centers[weight_col]
-        centers["northing"] = centers["northing_wt"] / centers[weight_col]
-        geoms = gpd.GeoSeries.from_xy(
-            x=centers["easting"], y=centers["northing"], crs=crs
-        )
-        centers = gpd.GeoDataFrame(index=centers.index, geometry=geoms.values)
-        return centers
-
 
 def load_dwell_set(dwells: pd.DataFrame, params: dict) -> DwellSet:
     """Load the dwell set from disk with column name parameters."""
