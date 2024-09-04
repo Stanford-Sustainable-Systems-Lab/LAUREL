@@ -1,4 +1,5 @@
 import copy
+import logging
 import re
 from collections.abc import Callable
 from itertools import product
@@ -12,6 +13,9 @@ import pandas as pd
 from megaPLuG.utils.h3 import cells_to_points, cells_to_polygons
 from numba import njit
 from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
+
 
 DEFAULT_COLUMN_NAMES = {
     "veh": "veh_id",
@@ -38,6 +42,7 @@ class DwellSet:
     _dist = None
     _reset = None
     _seq_names = None
+    _verify_sorting = None
     data = None
     data_type = None
 
@@ -50,6 +55,7 @@ class DwellSet:
         end: str,
         dist: str,
         reset: str = None,
+        verify_sorting: bool = True,
         *args,
         **kwargs,
     ):
@@ -88,6 +94,8 @@ class DwellSet:
         else:
             self._reset = _return_if_present(reset)
 
+        self.verify_sorting = verify_sorting
+
     def copy_without_data(self: Self) -> Self:
         """Copy the DwellSet without its underlying data. This is used for filtering."""
         new = copy.copy(self)
@@ -95,15 +103,22 @@ class DwellSet:
         newer = copy.deepcopy(new)
         return newer
 
-    def sort_by_veh_time(self) -> None:
+    def sort_by_veh_time(self, force: bool = False) -> None:
         """Sort the DwellSet by vehicle and time."""
-        if self.data.index.name in self.get_tracked_cols():
-            drop = False
-        else:
-            drop = True
-        self.data = DwellSet._sort_by_grp_time(
-            df=self.data, grp_col=self.veh, time_col=self.start, drop_cur_idx=drop
-        )
+        if not force:
+            logger.info("Checking if DwellSet is sorted by vehicle and time.")
+            is_sorted = self.is_sorted_by_veh_time()
+            if is_sorted:
+                logger.info("DwellSet is already sorted by vehicle and time.")
+        if force or not is_sorted:
+            logger.info("Sorting DwellSet by vehicle and time.")
+            if self.data.index.name in self.get_tracked_cols():
+                drop = False
+            else:
+                drop = True
+            self.data = DwellSet._sort_by_grp_time(
+                df=self.data, grp_col=self.veh, time_col=self.start, drop_cur_idx=drop
+            )
 
     @staticmethod
     def _sort_by_grp_time(
@@ -113,18 +128,85 @@ class DwellSet:
         drop_cur_idx: bool = False,
     ) -> pd.DataFrame | dd.DataFrame:
         """Sort a dataframe by a group and a time, then set the index."""
-        df = df.sort_values(
-            [grp_col, time_col]
-        )  # Test if this works if grp_col is already the index
-        if df.index.name != grp_col:
-            df = df.reset_index(drop=drop_cur_idx)
-            if isinstance(df, dd.DataFrame):
-                df = df.set_index(grp_col, sorted=True)
-            elif isinstance(df, pd.DataFrame):
+        if df.index.name == grp_col:
+            grp_is_idx = True
+            drop_cur_idx = False
+        else:
+            grp_is_idx = False
+
+        if isinstance(df, dd.DataFrame):
+            if not grp_is_idx:
                 df = df.set_index(grp_col)
+            else:
+                pass  # Assuming that Dask index is sorted already
+            df = df.groupby(grp_col, group_keys=False).apply(
+                lambda grp: grp.sort_values(time_col), meta=dd.utils.make_meta(df)
+            )
+        elif isinstance(df, pd.DataFrame):
+            df = df.reset_index(drop=drop_cur_idx)
+            df = df.sort_values([grp_col, time_col])
+            df = df.set_index(grp_col)
+
         return df
 
-    def filter_through(self, keep_col: str, inplace: bool = False) -> Self | None:
+    def is_sorted_by_veh_time(self: Self) -> bool:
+        """Check if the DwellSet is sorted by start time within each vehicle."""
+        return DwellSet._is_grp_time_structured(
+            self.data,
+            grp_col=self.veh,
+            time_col=self.start,
+        )
+
+    @staticmethod
+    def _is_grp_time_structured(
+        df: pd.DataFrame | dd.DataFrame,
+        grp_col: str,
+        time_col: str,
+    ) -> bool | np.ndarray:
+        """Check if the dataset is sorted by a time column within groups.
+
+        We assume here that the grouping column must be the index, since other
+        operations in the class depend on this, especially if using Dask as the backend
+        for speed.
+        """
+        # If group column isn't index, then no good
+        if df.index.name != grp_col:
+            return False
+
+        if isinstance(df, pd.DataFrame):
+            # If that index isn't sorted, then no good
+            grp_sorted = df.index.is_monotonic_increasing
+            if not grp_sorted:
+                return False
+            # If time isn't sorted within groups, then no good
+            time_sorted = DwellSet._groupby_increasing(
+                df=df, grp_col=grp_col, sort_col=time_col
+            )
+        elif isinstance(df, dd.DataFrame):
+            # Assuming that Dask index is group / sorted within partitions
+            time_sorted = df.map_partitions(
+                func=DwellSet._groupby_increasing,
+                grp_col=grp_col,
+                sort_col=time_col,
+            )
+        time_unsorted = ~time_sorted
+        any_unsorted = time_unsorted.any()
+        not_any_unsorted = ~any_unsorted
+        return not_any_unsorted
+
+    def _groupby_increasing(df: pd.DataFrame, grp_col: str, sort_col: str) -> pd.Series:
+        """Calculate if a dataframe is increasing on sort_col within each group."""
+        time_sorted = df.groupby(grp_col)[sort_col].agg(
+            lambda ser: ser.is_monotonic_increasing
+        )
+        return time_sorted
+
+    def filter_through(
+        self,
+        keep_mask_col: str,
+        sum_cols: str | list[str] | None = None,
+        inplace: bool = False,
+    ) -> Self | None:
         """Filter out individual dwells while merging trips together.
 
         Merging trips together means summing the distances traveled of the trips on
@@ -135,12 +217,25 @@ class DwellSet:
 
         Note: This function operates inplace for efficiency.
         """
+        if self.verify_sorting:
+            self.sort_by_veh_time()
+
+        if sum_cols is None:
+            sum_cols = self.dist
+        if isinstance(sum_cols, str):
+            sum_cols = [sum_cols]
+
+        head = copy.deepcopy(self.data.head(5))
+        sums_master_dtype = head[sum_cols].values.dtype
+        for col in sum_cols:
+            self.data[col] = self.data[col].astype(sums_master_dtype)
+
         # Force numba compilation
         _ = DwellSet._filter_through_grp(
-            grp=copy.deepcopy(self.data.head(5)),  # copy to prevent double-processing
-            keep_col=keep_col,
+            grp=head,  # copy to prevent double-processing
+            keep_mask_col=keep_mask_col,
+            sum_cols=sum_cols,
             reset_col=self.reset,
-            dist_col=self.dist,
         )
         if inplace:
             new = self
@@ -150,76 +245,90 @@ class DwellSet:
         if isinstance(self.data, dd.DataFrame):
             new.data = self.data.groupby(self.veh, group_keys=False).apply(
                 DwellSet._filter_through_grp,
-                keep_col=keep_col,
+                keep_mask_col=keep_mask_col,
+                sum_cols=sum_cols,
                 reset_col=self.reset,
-                dist_col=self.dist,
                 meta=dd.utils.make_meta(self.data),
             )
         elif isinstance(self.data, pd.DataFrame):
             tqdm.pandas()
             new.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
                 DwellSet._filter_through_grp,
-                keep_col=keep_col,
+                keep_mask_col=keep_mask_col,
+                sum_cols=sum_cols,
                 reset_col=self.reset,
-                dist_col=self.dist,
             )
-        new.data[keep_col] = new.data[keep_col].replace(False, np.NaN)
-        new.data.dropna(subset=keep_col, inplace=True)
-        new.data.drop(columns=keep_col, inplace=True)
+        new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
+        new.data.dropna(subset=keep_mask_col, inplace=True)
+        new.data.drop(columns=keep_mask_col, inplace=True)
         if inplace:
             return None
         else:
             return new
 
     @staticmethod
+    def _filter_through_grp(
+        grp: pd.DataFrame,
+        keep_mask_col: str,
+        sum_cols: str | list[str],
+        reset_col: str,
+    ) -> pd.DataFrame:
+        if isinstance(sum_cols, str):
+            sum_cols = [sum_cols]
+
+        arr = DwellSet._filter_through_grp_core(
+            keep=grp[keep_mask_col].values,
+            sums=grp[sum_cols].values,
+            reset=grp[reset_col].values,
+        )
+
+        for i, col in enumerate(sum_cols):
+            grp.loc[:, col] = arr[:, i]
+        grp.loc[:, reset_col] = arr[:, -1].astype(bool)
+        return grp
+
+    @staticmethod
     @njit
     def _filter_through_grp_core(
-        keep: np.ndarray, reset: np.ndarray, dist: np.ndarray
+        keep: np.ndarray,
+        sums: np.ndarray,
+        reset: np.ndarray,
     ) -> pd.DataFrame:
-        if not keep.shape == reset.shape == dist.shape:
-            raise RuntimeError("The three arrays must have the same shape.")
-        arr = np.vstack((dist, reset)).T
+        nsteps = keep.shape[0]
+        if not nsteps == reset.shape[0] == sums.shape[0]:
+            raise RuntimeError("The three arrays must have the same length.")
+        arr = np.hstack((sums, np.expand_dims(reset, axis=1)))
 
-        cum_dist = 0
+        cum_sums = np.zeros(sums.shape[1])
         cum_res = False
-        for i in range(keep.shape[0]):
+        for i in range(nsteps):
             if keep[i]:
                 # If we do reset, then the operation is just a copy of the original
                 if not reset[i]:  # With no reset, we apply accumulation
-                    arr[i, 0] = dist[i] + cum_dist
-                    arr[i, 1] = cum_res
-                cum_dist = 0
+                    arr[i, :-1] = sums[i, :] + cum_sums
+                    arr[i, -1] = cum_res
+                cum_sums = np.zeros(sums.shape[1])
                 cum_res = False
             elif reset[i]:  # Implicitly, this is reset and not keep
-                cum_dist = dist[i]
+                cum_sums = sums[i, :]
                 cum_res = True
             else:
-                cum_dist = dist[i] + cum_dist
+                cum_sums = sums[i, :] + cum_sums
                 # cum_res will just reassign to itself, since the current reset is False
         return arr
 
-    @staticmethod
-    def _filter_through_grp(
-        grp: pd.DataFrame, keep_col: str, reset_col: str, dist_col: str
-    ) -> pd.DataFrame:
-        arr = DwellSet._filter_through_grp_core(
-            keep=grp[keep_col].values,
-            reset=grp[reset_col].values,
-            dist=grp[dist_col].values,
-        )
-        grp.loc[:, dist_col] = arr[:, 0]
-        grp.loc[:, reset_col] = arr[:, 1].astype(bool)
-        return grp
-
-    def filter_reset(self, keep_col: str, inplace: bool = False) -> Self | None:
+    def filter_reset(self, keep_mask_col: str, inplace: bool = False) -> Self | None:
         """Filter out individual dwells while forcing a reset in the new gaps.
 
         Note: This function operates inplace for efficiency.
         """
+        if self.verify_sorting:
+            self.sort_by_veh_time()
+
         # Force numba compilation
         _ = DwellSet._filter_reset_grp(
             grp=copy.deepcopy(self.data.head(5)),  # copy to prevent double-processing
-            keep_col=keep_col,
+            keep_mask_col=keep_mask_col,
             reset_col=self.reset,
         )
 
@@ -231,7 +340,7 @@ class DwellSet:
         if isinstance(self.data, dd.DataFrame):
             new.data = self.data.groupby(self.veh, group_keys=False).apply(
                 DwellSet._filter_reset_grp,
-                keep_col=keep_col,
+                keep_mask_col=keep_mask_col,
                 reset_col=self.reset,
                 meta=dd.utils.make_meta(self.data),
             )
@@ -239,12 +348,12 @@ class DwellSet:
             tqdm.pandas()
             new.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
                 DwellSet._filter_reset_grp,
-                keep_col=keep_col,
+                keep_mask_col=keep_mask_col,
                 reset_col=self.reset,
             )
-        new.data[keep_col] = new.data[keep_col].replace(False, np.NaN)
-        new.data.dropna(subset=keep_col, inplace=True)
-        new.data.drop(columns=keep_col, inplace=True)
+        new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
+        new.data.dropna(subset=keep_mask_col, inplace=True)
+        new.data.drop(columns=keep_mask_col, inplace=True)
         if inplace:
             return None
         else:
@@ -252,10 +361,10 @@ class DwellSet:
 
     @staticmethod
     def _filter_reset_grp(
-        grp: pd.DataFrame, keep_col: str, reset_col: str
+        grp: pd.DataFrame, keep_mask_col: str, reset_col: str
     ) -> pd.DataFrame:
         grp.loc[:, reset_col] = DwellSet._filter_reset_grp_core(
-            keep=grp[keep_col].values,
+            keep=grp[keep_mask_col].values,
             reset=grp[reset_col].values,
         )
         return grp
@@ -370,6 +479,14 @@ class DwellSet:
     def reset(self, value):
         self._rename_idx_col(value, self._reset)
         self._reset = value
+
+    @property
+    def verify_sorting(self):
+        return self._verify_sorting
+
+    @verify_sorting.setter
+    def verify_sorting(self, value):
+        self._verify_sorting = value
 
     @property
     def seq_names(self):
@@ -573,31 +690,6 @@ class DwellSet:
         geoms = f(hexes)
         gdf = gdf.set_geometry(geoms)
         return gdf
-
-    def find_time_weighted_centers(self, weight_col: str) -> pd.DataFrame:
-        """Find time-weighted center of a set of dwells."""
-        if not hasattr(self.data, "crs"):
-            raise RuntimeError("The DwellSet's underlying dataset is not geographic.")
-        else:
-            crs = self.data.crs
-            if not crs.is_projected:
-                raise RuntimeError(
-                    "The DwellSet's underlying dataset is not in projected coordinates."
-                )
-
-        self.data["easting_wt"] = self.data.geometry.x * self.data[weight_col]
-        self.data["northing_wt"] = self.data.geometry.y * self.data[weight_col]
-        centers = self.data.groupby(self.veh).agg(
-            {"easting_wt": "sum", "northing_wt": "sum", weight_col: "sum"}
-        )
-        self.data = self.data.drop(columns=["easting_wt", "northing_wt"])
-        centers["easting"] = centers["easting_wt"] / centers[weight_col]
-        centers["northing"] = centers["northing_wt"] / centers[weight_col]
-        geoms = gpd.GeoSeries.from_xy(
-            x=centers["easting"], y=centers["northing"], crs=crs
-        )
-        centers = gpd.GeoDataFrame(index=centers.index, geometry=geoms.values)
-        return centers
 
 
 def load_dwell_set(dwells: pd.DataFrame, params: dict) -> DwellSet:
