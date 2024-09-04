@@ -10,6 +10,7 @@ import pandas as pd
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.utils.h3 import str_to_h3
+from megaPLuG.utils.local_time import total_hours
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +53,10 @@ def strip_vehicle_attrs(
 
 def calc_derived_trip_cols(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
     """Calculate derived variables which are needed for events."""
-    trips["trip_hrs"] = (
+    trips["trip_hrs"] = total_hours(
         trips[params["time_cols"]["trip_end"]]
         - trips[params["time_cols"]["trip_start"]]
-    ).dt.total_seconds() / 3600
-    trips["trip_avg_speed_mph"] = trips["trip_miles"] / trips["trip_hrs"]
+    )
 
     if params["persist"]:
         trips = trips.persist()

@@ -13,6 +13,7 @@ from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
+from megaPLuG.utils.local_time import total_hours
 from megaPLuG.utils.params import build_df_from_dict
 
 logger = logging.getLogger(__name__)
@@ -20,9 +21,7 @@ logger = logging.getLogger(__name__)
 
 def filter_substantial_dwells(dw: DwellSet, params: dict) -> DwellSet:
     """Filter to retain only substantial dwells to be described."""
-    dw.data["dwell_hrs"] = (
-        dw.data[dw.end] - dw.data[dw.start]
-    ).dt.total_seconds() / 3600
+    dw.data["dwell_hrs"] = total_hours(dw.data[dw.end] - dw.data[dw.start])
     dw.data["long_enough"] = dw.data["dwell_hrs"] > params["thresh_hrs"]
     dw.filter_through("long_enough", inplace=True)
     dw.data = dw.data.drop(
@@ -52,9 +51,7 @@ def calc_inter_visit_times(
 ) -> pd.DataFrame:
     """Calculate inter-visit times, assuming that `grp` is from a single vehicle and sorted by time."""
     prev_end_time = grp.groupby(hex_col)[end_col].shift(1)
-    grp.loc[:, "inter_visit_hrs"] = (
-        grp[start_col] - prev_end_time
-    ).dt.total_seconds() / 3600
+    grp.loc[:, "inter_visit_hrs"] = total_hours(grp[start_col] - prev_end_time)
     return grp
 
 

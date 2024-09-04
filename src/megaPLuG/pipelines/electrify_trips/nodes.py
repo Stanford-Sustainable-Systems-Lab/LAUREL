@@ -11,12 +11,10 @@ from tqdm import tqdm
 
 from megaPLuG.models.charging_algorithms import charge_soc_thresh
 from megaPLuG.models.dwell_sets import DwellSet
+from megaPLuG.utils.local_time import total_hours
 from megaPLuG.utils.params import build_df_from_dict, flatten_dict
 
 logger = logging.getLogger(__name__)
-
-SECS_PER_HOUR = 3600
-MINS_PER_HOUR = 60
 
 
 def set_vehicle_params(vehs: pd.DataFrame, params: dict) -> DwellSet:
@@ -80,12 +78,8 @@ def filter_dwells(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
     dw.data[dw.end] = dw.data[dw.end] - dw.data[pcols["plug_out"]]
     dw.data[dw.start] = dw.data[dw.start] + dw.data[pcols["plug_in"]]
 
-    # Get remaining time in hours
-    def timedelta_to_hrs(s: pd.Series) -> pd.Series:
-        return s.dt.total_seconds() / SECS_PER_HOUR
-
     dwell_time_col = params["dwell_time_col"]
-    dw.data[dwell_time_col] = timedelta_to_hrs(dw.data[dw.end] - dw.data[dw.start])
+    dw.data[dwell_time_col] = total_hours(dw.data[dw.end] - dw.data[dw.start])
 
     # Calculate potential SoC increase of this dwell
     dw.data["soc_boost_potential"] = (
