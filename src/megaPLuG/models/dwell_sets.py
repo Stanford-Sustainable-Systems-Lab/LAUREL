@@ -317,7 +317,7 @@ class DwellSet:
                 # cum_res will just reassign to itself, since the current reset is False
         return arr
 
-    def filter_reset(self, keep_col: str, inplace: bool = False) -> Self | None:
+    def filter_reset(self, keep_mask_col: str, inplace: bool = False) -> Self | None:
         """Filter out individual dwells while forcing a reset in the new gaps.
 
         Note: This function operates inplace for efficiency.
@@ -328,7 +328,7 @@ class DwellSet:
         # Force numba compilation
         _ = DwellSet._filter_reset_grp(
             grp=copy.deepcopy(self.data.head(5)),  # copy to prevent double-processing
-            keep_col=keep_col,
+            keep_mask_col=keep_mask_col,
             reset_col=self.reset,
         )
 
@@ -340,7 +340,7 @@ class DwellSet:
         if isinstance(self.data, dd.DataFrame):
             new.data = self.data.groupby(self.veh, group_keys=False).apply(
                 DwellSet._filter_reset_grp,
-                keep_col=keep_col,
+                keep_mask_col=keep_mask_col,
                 reset_col=self.reset,
                 meta=dd.utils.make_meta(self.data),
             )
@@ -348,12 +348,12 @@ class DwellSet:
             tqdm.pandas()
             new.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
                 DwellSet._filter_reset_grp,
-                keep_col=keep_col,
+                keep_mask_col=keep_mask_col,
                 reset_col=self.reset,
             )
-        new.data[keep_col] = new.data[keep_col].replace(False, np.NaN)
-        new.data.dropna(subset=keep_col, inplace=True)
-        new.data.drop(columns=keep_col, inplace=True)
+        new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
+        new.data.dropna(subset=keep_mask_col, inplace=True)
+        new.data.drop(columns=keep_mask_col, inplace=True)
         if inplace:
             return None
         else:
@@ -361,10 +361,10 @@ class DwellSet:
 
     @staticmethod
     def _filter_reset_grp(
-        grp: pd.DataFrame, keep_col: str, reset_col: str
+        grp: pd.DataFrame, keep_mask_col: str, reset_col: str
     ) -> pd.DataFrame:
         grp.loc[:, reset_col] = DwellSet._filter_reset_grp_core(
-            keep=grp[keep_col].values,
+            keep=grp[keep_mask_col].values,
             reset=grp[reset_col].values,
         )
         return grp
