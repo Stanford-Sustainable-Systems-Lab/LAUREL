@@ -1,4 +1,4 @@
-# This is a boilerplate parameters config generated for pipeline 'build_scenario_runners'
+# This is a boilerplate parameters config generated for pipeline 'build_runners'
 # using Kedro 0.19.5.
 #
 # Documentation for this file format can be found in "Parameters"

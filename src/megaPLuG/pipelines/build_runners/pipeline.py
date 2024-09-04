@@ -1,5 +1,5 @@
 """
-This is a boilerplate pipeline 'build_scenario_runners'
+This is a boilerplate pipeline 'build_runners'
 generated using Kedro 0.18.13
 """
 
@@ -33,6 +33,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="generate_bash_script",
             ),
         ],
-        tags="build_scenario_runners",
+        tags="build_runners",
     )
     return pipe
