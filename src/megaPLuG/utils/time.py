@@ -119,6 +119,6 @@ def get_local_time_attr_col_name(time_col: str, attr_name: str) -> str:
     return f"{time_col}_local_{attr_name}"
 
 
-def total_hours(s: pd.Series[pd.Timedelta]) -> pd.Series[float]:
+def total_hours(s: pd.Series) -> pd.Series:
     """Get the total number of hours from a series of timedeltas."""
     return s.dt.total_seconds() / SECS_PER_HOUR
