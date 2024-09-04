@@ -1,0 +1,117 @@
+import logging
+
+import h3.api.basic_str as h3_str
+import h3.api.numpy_int as h3
+import pandas as pd
+from timezonefinder import TimezoneFinder
+from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
+
+
+def calc_time_zones_from_hexes(
+    df: pd.DataFrame,
+    hex_col: str,
+    tz_col: str = "tz",
+) -> pd.DataFrame:
+    """Find the time zone for each row of a dataframe based on an H3 hexagon column."""
+    tf = TimezoneFinder(in_memory=True)
+    str_col = f"{hex_col}_str"
+    logger.info("Getting unique hexes")
+    df[str_col] = df[hex_col].transform(h3.h3_to_string)
+    hex_arr = df[str_col].unique()
+    logger.info("Identifying time zones for unique hexes")
+    hexes = pd.DataFrame(data=hex_arr, columns=[str_col])
+    hexes[tz_col] = hexes[str_col].transform(_get_timezone_from_hex, tf=tf)
+    logger.info("Merging time zones back onto original dataframe")
+    hexes = hexes.set_index(str_col)
+    df = df.merge(hexes, how="left", left_on=str_col, right_index=True)
+    df = df.drop(columns=[str_col])
+    return df
+
+
+def _get_timezone_from_hex(hex: int | str, tf: TimezoneFinder = None) -> str:
+    """Get the timezone string fror the h3 hexagon."""
+    if tf is None:
+        tf = TimezoneFinder(in_memory=True)
+
+    # # Consider shortcutting to cut runtime by about 40%, but this is approximate.
+    # par_hex = h3.h3_to_parent(hex, res=3)
+    # poly_id = tf.shortcut_mapping[par_hex][0]
+    # tz_str = tf.zone_name_from_poly_id(poly_id=poly_id)
+    if isinstance(hex, int):
+        lat, lng = h3.h3_to_geo(hex)
+    elif isinstance(hex, str):
+        lat, lng = h3_str.h3_to_geo(hex)
+    else:
+        raise RuntimeError("Hex argument came in as neither a string nor an integer.")
+    tz_str = tf.timezone_at(lng=lng, lat=lat)
+    return tz_str
+
+
+def calc_local_time_attrs(
+    df: pd.DataFrame,
+    time_cols: str | list[str],
+    attrs: str | list[str],
+    tz_col: str,
+    sort_col: str,
+    grp_cols: str | list[str] = None,
+) -> pd.DataFrame:
+    """Modifies the passed dataframe to also include local time attribute columns.
+
+    See the pandas.Timestamp documentation for possible attributes.
+    """
+    if grp_cols is None:
+        grouper = [tz_col]
+    elif isinstance(grp_cols, str):
+        grouper = [grp_cols, tz_col]
+    elif isinstance(grp_cols, list):
+        grouper = grp_cols + [tz_col]
+    else:
+        raise RuntimeError("grp_cols argument must be a string or list.")
+
+    for tcol in time_cols:
+        for a in attrs:
+            new_name = get_local_time_attr_col_name(time_col=tcol, attr_name=a)
+            df[new_name] = 0  # May need to be adjusted for different attribute dtypes
+    logger.info("Building time attribute columns")
+    tqdm.pandas()
+    df = df.groupby(grouper, group_keys=False).progress_apply(
+        lambda g: _get_local_time_attr_by_tz(
+            g, tz=g.name[-1], utc_cols=time_cols, attrs=attrs
+        )
+    )
+    logger.info("Sorting within each group.")
+    df = df.groupby(grp_cols, group_keys=False).progress_apply(
+        lambda grp: grp.sort_values(sort_col)
+    )
+    return df
+
+
+def _get_local_time_attr_by_tz(
+    grp: pd.DataFrame,
+    tz: str,
+    utc_cols: str | list[str],
+    attrs: str | list[str],
+) -> pd.DataFrame:
+    """Get a time-based metric, like day, day_of_year, etc. from a UTC datetime column
+    and a timezone.
+
+    This function assumes that there is a single time zone across the dataframe. If this
+    is not the case, then group by time zone and then pass to this function.
+    """
+    if isinstance(utc_cols, str):
+        utc_cols = [utc_cols]
+    if isinstance(attrs, str):
+        attrs = [attrs]
+
+    for tcol in utc_cols:
+        local_time_ser = grp[tcol].dt.tz_convert(tz)
+        for a in attrs:
+            new_name = get_local_time_attr_col_name(time_col=tcol, attr_name=a)
+            grp.loc[:, new_name] = getattr(local_time_ser.dt, a)
+    return grp
+
+
+def get_local_time_attr_col_name(time_col: str, attr_name: str) -> str:
+    return f"{time_col}_local_{attr_name}"
