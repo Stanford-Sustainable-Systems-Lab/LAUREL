@@ -22,7 +22,8 @@ DEFAULT_COLUMN_NAMES = {
     "hex": "hex_id",
     "start": "dwell_start_time",
     "end": "dwell_end_time",
-    "dist": "distance",
+    "trip_dist": "trip_distance",
+    "trip_dur": "trip_duration",
     "reset": "reset_state_before",
 }
 
@@ -39,7 +40,8 @@ class DwellSet:
     _hex = None
     _start = None
     _end = None
-    _dist = None
+    _trip_dist = None
+    _trip_dur = None
     _reset = None
     _seq_names = None
     _verify_sorting = None
@@ -53,7 +55,8 @@ class DwellSet:
         hex: str,
         start: str,
         end: str,
-        dist: str,
+        trip_dist: str,
+        trip_dur: str,
         reset: str = None,
         verify_sorting: bool = True,
         *args,
@@ -70,7 +73,7 @@ class DwellSet:
         def has_duplicates(lst):
             return len(lst) != len(set(lst))
 
-        dup_test = [veh, hex, start, end, dist]
+        dup_test = [veh, hex, start, end, trip_dist, trip_dur]
         dup = has_duplicates(dup_test)
         if dup:
             raise RuntimeError("Duplicated column names in arguments.")
@@ -87,7 +90,8 @@ class DwellSet:
         self._hex = _return_if_present(hex)
         self._start = _return_if_present(start)
         self._end = _return_if_present(end)
-        self._dist = _return_if_present(dist)
+        self._trip_dist = _return_if_present(trip_dist)
+        self._trip_dur = _return_if_present(trip_dur)
         if reset is None:
             self._reset = DEFAULT_COLUMN_NAMES["reset"]
             self.set_default_reset_col()
@@ -221,7 +225,7 @@ class DwellSet:
             self.sort_by_veh_time()
 
         if sum_cols is None:
-            sum_cols = self.dist
+            sum_cols = self.trip_dist
         if isinstance(sum_cols, str):
             sum_cols = [sum_cols]
 
@@ -476,13 +480,22 @@ class DwellSet:
         self._end = value
 
     @property
-    def dist(self):
-        return self._dist
+    def trip_dist(self):
+        return self._trip_dist
 
-    @dist.setter
-    def dist(self, value):
-        self._rename_idx_col(value, self._dist)
-        self._dist = value
+    @trip_dist.setter
+    def trip_dist(self, value):
+        self._rename_idx_col(value, self._trip_dist)
+        self._trip_dist = value
+
+    @property
+    def trip_dur(self):
+        return self._trip_dur
+
+    @trip_dur.setter
+    def trip_dur(self, value):
+        self._rename_idx_col(value, self._trip_dur)
+        self._trip_dur = value
 
     @property
     def reset(self):
@@ -526,7 +539,15 @@ class DwellSet:
             self.data = self.data.rename(columns={old: new})
 
     def get_tracked_cols(self):
-        return [self._veh, self._hex, self._start, self._end, self._dist, self._reset]
+        return [
+            self._veh,
+            self._hex,
+            self._start,
+            self._end,
+            self._trip_dist,
+            self._trip_dur,
+            self._reset,
+        ]
 
     @classmethod
     def from_trips(
@@ -536,7 +557,8 @@ class DwellSet:
         hex: str,
         start_trip: str,
         end_trip: str,
-        dist: str,
+        trip_dist: str,
+        trip_dur: str,
         sorted: bool = False,
         *args,
         **kwargs,
@@ -548,7 +570,8 @@ class DwellSet:
             hex=hex,
             start=end_trip,
             end=start_trip,  # This is almost true, since the dwell end is the shifted start_trip
-            dist=dist,
+            trip_dist=trip_dist,
+            trip_dur=trip_dur,
         )
         if not sorted:
             dw.sort_by_veh_time()

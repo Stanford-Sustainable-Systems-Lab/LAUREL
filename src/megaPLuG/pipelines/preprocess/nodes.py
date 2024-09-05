@@ -82,7 +82,8 @@ def create_dwells(trips: dd.DataFrame, params: dict) -> dd.DataFrame | pd.DataFr
         hex=colnames["hex"],
         start_trip=colnames["start_trip"],
         end_trip=colnames["end_trip"],
-        dist=colnames["dist"],
+        trip_dist=colnames["trip_dist"],
+        trip_dur=colnames["trip_dur"],
     )
 
     if params["persist"]:

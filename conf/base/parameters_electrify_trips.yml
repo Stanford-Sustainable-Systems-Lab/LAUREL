@@ -9,7 +9,8 @@ load_dwell_set:
   hex: hex_id
   start: dwell_start_time
   end: dwell_end_time
-  dist: trip_miles
+  trip_dist: trip_miles
+  trip_dur: trip_hrs
   reset: reset_state_before
 
 filter_dwells:

@@ -45,5 +45,5 @@ create_dwells:
     hex: hex_id
     start_trip: start_timestamp_utc
     end_trip: end_timestamp_utc
-    dist: trip_miles
-  persist: False
+    trip_dist: trip_miles
+    trip_dur: trip_hrs

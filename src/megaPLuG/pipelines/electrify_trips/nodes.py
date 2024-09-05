@@ -156,7 +156,9 @@ def filter_noncritical_dwells(dw: DwellSet, params: dict) -> DwellSet:
 def calc_energy_use(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
     """Calculate energy use for all trips."""
     dw.data = dw.data.merge(vehs.loc[:, [params["consump_col"]]], how="left", on=dw.veh)
-    dw.data[params["energy_col"]] = dw.data[dw.dist] * dw.data[params["consump_col"]]
+    dw.data[params["energy_col"]] = (
+        dw.data[dw.trip_dist] * dw.data[params["consump_col"]]
+    )
     dw.data = dw.data.drop(columns=[params["consump_col"]])
     return dw
 
