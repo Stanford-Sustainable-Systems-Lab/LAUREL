@@ -14,9 +14,6 @@ load_dwell_set:
   reset: reset_state_before
 
 filter_dwells:
-  drop_cols:
-    - trip_hrs
-    - trip_avg_speed_mph
   veh_param_cols:
     plug_in: minimum_times_plug_in_mins
     plug_out: minimum_times_plug_out_mins

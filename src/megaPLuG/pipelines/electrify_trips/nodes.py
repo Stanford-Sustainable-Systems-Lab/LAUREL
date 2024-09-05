@@ -91,8 +91,8 @@ def filter_dwells(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
 
     logger.info("Filter by dwells by accumulating through")
     old_len = len(dw.data)
-    drop_cols = params["drop_cols"] + list(pcols.values()) + ["soc_boost_potential"]
-    dw.data = dw.data.drop(columns=drop_cols)  # Not accumulated
+    drop_cols = list(pcols.values()) + ["soc_boost_potential"]
+    dw.data = dw.data.drop(columns=drop_cols)
     dw.filter_through("big_boost", inplace=True)
     new_len = len(dw.data)
     logger.info(f"Rows dropped: {old_len - new_len}, {round(new_len/old_len*100, 1)}%")
