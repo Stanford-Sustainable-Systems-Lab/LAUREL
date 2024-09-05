@@ -254,6 +254,9 @@ class DwellSet:
                 reset_col=self.reset,
                 meta=dd.utils.make_meta(self.data),
             )
+            new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
+            new.data.dropna(subset=keep_mask_col)
+            new.data.drop(columns=keep_mask_col)
         elif isinstance(self.data, pd.DataFrame):
             tqdm.pandas()
             new.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
@@ -262,9 +265,9 @@ class DwellSet:
                 sum_cols=sum_cols,
                 reset_col=self.reset,
             )
-        new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
-        new.data.dropna(subset=keep_mask_col, inplace=True)
-        new.data.drop(columns=keep_mask_col, inplace=True)
+            new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
+            new.data.dropna(subset=keep_mask_col, inplace=True)
+            new.data.drop(columns=keep_mask_col, inplace=True)
         if inplace:
             return None
         else:
@@ -351,6 +354,9 @@ class DwellSet:
                 reset_col=self.reset,
                 meta=dd.utils.make_meta(self.data),
             )
+            new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
+            new.data.dropna(subset=keep_mask_col)
+            new.data.drop(columns=keep_mask_col)
         elif isinstance(self.data, pd.DataFrame):
             tqdm.pandas()
             new.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
@@ -358,9 +364,9 @@ class DwellSet:
                 keep_mask_col=keep_mask_col,
                 reset_col=self.reset,
             )
-        new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
-        new.data.dropna(subset=keep_mask_col, inplace=True)
-        new.data.drop(columns=keep_mask_col, inplace=True)
+            new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
+            new.data.dropna(subset=keep_mask_col, inplace=True)
+            new.data.drop(columns=keep_mask_col, inplace=True)
         if inplace:
             return None
         else:
