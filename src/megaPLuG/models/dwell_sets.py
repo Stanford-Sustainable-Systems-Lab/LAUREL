@@ -226,7 +226,7 @@ class DwellSet:
 
         sums_master_dtype = np.result_type(*self.data[self.sum_cols].dtypes.values)
         for col in self.sum_cols:
-            self.data[col] = self.data[col].astype(sums_master_dtype)
+            self.data.loc[:, col] = self.data[col].astype(sums_master_dtype)
 
         # Force numba compilation
         base = np.array(
@@ -245,6 +245,14 @@ class DwellSet:
         else:
             new = self.copy_without_data()
 
+        # Pre-allocate target columns
+        for col in self.sum_cols:
+            new_name = f"{col}_{keep_mask_col}"
+            new.data.loc[:, new_name] = (
+                0.0  # Decimal is very important here, makes float
+            )
+            new.data.loc[:, new_name] = new.data[new_name].astype(sums_master_dtype)
+        new.data.loc[:, f"{self.reset}_{keep_mask_col}"] = False
         if isinstance(self.data, dd.DataFrame):
             new.data = self.data.groupby(self.veh, group_keys=False).apply(
                 DwellSet._filter_through_grp,
@@ -253,9 +261,9 @@ class DwellSet:
                 reset_col=self.reset,
                 meta=dd.utils.make_meta(self.data),
             )
-            new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
-            new.data.dropna(subset=keep_mask_col)
-            new.data.drop(columns=keep_mask_col)
+            # new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
+            # new.data.dropna(subset=keep_mask_col)
+            # new.data.drop(columns=keep_mask_col)
         elif isinstance(self.data, pd.DataFrame):
             tqdm.pandas()
             new.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
@@ -264,9 +272,9 @@ class DwellSet:
                 sum_cols=self.sum_cols,
                 reset_col=self.reset,
             )
-            new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
-            new.data.dropna(subset=keep_mask_col, inplace=True)
-            new.data.drop(columns=keep_mask_col, inplace=True)
+            # new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
+            # new.data.dropna(subset=keep_mask_col, inplace=True)
+            # new.data.drop(columns=keep_mask_col, inplace=True)
         if inplace:
             return None
         else:
@@ -292,8 +300,9 @@ class DwellSet:
         )
 
         for i, col in enumerate(sum_cols):
-            grp.loc[:, col] = arr[:, i]
-        grp.loc[:, reset_col] = arr[:, -1].astype(bool)
+            new_name = f"{col}_{keep_mask_col}"
+            grp.loc[:, new_name] = arr[:, i]
+        grp.loc[:, f"{reset_col}_{keep_mask_col}"] = arr[:, -1].astype(bool)
         return grp
 
     @staticmethod
@@ -324,6 +333,7 @@ class DwellSet:
             else:
                 cum_sums = sums[i, :] + cum_sums
                 # cum_res will just reassign to itself, since the current reset is False
+        arr[~keep, :] = np.NaN
         return arr
 
     def filter_reset(self, keep_mask_col: str, inplace: bool = False) -> Self | None:
