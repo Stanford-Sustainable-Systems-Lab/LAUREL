@@ -99,6 +99,7 @@ class DwellSet:
             self._reset = _return_if_present(reset)
 
         self.verify_sorting = verify_sorting
+        self.sum_cols = [self.trip_dist, self.trip_dur]
 
     def copy_without_data(self: Self) -> Self:
         """Copy the DwellSet without its underlying data. This is used for filtering."""
@@ -208,7 +209,6 @@ class DwellSet:
     def filter_through(
         self,
         keep_mask_col: str,
-        sum_cols: str | list[str] | None = None,
         inplace: bool = False,
     ) -> Self | None:
         """Filter out individual dwells while merging trips together.
@@ -224,13 +224,8 @@ class DwellSet:
         if self.verify_sorting:
             self.sort_by_veh_time()
 
-        if sum_cols is None:
-            sum_cols = self.trip_dist
-        if isinstance(sum_cols, str):
-            sum_cols = [sum_cols]
-
-        sums_master_dtype = np.result_type(*self.data[sum_cols].dtypes.values)
-        for col in sum_cols:
+        sums_master_dtype = np.result_type(*self.data[self.sum_cols].dtypes.values)
+        for col in self.sum_cols:
             self.data[col] = self.data[col].astype(sums_master_dtype)
 
         # Force numba compilation
@@ -238,8 +233,8 @@ class DwellSet:
             [True, False, True]
         )  # Just an example array of the correct dtype
         sums_base = np.expand_dims(base.astype(sums_master_dtype), axis=1)
-        if len(sum_cols) > 1:
-            sums_base = np.hstack([sums_base] * len(sum_cols))
+        if len(self.sum_cols) > 1:
+            sums_base = np.hstack([sums_base] * len(self.sum_cols))
         _ = DwellSet._filter_through_grp_core(
             keep=base,
             sums=sums_base,
@@ -254,7 +249,7 @@ class DwellSet:
             new.data = self.data.groupby(self.veh, group_keys=False).apply(
                 DwellSet._filter_through_grp,
                 keep_mask_col=keep_mask_col,
-                sum_cols=sum_cols,
+                sum_cols=self.sum_cols,
                 reset_col=self.reset,
                 meta=dd.utils.make_meta(self.data),
             )
@@ -266,7 +261,7 @@ class DwellSet:
             new.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
                 DwellSet._filter_through_grp,
                 keep_mask_col=keep_mask_col,
-                sum_cols=sum_cols,
+                sum_cols=self.sum_cols,
                 reset_col=self.reset,
             )
             new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
