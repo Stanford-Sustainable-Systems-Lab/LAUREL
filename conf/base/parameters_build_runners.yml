@@ -14,9 +14,9 @@ slurm_reporting:
 
 slurm_resources:
   partition: serc
-  mem: 32GB # Increasing memory, since I've had some memory errors
   ntasks: 2 # I believe that this is what we need for SequentialRunner, while ParallelRunner needs n_examples + 1
-  cpus-per-task: 32 # Upping cpus per task since we can't parallelize as wide between tasks
+  cpus-per-task: 1 # Using multiple CPUs takes a lot of effort (e.g. Dask cluster)
+  mem-per-cpu: 32GB # Increasing memory, since I've had some memory errors
   gpus: 0
   time: 0-04:00 # Reducing time requirement, since with more processors we're going faster.
   array: 1-60%2 # 2 at a time is enforced by Gurobi license
