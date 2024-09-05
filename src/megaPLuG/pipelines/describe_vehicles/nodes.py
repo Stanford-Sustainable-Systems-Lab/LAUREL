@@ -13,6 +13,7 @@ from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
+from megaPLuG.utils.data import merge_on_int_cols
 from megaPLuG.utils.params import build_df_from_dict
 from megaPLuG.utils.time import total_hours
 
@@ -149,10 +150,11 @@ def classify_vehicles(
 
 def mark_locations(dw: DwellSet, veh_locs: pd.DataFrame, params: dict) -> DwellSet:
     """Mark locations-of-interest for each vehicle (e.g. home base)."""
-    veh_loc_merge = veh_locs.loc[:, params["veh_loc_cols"]]
-    # TODO: Modify this code so that it works with Dask, using a single merge column
-    # Achieve this using an encoding function e.g. id1 * set1_size + id2, or a hash
-    # Pandas almost surely does this internally, but Dask doesn't presume.
-    # TODO: Also ensure that this preserves ordering
-    dw.data = dw.data.merge(veh_loc_merge, how="left", on=[dw.veh, dw.hex])
+    # Move the dw.data columns out from the index, if necessary
+    dw.data = merge_on_int_cols(
+        left=dw.data,
+        right=veh_locs.loc[:, params["veh_loc_cols"]],
+        on=[dw.veh, dw.hex],
+        how="left",
+    )
     return dw
