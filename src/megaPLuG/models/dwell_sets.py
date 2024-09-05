@@ -225,17 +225,21 @@ class DwellSet:
         if isinstance(sum_cols, str):
             sum_cols = [sum_cols]
 
-        head = copy.deepcopy(self.data.head(5))
-        sums_master_dtype = head[sum_cols].values.dtype
+        sums_master_dtype = np.result_type(*self.data[sum_cols].dtypes.values)
         for col in sum_cols:
             self.data[col] = self.data[col].astype(sums_master_dtype)
 
         # Force numba compilation
-        _ = DwellSet._filter_through_grp(
-            grp=head,  # copy to prevent double-processing
-            keep_mask_col=keep_mask_col,
-            sum_cols=sum_cols,
-            reset_col=self.reset,
+        base = np.array(
+            [True, False, True]
+        )  # Just an example array of the correct dtype
+        sums_base = np.expand_dims(base.astype(sums_master_dtype), axis=1)
+        if len(sum_cols) > 1:
+            sums_base = np.hstack([sums_base] * len(sum_cols))
+        _ = DwellSet._filter_through_grp_core(
+            keep=base,
+            sums=sums_base,
+            reset=base,
         )
         if inplace:
             new = self
@@ -275,10 +279,13 @@ class DwellSet:
     ) -> pd.DataFrame:
         if isinstance(sum_cols, str):
             sum_cols = [sum_cols]
+            sums = np.expand_dims(grp[sum_cols].values, axis=1)
+        else:
+            sums = grp[sum_cols].values
 
         arr = DwellSet._filter_through_grp_core(
             keep=grp[keep_mask_col].values,
-            sums=grp[sum_cols].values,
+            sums=sums,
             reset=grp[reset_col].values,
         )
 
