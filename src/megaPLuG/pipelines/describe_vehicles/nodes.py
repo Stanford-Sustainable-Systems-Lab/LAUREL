@@ -6,6 +6,7 @@ generated using Kedro 0.19.3
 import logging
 from copy import deepcopy
 
+import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 from sklearn.cluster import HDBSCAN
@@ -39,7 +40,7 @@ def calc_inter_visit_stats(dw: DwellSet) -> DwellSet:
         calc_inter_visit_times, hex_col=dw.hex, end_col=dw.end, start_col=dw.start
     )
 
-    dw.data["cum_veh_miles"] = dw.data.groupby(dw.veh)[dw.dist].cumsum()
+    dw.data["cum_veh_miles"] = dw.data.groupby(dw.veh)[dw.trip_dist].cumsum()
     dw.data["inter_visit_miles"] = dw.data.groupby([dw.veh, dw.hex])[
         "cum_veh_miles"
     ].diff()
@@ -120,15 +121,16 @@ def cluster_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
 
 def label_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Set the vehicles' important locations, like home base, if one exists."""
-    corpars = params["cluster_location_corresp"]
-    col_ls = list(corpars["cols"].values())
-    cl_loc_cor = build_df_from_dict(d=corpars["vals"], cols=col_ls)
-    cl_loc_cor[corpars["cols"]["location"]] = pd.Categorical(
-        cl_loc_cor[corpars["cols"]["location"]]
+    corpars = params["location"]
+    cl_loc_cor = build_df_from_dict(
+        d=corpars["vals"],
+        id_cols=list(corpars["id_cols"].values()),
+        value_col="location",
     )
+    cl_loc_cor["location"] = pd.Categorical(cl_loc_cor["location"])
     orig_idx = veh_locs.index.names
     veh_locs = veh_locs.reset_index()
-    veh_locs = veh_locs.merge(cl_loc_cor, how="left", on=corpars["cols"]["cluster"])
+    veh_locs = veh_locs.merge(cl_loc_cor, how="left", on=corpars["id_cols"]["cluster"])
     veh_locs = veh_locs.set_index(orig_idx)
     return veh_locs
 
@@ -150,11 +152,10 @@ def classify_vehicles(
 
 def mark_locations(dw: DwellSet, veh_locs: pd.DataFrame, params: dict) -> DwellSet:
     """Mark locations-of-interest for each vehicle (e.g. home base)."""
-    # Move the dw.data columns out from the index, if necessary
-    dw.data = merge_on_int_cols(
-        left=dw.data,
-        right=veh_locs.loc[:, params["veh_loc_cols"]],
-        on=[dw.veh, dw.hex],
-        how="left",
-    )
+    right = veh_locs.loc[:, params["veh_loc_cols"]]
+    merge_cols = [dw.veh, dw.hex]
+    if isinstance(dw.data, pd.DataFrame):
+        dw.data = dw.data.merge(right, how="left", on=merge_cols)
+    elif isinstance(dw.data, dd.DataFrame):
+        dw.data = merge_on_int_cols(left=dw.data, right=right, on=[dw.veh, dw.hex])
     return dw

@@ -29,10 +29,9 @@ cluster_veh_loc_pairs:
   cluster_col: cluster
 
 label_veh_loc_pairs:
-  cluster_location_corresp:
-    cols:
+  location:
+    id_cols:
       cluster: cluster
-      location: location
     vals:
       2: home_base
 
