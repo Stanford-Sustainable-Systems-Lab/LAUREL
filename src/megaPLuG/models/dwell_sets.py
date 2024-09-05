@@ -57,7 +57,7 @@ class DwellSet:
         end: str,
         trip_dist: str,
         trip_dur: str,
-        reset: str = None,
+        reset: str | None = None,
         verify_sorting: bool = True,
         *args,
         **kwargs,
