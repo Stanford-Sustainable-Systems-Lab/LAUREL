@@ -14,7 +14,7 @@ load_dwell_set:
   reset: reset_state_before
   verify_sorting: True
 
-filter_dwells:
+mark_substantial_dwells:
   veh_param_cols:
     plug_in: minimum_times_plug_in_mins
     plug_out: minimum_times_plug_out_mins
@@ -26,15 +26,22 @@ filter_dwells:
     minimum_times_plug_out_mins: minute
   dwell_time_col: dwell_time_hrs
 
-veh_days:
+mark_critical_days:
   loc_col: location
-  veh_day_col: veh_day_id
   refresh_locations:
     - home_base
   refresh_col: is_refresh
   crit_col: is_crit_day
   batt_cap_col: battery_capacity_kwh
   consump_col: consump_rate_kwh_per_mi
+
+filter_dwells:
+  filter_cols:
+    substantial_soc: big_boost
+    refresh: is_refresh
+    crit: is_crit_day
+  drop_cols:
+   - range_estim
 
 vehicles:
   battery_capacity_kwh:

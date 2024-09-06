@@ -7,6 +7,7 @@ import logging
 
 import numpy as np
 import pandas as pd
+from dask.dataframe.utils import make_meta
 from tqdm import tqdm
 
 from megaPLuG.models.charging_algorithms import charge_soc_thresh
@@ -73,8 +74,8 @@ def set_charging_availability(dw: DwellSet, locs: dict) -> DwellSet:
     return dw
 
 
-def filter_dwells(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
-    """Set the charging availability for each session."""
+def mark_substantial_dwells(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
+    """Mark dwells which could provide substantial SoC to each vehicle."""
     pcols = params["veh_param_cols"]
     for col, unit in params["time_cols_w_unit"].items():
         vehs[col] = pd.to_timedelta(vehs[col], unit=unit)
@@ -95,66 +96,53 @@ def filter_dwells(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
     )
     dw.data["big_boost"] = dw.data["soc_boost_potential"] > dw.data[pcols["soc_boost"]]
 
-    logger.info("Filter by dwells by accumulating through")
-    old_len = len(dw.data)
     drop_cols = list(pcols.values()) + ["soc_boost_potential"]
     dw.data = dw.data.drop(columns=drop_cols)
-    dw.filter_through("big_boost", inplace=True)
-    new_len = len(dw.data)
-    logger.info(f"Rows dropped: {old_len - new_len}, {round(new_len/old_len*100, 1)}%")
-    return dw
-
-
-def mark_vehicle_days(dw: DwellSet, params: dict) -> DwellSet:
-    """Mark out vehicle-days, the periods between human-intuitive-resets.
-
-    For vehicles with a home base, these would be times between visits to the home base.
-    """
-    dw.data[params["refresh_col"]] = dw.data[params["loc_col"]].isin(
-        params["refresh_locations"]
-    )
-    dw.data[params["veh_day_col"]] = dw.data.groupby(dw.veh)[
-        params["refresh_col"]
-    ].transform(lambda ser: ser.shift(1, fill_value=False).cumsum())
     return dw
 
 
 def mark_critical_days(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
     """Mark critical days, vehicle-days which cannot be achieved on a single charge."""
-    crit_days = dw.filter_through(params["refresh_col"])
+    refr_col = params["refresh_col"]
+    dw.data[refr_col] = dw.data[params["loc_col"]].isin(params["refresh_locations"])
+    dw.filter_through(refr_col, inplace=True)
 
     # Apply vehicle-specific estimated range
     vehs["range_estim"] = vehs[params["batt_cap_col"]] / vehs[params["consump_col"]]
-    crit_days.data = crit_days.data.merge(
-        vehs.loc[:, ["range_estim"]], how="left", on=crit_days.veh
-    )
+    dw.data = dw.data.merge(vehs.loc[:, ["range_estim"]], how="left", on=dw.veh)
 
     crcol = params["crit_col"]
-    crit_days.data[crcol] = (
-        crit_days.data[crit_days.dist] > crit_days.data["range_estim"]
-    )
+    veh_day_trip_dist_col = f"{dw.trip_dist}_{refr_col}"
+    dw.data[crcol] = dw.data[veh_day_trip_dist_col] > dw.data["range_estim"]
 
-    vdcol = params["veh_day_col"]
-    crit_days_merge = crit_days.data.loc[:, [vdcol, crcol]]
-    dw.data = dw.data.merge(crit_days_merge, how="left", on=[dw.veh, vdcol])
     # Assume a critical day for partial days, since the point of the critical days
     # assumption is to reduce public charging on days when we're sure it's unnecessary
-    crit_na = dw.data[crcol].isna()
-    dw.data.loc[crit_na, crcol] = True
-    dw.data[crcol] = dw.data[crcol].astype(bool)
+    dw.data[crcol] = dw.data[crcol].astype("boolean")
+    dw.data.loc[~dw.data[refr_col], crcol] = pd.NA
+    dw.data[crcol] = dw.data[crcol].groupby(dw.veh).bfill().fillna(True).astype(bool)
     return dw
 
 
-def filter_noncritical_dwells(dw: DwellSet, params: dict) -> DwellSet:
+def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     """Filter out the en-route dwells on non-critical days."""
     if not dw.is_dask:
         logger.info("Filter by dwells by accumulating through")
         old_len = len(dw.data)
 
-    dw.data["keep_dwells"] = (
-        dw.data[params["refresh_col"]] | dw.data[params["crit_col"]]
+    flt_cols = params["filter_cols"]
+    dw.data["keep_dwells"] = dw.data[flt_cols["substantial_soc"]] & (
+        dw.data[flt_cols["refresh"]] | dw.data[flt_cols["crit"]]
     )
     dw.filter_through("keep_dwells", inplace=True)
+
+    dw.data["keep_dwells"] = dw.data["keep_dwells"].astype("boolean")
+    dw.data["keep_dwells"] = dw.data["keep_dwells"].replace(False, pd.NA)
+    if dw.is_dask:
+        dw.data.dropna(subset="keep_dwells")
+    else:
+        dw.data.dropna(subset="keep_dwells", inplace=True)
+    drop_cols = ["keep_dwells"] + list(flt_cols.values()) + params["drop_cols"]
+    dw.data = dw.data.drop(columns=drop_cols)
 
     if not dw.is_dask:
         new_len = len(dw.data)
@@ -182,16 +170,25 @@ def simulate_charging_choice(
     icols = params["input_cols"]
     for col in params["output_cols"]:
         dw.data[col] = np.NaN  # Allocate columns to fill in, which avoids merging
-    tqdm.pandas()
-    dw.data = dw.data.groupby(dw.veh, group_keys=False).progress_apply(
-        charge_soc_thresh,
-        consumed_kwh_col=icols["consumed_kwh"],
-        avail_kw_col=icols["avail_kw"],
-        dwell_hrs_col=icols["dwell_hrs"],
-        reset_col=dw.reset,
-        veh_params=vehs,
-        out_cols=params["output_cols"],
-    )
+
+    # Set arguments
+    kws = {
+        "func": charge_soc_thresh,
+        "consumed_kwh_col": icols["consumed_kwh"],
+        "avail_kw_col": icols["avail_kw"],
+        "dwell_hrs_col": icols["dwell_hrs"],
+        "reset_col": dw.reset,
+        "veh_params": vehs,
+        "out_cols": params["output_cols"],
+    }
+
+    # Run simulation
+    if dw.is_dask:
+        kws.update({"meta": make_meta(dw.data)})
+        dw.data = dw.data.groupby(dw.veh, group_keys=False).apply(**kws)
+    else:
+        tqdm.pandas()
+        dw.data = dw.data.groupby(dw.veh, group_keys=False).progress_apply(**kws)
     return dw
 
 
