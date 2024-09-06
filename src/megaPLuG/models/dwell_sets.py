@@ -323,7 +323,7 @@ class DwellSet:
         arr[~keep, :] = np.NaN
         return arr
 
-    def filter_reset(self, keep_mask_col: str, inplace: bool = False) -> Self | None:
+    def reset_masked(self, keep_mask_col: str, inplace: bool = False) -> Self | None:
         """Filter out individual dwells while forcing a reset in the new gaps.
 
         Note: This function operates inplace for efficiency.
@@ -335,7 +335,7 @@ class DwellSet:
         base = np.array(
             [True, False, True]
         )  # Just an example array of the correct dtype
-        _ = DwellSet._filter_reset_grp_core(
+        _ = DwellSet._reset_masked_grp_core(
             keep=base,
             reset=base,
         )
@@ -349,7 +349,7 @@ class DwellSet:
         new.data.loc[:, f"{self.reset}_{keep_mask_col}"] = False
 
         kws = {
-            "func": DwellSet._filter_reset_grp,
+            "func": DwellSet._reset_masked_grp,
             "keep_mask_col": keep_mask_col,
             "reset_col": self.reset,
         }
@@ -367,11 +367,11 @@ class DwellSet:
             return new
 
     @staticmethod
-    def _filter_reset_grp(
+    def _reset_masked_grp(
         grp: pd.DataFrame, keep_mask_col: str, reset_col: str
     ) -> pd.DataFrame:
         new_name = f"{reset_col}_{keep_mask_col}"
-        grp.loc[:, new_name] = DwellSet._filter_reset_grp_core(
+        grp.loc[:, new_name] = DwellSet._reset_masked_grp_core(
             keep=grp[keep_mask_col].values,
             reset=grp[reset_col].values,
         )
@@ -379,7 +379,7 @@ class DwellSet:
 
     @staticmethod
     @njit
-    def _filter_reset_grp_core(keep: np.ndarray, reset: np.ndarray) -> np.ndarray:
+    def _reset_masked_grp_core(keep: np.ndarray, reset: np.ndarray) -> np.ndarray:
         if not keep.shape == reset.shape:
             raise RuntimeError("The two arrays must have the same shape.")
         prev_keep = False
