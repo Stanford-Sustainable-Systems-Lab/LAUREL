@@ -23,7 +23,7 @@ def merge_on_int_cols(
     right_merge = right.reset_index()
 
     # Get combined merge column
-    col_0_max = max(left[on[0]].max(), right_merge[on[0]].max())
+    col_0_max = left[on[0]].max()
 
     right_merge["_merge"] = get_multi_col_merger(
         right_merge, src_cols=on, col_0_max=col_0_max
@@ -33,7 +33,7 @@ def merge_on_int_cols(
     # Perform merge
     right_merge = right_merge.drop(columns=on)
     right_merge = right_merge.set_index("_merge")
-    left = left.merge(right_merge, on="_merge", **kwargs)
+    left = left.merge(right_merge, on="_merge", how="left", **kwargs)
     left = left.drop(columns="_merge")
 
     # Reset index, if necessary
