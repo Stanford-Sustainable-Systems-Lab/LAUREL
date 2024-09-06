@@ -220,7 +220,7 @@ class DwellSet:
 
         sums_master_dtype = np.result_type(*self.data[self.sum_cols].dtypes.values)
         for col in self.sum_cols:
-            self.data.loc[:, col] = self.data[col].astype(sums_master_dtype)
+            self.data[col] = self.data[col].astype(sums_master_dtype)
 
         # Force numba compilation
         base = np.array(
@@ -242,11 +242,9 @@ class DwellSet:
         # Pre-allocate target columns
         for col in self.sum_cols:
             new_name = f"{col}_{keep_mask_col}"
-            new.data.loc[:, new_name] = (
-                0.0  # Decimal is very important here, makes float
-            )
-            new.data.loc[:, new_name] = new.data[new_name].astype(sums_master_dtype)
-        new.data.loc[:, f"{self.reset}_{keep_mask_col}"] = False
+            new.data[new_name] = 0.0  # Decimal is very important here, makes float
+            new.data[new_name] = new.data[new_name].astype(sums_master_dtype)
+        new.data[f"{self.reset}_{keep_mask_col}"] = False
 
         kws = {
             "func": DwellSet._accum_masked_grp,
