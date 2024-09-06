@@ -46,7 +46,7 @@ class DwellSet:
     _seq_names = None
     _verify_sorting = None
     data = None
-    data_type = None
+    is_dask = False
 
     def __init__(
         self,
@@ -62,12 +62,6 @@ class DwellSet:
         *args,
         **kwargs,
     ):
-        if isinstance(data, dd.DataFrame):
-            self.data_type = dd.DataFrame
-        elif isinstance(data, pd.DataFrame):
-            self.data_type == pd.DataFrame
-        else:
-            raise RuntimeError("Unsupported underlying data type for DwellSet.")
         self.data = data
 
         def has_duplicates(lst):
@@ -253,7 +247,7 @@ class DwellSet:
             )
             new.data.loc[:, new_name] = new.data[new_name].astype(sums_master_dtype)
         new.data.loc[:, f"{self.reset}_{keep_mask_col}"] = False
-        if isinstance(self.data, dd.DataFrame):
+        if self.is_dask:
             new.data = self.data.groupby(self.veh, group_keys=False).apply(
                 DwellSet._filter_through_grp,
                 keep_mask_col=keep_mask_col,
@@ -264,7 +258,7 @@ class DwellSet:
             # new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
             # new.data.dropna(subset=keep_mask_col)
             # new.data.drop(columns=keep_mask_col)
-        elif isinstance(self.data, pd.DataFrame):
+        else:
             tqdm.pandas()
             new.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
                 DwellSet._filter_through_grp,
@@ -356,7 +350,7 @@ class DwellSet:
         else:
             new = self.copy_without_data()
 
-        if isinstance(self.data, dd.DataFrame):
+        if self.is_dask:
             new.data = self.data.groupby(self.veh, group_keys=False).apply(
                 DwellSet._filter_reset_grp,
                 keep_mask_col=keep_mask_col,
@@ -366,7 +360,7 @@ class DwellSet:
             new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
             new.data.dropna(subset=keep_mask_col)
             new.data.drop(columns=keep_mask_col)
-        elif isinstance(self.data, pd.DataFrame):
+        else:
             tqdm.pandas()
             new.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
                 DwellSet._filter_reset_grp,
@@ -410,13 +404,13 @@ class DwellSet:
         """
         self.data[self.reset] = False
         reset_col_idx = self.data.columns.get_loc(self.reset)
-        if isinstance(self.data, dd.DataFrame):
+        if self.is_dask:
             self.data = self.data.groupby(self.veh, group_keys=False).apply(
                 DwellSet._set_default_reset_col_grp,
                 reset_col_idx=reset_col_idx,
                 meta=dd.utils.make_meta(self.data),
             )
-        elif isinstance(self.data, pd.DataFrame):
+        else:
             tqdm.pandas()
             self.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
                 DwellSet._set_default_reset_col_grp,
@@ -430,23 +424,21 @@ class DwellSet:
         grp.iat[0, reset_col_idx] = True
         return grp
 
-    def is_sorted(self) -> bool:
-        """Check if the DwellSet is sorted by vehicle and time.
+    @property
+    def data(self):
+        return self._data
 
-        This is a precondition for many of the algorithms.
-        """
-        if self.data.index.name != self._veh_time:
-            return False
-        is_inc = self.data.groupby(self.veh).apply(
-            lambda grp: grp.index.is_monotonic_increasing, include_groups=False
-        )
-        if isinstance(self.data, dd.DataFrame):
-            is_inc = is_inc.compute()
-        all_inc = np.all(is_inc)
-        if all_inc:
-            return True
+    @data.setter
+    def data(self, value):
+        if isinstance(value, dd.DataFrame):
+            self.is_dask = True
+        elif isinstance(value, pd.DataFrame):
+            self.is_dask = False
         else:
-            return False
+            raise NotImplementedError(
+                "DwellSet's data must be a Dask or Pandas DataFrame."
+            )
+        self._data = value
 
     @property
     def veh(self):
@@ -586,14 +578,14 @@ class DwellSet:
             grp[tgt] = grp[src].shift(-1)
             return grp
 
-        if isinstance(dw.data, dd.DataFrame):
+        if dw.is_dask:
             dw.data = dw.data.groupby(dw.veh, group_keys=False).apply(
                 _shift_by_grp,
                 src=dw.end,
                 tgt=dw.end,
                 meta=dd.utils.make_meta(dw.data),
             )
-        elif isinstance(dw.data, pd.DataFrame):
+        else:
             dw.data = dw.data.groupby(dw.veh, group_keys=False).apply(
                 _shift_by_grp,
                 src=dw.end,
@@ -625,14 +617,14 @@ class DwellSet:
         tcol = DwellSet._get_seq_name_tail(self.seq_names[0], self.start)
 
         id_cols = [self.veh, self.hex]
-        if isinstance(self.data, dd.DataFrame):
+        if self.is_dask:
             events = self.data.map_partitions(
                 DwellSet._dwells_to_events_grp,
                 id_cols=id_cols,
                 seq_names=self.seq_names,
                 drop_cur_idx=drop,
             )
-        elif isinstance(self.data, pd.DataFrame):
+        else:
             events = DwellSet._dwells_to_events_grp(
                 dw=self.data,
                 id_cols=id_cols,
@@ -696,22 +688,20 @@ class DwellSet:
         else:
             raise RuntimeError("Only 'point' and 'polygon' geometries are supported.")
 
-        if isinstance(self.data, dd.DataFrame):
+        if self.is_dask:
             self.data = dask_geopandas.from_dask_dataframe(df=self.data, geometry=None)
             self.data = self.data.map_partitions(
                 DwellSet._cells_to_geom_wrapper,
                 f=f,
                 hex_col=self.hex,
             )
-        elif isinstance(self.data, pd.DataFrame):
+        else:
             self.data = gpd.GeoDataFrame(data=self.data, geometry=None)
             self.data = DwellSet._cells_to_geom_wrapper(
                 gdf=self.data,
                 f=f,
                 hex_col=self.hex,
             )
-        else:
-            raise RuntimeError("Only pandas and dask dataframes are supported.")
 
     @staticmethod
     def _cells_to_geom_wrapper(
