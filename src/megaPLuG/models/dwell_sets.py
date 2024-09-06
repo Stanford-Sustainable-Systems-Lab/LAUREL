@@ -247,28 +247,21 @@ class DwellSet:
             )
             new.data.loc[:, new_name] = new.data[new_name].astype(sums_master_dtype)
         new.data.loc[:, f"{self.reset}_{keep_mask_col}"] = False
+
+        kws = {
+            "func": DwellSet._filter_through_grp,
+            "keep_mask_col": keep_mask_col,
+            "sum_cols": self.sum_cols,
+            "reset_col": self.reset,
+        }
         if self.is_dask:
-            new.data = self.data.groupby(self.veh, group_keys=False).apply(
-                DwellSet._filter_through_grp,
-                keep_mask_col=keep_mask_col,
-                sum_cols=self.sum_cols,
-                reset_col=self.reset,
-                meta=dd.utils.make_meta(self.data),
-            )
-            # new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
-            # new.data.dropna(subset=keep_mask_col)
-            # new.data.drop(columns=keep_mask_col)
+            kws.update({"meta": dd.utils.make_meta(self.data)})
+            new.data = self.data.groupby(self.veh, group_keys=False).apply(**kws)
         else:
             tqdm.pandas()
             new.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
-                DwellSet._filter_through_grp,
-                keep_mask_col=keep_mask_col,
-                sum_cols=self.sum_cols,
-                reset_col=self.reset,
+                **kws
             )
-            # new.data[keep_mask_col] = new.data[keep_mask_col].replace(False, np.NaN)
-            # new.data.dropna(subset=keep_mask_col, inplace=True)
-            # new.data.drop(columns=keep_mask_col, inplace=True)
         if inplace:
             return None
         else:
