@@ -52,12 +52,18 @@ def set_vehicle_params(vehs: pd.DataFrame, params: dict) -> DwellSet:
 
 def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
     """Filter out vehicles that we're not considering."""
+    if not dw.is_dask:
+        logger.info("Filter by vehicles by direct dropping")
+        old_len = len(dw.data)
+
     keep_idx = vehs.loc[vehs["has_home_base"], :].index.values
-    logger.info("Filter by vehicles by direct dropping")
-    old_len = len(dw.data)
     dw.data = dw.data.loc[keep_idx, :]
-    new_len = len(dw.data)
-    logger.info(f"Rows dropped: {old_len - new_len}, {round(new_len/old_len*100, 1)}%")
+
+    if not dw.is_dask:
+        new_len = len(dw.data)
+        abs_diff = old_len - new_len
+        pct_diff = round(new_len / old_len * 100, 1)
+        logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
     return dw
 
 
@@ -141,15 +147,20 @@ def mark_critical_days(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellS
 
 def filter_noncritical_dwells(dw: DwellSet, params: dict) -> DwellSet:
     """Filter out the en-route dwells on non-critical days."""
+    if not dw.is_dask:
+        logger.info("Filter by dwells by accumulating through")
+        old_len = len(dw.data)
+
     dw.data["keep_dwells"] = (
         dw.data[params["refresh_col"]] | dw.data[params["crit_col"]]
     )
-
-    logger.info("Filter by dwells by accumulating through")
-    old_len = len(dw.data)
     dw.filter_through("keep_dwells", inplace=True)
-    new_len = len(dw.data)
-    logger.info(f"Rows dropped: {old_len - new_len}, {round(new_len/old_len*100, 1)}%")
+
+    if not dw.is_dask:
+        new_len = len(dw.data)
+        abs_diff = old_len - new_len
+        pct_diff = round(new_len / old_len * 100, 1)
+        logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
     return dw
 
 
