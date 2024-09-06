@@ -12,6 +12,7 @@ load_dwell_set:
   trip_dist: trip_miles
   trip_dur: trip_hrs
   reset: reset_state_before
+  verify_sorting: True
 
 filter_dwells:
   veh_param_cols:
