@@ -25,10 +25,10 @@ def filter_substantial_dwells(dw: DwellSet, params: dict) -> DwellSet:
     """Filter to retain only substantial dwells to be described."""
     dw.data["dwell_hrs"] = total_hours(dw.data[dw.end] - dw.data[dw.start])
     dw.data["long_enough"] = dw.data["dwell_hrs"] > params["thresh_hrs"]
-    dw.filter_through("long_enough", inplace=True)
+    dw.accum_masked("long_enough", inplace=True)
     dw.data = dw.data.drop(
         columns=params["drop_cols"]
-    )  # Since these aren't accumulated by filter_through
+    )  # Since these aren't accumulated by accum_masked
     return dw
 
 

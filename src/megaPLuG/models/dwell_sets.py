@@ -200,7 +200,7 @@ class DwellSet:
         )
         return time_sorted
 
-    def filter_through(
+    def accum_masked(
         self,
         keep_mask_col: str,
         inplace: bool = False,
@@ -229,7 +229,7 @@ class DwellSet:
         sums_base = np.expand_dims(base.astype(sums_master_dtype), axis=1)
         if len(self.sum_cols) > 1:
             sums_base = np.hstack([sums_base] * len(self.sum_cols))
-        _ = DwellSet._filter_through_grp_core(
+        _ = DwellSet._accum_masked_grp_core(
             keep=base,
             sums=sums_base,
             reset=base,
@@ -249,7 +249,7 @@ class DwellSet:
         new.data.loc[:, f"{self.reset}_{keep_mask_col}"] = False
 
         kws = {
-            "func": DwellSet._filter_through_grp,
+            "func": DwellSet._accum_masked_grp,
             "keep_mask_col": keep_mask_col,
             "sum_cols": self.sum_cols,
             "reset_col": self.reset,
@@ -268,7 +268,7 @@ class DwellSet:
             return new
 
     @staticmethod
-    def _filter_through_grp(
+    def _accum_masked_grp(
         grp: pd.DataFrame,
         keep_mask_col: str,
         sum_cols: str | list[str],
@@ -280,7 +280,7 @@ class DwellSet:
         else:
             sums = grp[sum_cols].values
 
-        arr = DwellSet._filter_through_grp_core(
+        arr = DwellSet._accum_masked_grp_core(
             keep=grp[keep_mask_col].values,
             sums=sums,
             reset=grp[reset_col].values,
@@ -294,7 +294,7 @@ class DwellSet:
 
     @staticmethod
     @njit
-    def _filter_through_grp_core(
+    def _accum_masked_grp_core(
         keep: np.ndarray,
         sums: np.ndarray,
         reset: np.ndarray,

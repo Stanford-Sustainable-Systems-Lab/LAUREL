@@ -105,7 +105,7 @@ def mark_critical_days(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellS
     """Mark critical days, vehicle-days which cannot be achieved on a single charge."""
     refr_col = params["refresh_col"]
     dw.data[refr_col] = dw.data[params["loc_col"]].isin(params["refresh_locations"])
-    dw.filter_through(refr_col, inplace=True)
+    dw.accum_masked(refr_col, inplace=True)
 
     # Apply vehicle-specific estimated range
     vehs["range_estim"] = vehs[params["batt_cap_col"]] / vehs[params["consump_col"]]
@@ -133,7 +133,7 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     dw.data["keep_dwells"] = dw.data[flt_cols["substantial_soc"]] & (
         dw.data[flt_cols["refresh"]] | dw.data[flt_cols["crit"]]
     )
-    dw.filter_through("keep_dwells", inplace=True)
+    dw.accum_masked("keep_dwells", inplace=True)
 
     dw.data["keep_dwells"] = dw.data["keep_dwells"].astype("boolean")
     dw.data["keep_dwells"] = dw.data["keep_dwells"].replace(False, pd.NA)
