@@ -104,7 +104,8 @@ def mark_substantial_dwells(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> D
 def mark_critical_days(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
     """Mark critical days, vehicle-days which cannot be achieved on a single charge."""
     refr_col = params["refresh_col"]
-    dw.data[refr_col] = dw.data[params["loc_col"]].isin(params["refresh_locations"])
+    refr_locs = set(params["refresh_locations"])
+    dw.data[refr_col] = dw.data[params["loc_col"]].isin(refr_locs)
     dw.accum_masked(refr_col, inplace=True)
 
     # Apply vehicle-specific estimated range
@@ -117,8 +118,10 @@ def mark_critical_days(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellS
 
     # Assume a critical day for partial days, since the point of the critical days
     # assumption is to reduce public charging on days when we're sure it's unnecessary
-    dw.data[crcol] = dw.data[crcol].astype("boolean")
-    dw.data.loc[~dw.data[refr_col], crcol] = pd.NA
+    # Note that "boolean" is different from "bool" data type. See Pandas BooleanArray
+    is_critical = dw.data[crcol].astype("boolean")
+    is_refresh = dw.data[refr_col].astype("boolean")
+    dw.data[crcol] = (is_refresh & is_critical) ^ ~(is_refresh | pd.NA)
     dw.data[crcol] = dw.data[crcol].groupby(dw.veh).bfill().fillna(True).astype(bool)
     return dw
 
