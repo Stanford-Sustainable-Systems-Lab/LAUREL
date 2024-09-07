@@ -246,14 +246,14 @@ class DwellSet:
             new.data[new_name] = new.data[new_name].astype(sums_master_dtype)
         new.data[f"{self.reset}_{keep_mask_col}"] = False
 
-        kws = {
-            "func": DwellSet._accum_masked_grp,
-            "keep_mask_col": keep_mask_col,
-            "sum_cols": self.sum_cols,
-            "reset_col": self.reset,
-        }
+        kws = dict(
+            func=DwellSet._accum_masked_grp,
+            keep_mask_col=keep_mask_col,
+            sum_cols=self.sum_cols,
+            reset_col=self.reset,
+        )
         if self.is_dask:
-            kws.update({"meta": dd.utils.make_meta(self.data)})
+            kws.update(dict(meta=dd.utils.make_meta(self.data)))
             new.data = self.data.groupby(self.veh, group_keys=False).apply(**kws)
         else:
             tqdm.pandas()
@@ -346,13 +346,13 @@ class DwellSet:
         # Pre-allocate target column
         new.data.loc[:, f"{self.reset}_{keep_mask_col}"] = False
 
-        kws = {
-            "func": DwellSet._reset_masked_grp,
-            "keep_mask_col": keep_mask_col,
-            "reset_col": self.reset,
-        }
+        kws = dict(
+            func=DwellSet._reset_masked_grp,
+            keep_mask_col=keep_mask_col,
+            reset_col=self.reset,
+        )
         if self.is_dask:
-            kws.update({"meta": dd.utils.make_meta(self.data)})
+            kws.update(dict(meta=dd.utils.make_meta(self.data)))
             new.data = self.data.groupby(self.veh, group_keys=False).apply(**kws)
         else:
             tqdm.pandas()

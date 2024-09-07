@@ -175,19 +175,19 @@ def simulate_charging_choice(
         dw.data[col] = np.NaN  # Allocate columns to fill in, which avoids merging
 
     # Set arguments
-    kws = {
-        "func": charge_soc_thresh,
-        "consumed_kwh_col": icols["consumed_kwh"],
-        "avail_kw_col": icols["avail_kw"],
-        "dwell_hrs_col": icols["dwell_hrs"],
-        "reset_col": dw.reset,
-        "veh_params": vehs,
-        "out_cols": params["output_cols"],
-    }
+    kws = dict(
+        func=charge_soc_thresh,
+        consumed_kwh_col=icols["consumed_kwh"],
+        avail_kw_col=icols["avail_kw"],
+        dwell_hrs_col=icols["dwell_hrs"],
+        reset_col=dw.reset,
+        veh_params=vehs,
+        out_cols=params["output_cols"],
+    )
 
     # Run simulation
     if dw.is_dask:
-        kws.update({"meta": make_meta(dw.data)})
+        kws.update(dict(meta=make_meta(dw.data)))
         dw.data = dw.data.groupby(dw.veh, group_keys=False).apply(**kws)
     else:
         tqdm.pandas()
