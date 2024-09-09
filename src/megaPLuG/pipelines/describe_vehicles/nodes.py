@@ -6,7 +6,6 @@ generated using Kedro 0.19.3
 import logging
 from copy import deepcopy
 
-import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 from sklearn.cluster import HDBSCAN
@@ -154,8 +153,8 @@ def mark_locations(dw: DwellSet, veh_locs: pd.DataFrame, params: dict) -> DwellS
     """Mark locations-of-interest for each vehicle (e.g. home base)."""
     right = veh_locs.loc[:, params["veh_loc_cols"]]
     merge_cols = [dw.veh, dw.hex]
-    if isinstance(dw.data, pd.DataFrame):
+    if not dw.is_dask:
         dw.data = dw.data.merge(right, how="left", on=merge_cols)
-    elif isinstance(dw.data, dd.DataFrame):
+    else:
         dw.data = merge_on_int_cols(left=dw.data, right=right, on=[dw.veh, dw.hex])
     return dw
