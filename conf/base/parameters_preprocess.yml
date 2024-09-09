@@ -35,7 +35,6 @@ create_dwells:
   debug_subsample:
     active: False
     n: 1000
-  load_into_memory: True
   drop_cols:
     - starting_h3_8
   col_renamer:
@@ -47,3 +46,4 @@ create_dwells:
     end_trip: end_timestamp_utc
     trip_dist: trip_miles
     trip_dur: trip_hrs
+  load_into_memory: True
