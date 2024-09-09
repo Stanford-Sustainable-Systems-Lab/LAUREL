@@ -7,7 +7,6 @@ import logging
 
 import numpy as np
 import pandas as pd
-from dask.dataframe.utils import make_meta
 from tqdm import tqdm
 
 from megaPLuG.models.charging_algorithms import charge_soc_thresh
@@ -53,18 +52,16 @@ def set_vehicle_params(vehs: pd.DataFrame, params: dict) -> DwellSet:
 
 def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
     """Filter out vehicles that we're not considering."""
-    if not dw.is_dask:
-        logger.info("Filter by vehicles by direct dropping")
-        old_len = len(dw.data)
+    logger.info("Filter by vehicles by direct dropping")
+    old_len = len(dw.data)
 
     keep_idx = vehs.loc[vehs["has_home_base"], :].index.values
     dw.data = dw.data.loc[keep_idx, :]
 
-    if not dw.is_dask:
-        new_len = len(dw.data)
-        abs_diff = old_len - new_len
-        pct_diff = round(new_len / old_len * 100, 1)
-        logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
+    new_len = len(dw.data)
+    abs_diff = old_len - new_len
+    pct_diff = round(new_len / old_len * 100, 1)
+    logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
     return dw
 
 
@@ -128,9 +125,8 @@ def mark_critical_days(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellS
 
 def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     """Filter out the en-route dwells on non-critical days."""
-    if not dw.is_dask:
-        logger.info("Filter by dwells by accumulating through")
-        old_len = len(dw.data)
+    logger.info("Filter by dwells by accumulating through")
+    old_len = len(dw.data)
 
     flt_cols = params["filter_cols"]
     dw.data["keep_dwells"] = dw.data[flt_cols["substantial_soc"]] & (
@@ -140,18 +136,14 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
 
     dw.data["keep_dwells"] = dw.data["keep_dwells"].astype("boolean")
     dw.data["keep_dwells"] = dw.data["keep_dwells"].replace(False, pd.NA)
-    if dw.is_dask:
-        dw.data.dropna(subset="keep_dwells")
-    else:
-        dw.data.dropna(subset="keep_dwells", inplace=True)
+    dw.data.dropna(subset="keep_dwells", inplace=True)
     drop_cols = ["keep_dwells"] + list(flt_cols.values()) + params["drop_cols"]
     dw.data = dw.data.drop(columns=drop_cols)
 
-    if not dw.is_dask:
-        new_len = len(dw.data)
-        abs_diff = old_len - new_len
-        pct_diff = round(new_len / old_len * 100, 1)
-        logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
+    new_len = len(dw.data)
+    abs_diff = old_len - new_len
+    pct_diff = round(new_len / old_len * 100, 1)
+    logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
     return dw
 
 
@@ -186,12 +178,8 @@ def simulate_charging_choice(
     )
 
     # Run simulation
-    if dw.is_dask:
-        kws.update(dict(meta=make_meta(dw.data)))
-        dw.data = dw.data.groupby(dw.veh, group_keys=False).apply(**kws)
-    else:
-        tqdm.pandas()
-        dw.data = dw.data.groupby(dw.veh, group_keys=False).progress_apply(**kws)
+    tqdm.pandas()
+    dw.data = dw.data.groupby(dw.veh, group_keys=False).progress_apply(**kws)
     return dw
 
 
