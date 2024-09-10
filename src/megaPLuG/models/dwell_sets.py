@@ -420,14 +420,15 @@ class DwellSet:
 
     @data.setter
     def data(self, value):
-        if isinstance(value, dd.DataFrame):
-            self.is_dask = True
-        elif isinstance(value, pd.DataFrame):
-            self.is_dask = False
-        else:
-            raise NotImplementedError(
-                "DwellSet's data must be a Dask or Pandas DataFrame."
-            )
+        if value is not None:
+            if isinstance(value, dd.DataFrame):
+                self.is_dask = True
+            elif isinstance(value, pd.DataFrame | gpd.GeoDataFrame):
+                self.is_dask = False
+            else:
+                raise NotImplementedError(
+                    "DwellSet's data must be a Dask or Pandas DataFrame."
+                )
         self._data = value
 
     @property
@@ -669,7 +670,7 @@ class DwellSet:
             raise RuntimeError("The column does not include the desired sequence name.")
         return matches[0]
 
-    def to_geodataframe(self, geom_type: str = "point"):
+    def to_geodataframe(self, geom_type: str = "point") -> Self:
         """Convert the underlying dataset into a GeoDataFrame."""
         if geom_type == "point":
             f = cells_to_points
@@ -692,6 +693,7 @@ class DwellSet:
                 f=f,
                 hex_col=self.hex,
             )
+        return self
 
     @staticmethod
     def _cells_to_geom_wrapper(
