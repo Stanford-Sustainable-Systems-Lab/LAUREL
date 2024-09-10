@@ -69,9 +69,8 @@ class GeoPackageDataset(AbstractDataset[gpd.GeoDataFrame, gpd.GeoDataFrame]):
             Data from the GeoPackage file as a geopandas.GeoDataFrame
         """
         load_path = get_filepath_str(self._filepath, self._protocol)
-        with self._fs.open(load_path, mode="r") as f:
-            gdf = gpd.read_file(f, **self._load_args)
-            return gdf
+        gdf = gpd.read_file(load_path, **self._load_args)
+        return gdf
 
     def _save(
         self,
@@ -79,8 +78,7 @@ class GeoPackageDataset(AbstractDataset[gpd.GeoDataFrame, gpd.GeoDataFrame]):
     ) -> None:
         """Saves geographic data to the specified filepath."""
         save_path = get_filepath_str(self._filepath, self._protocol)
-        with self._fs.open(save_path, mode="wb") as f:
-            gdf.to_file(f, **self._save_args)
+        gdf.to_file(save_path, **self._save_args)
 
     def _describe(self) -> dict[str, Any]:
         return {
