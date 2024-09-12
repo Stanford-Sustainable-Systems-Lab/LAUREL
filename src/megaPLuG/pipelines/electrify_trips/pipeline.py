@@ -6,19 +6,16 @@ generated using Kedro 0.19.1
 from kedro.pipeline import Pipeline, node, pipeline
 
 from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
-from megaPLuG.scenarios.manage_scenarios import write_scenario_partition
 
 from .nodes import (
     calc_energy_use,
     filter_dwells,
     filter_vehicles,
-    get_hex_events_from_dwells,
     mark_critical_days,
     mark_substantial_dwells,
     set_charging_availability,
     set_vehicle_params,
     simulate_charging_choice,
-    summarize_vehicles,
 )
 
 
@@ -35,7 +32,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=load_dwell_set,
                 inputs=["dwells_with_locations", "params:load_dwell_set"],
                 outputs="dwell_obj",
-                name="load_dwell_set",
+                name="load_dwell_set_electrify_trips",
             ),
             node(
                 func=filter_vehicles,
@@ -96,54 +93,10 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="simulate_charging_choice",
             ),
             node(
-                func=summarize_vehicles,
-                inputs=[
-                    "dwell_obj_w_charging",
-                    "vehicles_with_params",
-                    "params:summarize_vehicles",
-                ],
-                outputs="vehicles_evaluated",
-                name="summarize_vehicles",
-            ),
-            node(
-                func=get_hex_events_from_dwells,
-                inputs=["dwell_obj_w_charging", "params:events_from_dwells"],
-                outputs="events",
-                name="get_hex_events_from_dwells",
-            ),
-            # From here down is saving out the results
-            node(
                 func=save_dwell_set,
                 inputs="dwell_obj_w_charging",
                 outputs="dwells_with_charging",
                 name="save_dwell_set",
-            ),
-            node(
-                func=write_scenario_partition,
-                inputs=[
-                    "dwells_with_charging",
-                    "params:results_partition",
-                ],
-                outputs="dwells_with_charging_partition",
-                name="write_scenario_partition_dwells",
-            ),
-            node(
-                func=write_scenario_partition,
-                inputs=[
-                    "vehicles_evaluated",
-                    "params:results_partition",
-                ],
-                outputs="vehicles_evaluated_partition",
-                name="write_scenario_partition_vehicles",
-            ),
-            node(
-                func=write_scenario_partition,
-                inputs=[
-                    "events",
-                    "params:results_partition",
-                ],
-                outputs="events_partition",
-                name="write_scenario_partition_events",
             ),
         ],
     )
