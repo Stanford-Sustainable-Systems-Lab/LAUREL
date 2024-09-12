@@ -8,7 +8,7 @@ import logging
 import geopandas as gpd
 import pandas as pd
 
-from megaPLuG.utils.h3 import h3_to_poly
+from megaPLuG.utils.h3 import cells_to_polygons
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,5 @@ def add_geometries(df: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
     else:
         raise RuntimeError(f"'{hcol}' not found in DataFrame columns or index.")
 
-    df["polygons"] = id_ser.transform(h3_to_poly)
-    hexes = gpd.GeoDataFrame(df, geometry="polygons", crs=params["crs"])
+    hexes = gpd.GeoDataFrame(df, geometry=cells_to_polygons(id_ser))
     return hexes
