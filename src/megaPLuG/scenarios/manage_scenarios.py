@@ -1,6 +1,7 @@
 import functools
 import re
 from collections.abc import Callable
+from itertools import product
 from pathlib import Path
 
 import numpy as np
@@ -43,7 +44,10 @@ def build_config_partition(
     """
     part_pth = pth / f"task_{slurm_task_id}"
     # Add the partition path to this scenario's config
-    result_partition = {"dir": str(part_pth)}
+    result_partition = {
+        "dir": str(part_pth),
+        "level_names": params["results_partition"]["level_names"],
+    }
     params.update({"results_partition": result_partition})
 
     # Add this scenario's config to the partitions
@@ -74,20 +78,53 @@ def write_scenario_partition(obj: object, params: dict) -> dict[str:object]:
     return {params["dir"]: obj}
 
 
-def collate_scenario_partitions(parts: dict, params: dict) -> pd.DataFrame:
+def read_scenario_partition(partitions: dict, params: dict) -> pd.DataFrame:
+    """Read in a single partition for this scenario and dataset.
+
+    Insert this into a kedro pipeline to enable loading in of a file from a partition
+    which you're also saving from.
+
+    If you want to load in from multiple partitions at once and collate the results,
+    then use `collate_scenario_partitions` instead.
+    """
+    dir = params["dir"]
+    partitions = {Path(k): v for k, v in partitions.items()}
+    selected = _select_partitions(partitions, dir)
+    if len(selected) > 1:
+        raise RuntimeError(
+            "More than one partition identified in the given directories."
+        )
+    if len(selected) < 1:
+        raise RuntimeError("No partitions were identified in the given directories.")
+    part_load_func = list(selected.values())[0]
+    df = part_load_func()
+    return df
+
+
+def collate_scenario_partitions(partitions: dict, params: dict) -> pd.DataFrame:
     """Read in dataframes from select partitions and concatenate."""
-    df_ls = []
-    key_ls = []
-    for part_key, part_load_func in parts.items():
-        key_split = Path(part_key).parts
-        if key_split[0] in params["include_partitions"]:
-            cur_key = list(key_split)
-            key_ls.append(tuple(cur_key))
-            df_cur = part_load_func().reset_index()
-            df_ls.append(df_cur)
+    dirs = params["dir"]
+    partitions = {Path(k): v for k, v in partitions.items()}
+    selected = _select_partitions(partitions, dirs)
+
+    if len(selected) < 1:
+        raise RuntimeError("No partitions were identified in the given directories.")
+
+    key_ls = [k.parts for k in selected.keys()]  # Yielding tuples of directory levels
+    df_ls = [load_func() for load_func in selected.values()]
     coll = pd.concat(df_ls, keys=key_ls, names=params["level_names"])
-    coll.index = coll.index.droplevel(-1)
     return coll
+
+
+def _select_partitions(
+    partitions: dict[Path, object], dirs: str | list[str]
+) -> dict[Path, object]:
+    """Select all partitions which are within any of the given directories."""
+    if isinstance(dirs, str):
+        dirs = [dirs]
+    candids = product(dirs, partitions)
+    selected = {pth: partitions[pth] for dir, pth in candids if pth.is_relative_to(dir)}
+    return selected
 
 
 def list_completed_tasks(pth: str) -> list[int]:
