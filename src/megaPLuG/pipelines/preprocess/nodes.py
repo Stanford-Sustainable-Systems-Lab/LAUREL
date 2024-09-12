@@ -95,19 +95,17 @@ def create_dwells(trips: dd.DataFrame, params: dict) -> dd.DataFrame | pd.DataFr
     return dw.data
 
 
-def get_vius_by_home_base_state(url: str, params: dict) -> pd.DataFrame:
-    """Get the VIUS214A: In-use Vehicles by Home Base State for the U.S.
-    (excluding New Hampshire) : 2021 table.
-    """
+def get_vius_from_url(url: str, params: dict) -> pd.DataFrame:
+    """Get a VIUS dataset from a URL."""
     r = requests.get(url)
     txt = re.sub(r"[\[\]]", "", r.text)
-    vius_hb = pd.read_csv(StringIO(txt))
+    df = pd.read_csv(StringIO(txt))
 
-    vius_hb = vius_hb.rename(columns={v: k for k, v in params["col_renamer"].items()})
-    vius_hb = vius_hb.loc[:, list(params["col_renamer"].keys())]
+    df = df.rename(columns={v: k for k, v in params["col_renamer"].items()})
+    df = df.loc[:, list(params["col_renamer"].keys())]
 
     for col, mult in params["multipliers"].items():
-        vius_hb[col] = vius_hb[col] * mult
+        df[col] = df[col] * mult
 
-    vius_hb = vius_hb.set_index(params["index_col"]).sort_index()
-    return vius_hb
+    df = df.set_index(params["index_col"]).sort_index()
+    return df

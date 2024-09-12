@@ -9,7 +9,7 @@ from .nodes import (
     calc_derived_trip_cols,
     create_dwells,
     format_trips_columns,
-    get_vius_by_home_base_state,
+    get_vius_from_url,
     strip_vehicle_attrs,
 )
 
@@ -42,7 +42,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="create_dwells",
             ),
             node(
-                func=get_vius_by_home_base_state,
+                func=get_vius_from_url,
                 inputs=[
                     "vius_home_base_state_raw",
                     "params:get_vius_by_home_base_state",
