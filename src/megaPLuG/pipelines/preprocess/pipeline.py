@@ -51,6 +51,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="get_vius_by_home_base_state",
                 tags="downloads",
             ),
+            node(
+                func=get_vius_from_url,
+                inputs=[
+                    "vius_weight_class_raw",
+                    "params:get_vius_by_weight_class",
+                ],
+                outputs="vius_weight_class",
+                name="get_vius_by_weight_class",
+                tags="downloads",
+            ),
         ],
     )
     return pipe

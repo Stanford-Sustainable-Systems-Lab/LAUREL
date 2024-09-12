@@ -7,6 +7,10 @@ vius_home_base_state_raw:
   type: text.TextDataset
   filepath: data/01_raw/VIUS/vius_home_base_state_url.txt
 
+vius_weight_class_raw:
+  type: text.TextDataset
+  filepath: data/01_raw/VIUS/vius_weight_class_url.txt
+
 state_boundaries:
   type: megaPLuG.datasets.geodatabase.GeoDataBaseDataset
   filepath: data/01_raw/Census_Geographies/cb_2023_us_all_20m.gdb
@@ -45,6 +49,10 @@ vehicle_location_pairs_labelled:
 vius_home_base_state:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/VIUS/vius_home_base_state.feather
+
+vius_weight_class:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/VIUS/vius_weight_class.feather
 
 # Electrification simulation datasets
 vehicles_evaluated_partition:

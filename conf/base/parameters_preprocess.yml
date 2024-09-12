@@ -58,3 +58,14 @@ get_vius_by_home_base_state:
     n_vehs: 1000
     veh_miles: 1000000
   index_col: home_base_state
+
+get_vius_by_weight_class:
+  col_renamer:
+    gvw_class: GVWR_LABEL
+    n_vehs: VCOUNT
+    veh_miles: VMILE
+    avg_miles_per_veh: AMILE
+  multipliers:
+    n_vehs: 1000
+    veh_miles: 1000000
+  index_col: gvw_class
