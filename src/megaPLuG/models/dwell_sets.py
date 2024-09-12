@@ -321,6 +321,31 @@ class DwellSet:
         arr[~keep, :] = np.NaN
         return arr
 
+    def drop_masked(
+        self, keep_mask_col: str, inplace: bool = False, drop_mask_col: bool = True
+    ) -> Self | None:
+        """Drop rows using a boolean mask column."""
+        if inplace:
+            new = self
+        else:
+            new = copy.deepcopy(self)
+
+        kws = {}
+        if not self.is_dask:
+            kws.update(dict(inplace=True))
+
+        new.data[keep_mask_col] = (
+            new.data[keep_mask_col].astype("boolean").replace(False, pd.NA)
+        )
+        new.data.dropna(subset=keep_mask_col, **kws)
+        if drop_mask_col:
+            new.data.drop(columns=[keep_mask_col], **kws)
+
+        if inplace:
+            return None
+        else:
+            return new
+
     def reset_masked(self, keep_mask_col: str, inplace: bool = False) -> Self | None:
         """Filter out individual dwells while forcing a reset in the new gaps.
 
