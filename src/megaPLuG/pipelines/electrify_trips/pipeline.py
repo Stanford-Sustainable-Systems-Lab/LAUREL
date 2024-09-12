@@ -6,6 +6,7 @@ generated using Kedro 0.19.1
 from kedro.pipeline import Pipeline, node, pipeline
 
 from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
+from megaPLuG.scenarios.manage_scenarios import write_scenario_partition
 
 from .nodes import (
     calc_energy_use,
@@ -97,6 +98,18 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs="dwell_obj_w_charging",
                 outputs="dwells_with_charging",
                 name="save_dwell_set",
+            ),
+            node(
+                func=write_scenario_partition,
+                inputs=["dwells_with_charging", "params:results_partition"],
+                outputs="dwells_with_charging_partition",
+                name="write_scenario_partition_dwells",
+            ),
+            node(
+                func=write_scenario_partition,
+                inputs=["vehicles_with_params", "params:results_partition"],
+                outputs="vehicles_with_params_partition",
+                name="write_scenario_partition_vehs",
             ),
         ],
     )

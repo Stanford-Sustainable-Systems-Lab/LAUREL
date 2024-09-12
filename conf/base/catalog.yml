@@ -55,13 +55,19 @@ vius_weight_class:
   filepath: data/02_intermediate/VIUS/vius_weight_class.feather
 
 # Electrification simulation datasets
-dwells_with_charging:
-  type: pandas.FeatherDataset
-  filepath: data/04_feature/dwells_with_charging.feather
+dwells_with_charging_partition:
+  type: partitions.PartitionedDataset
+  path: data/07_model_output/dwells_with_charging
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
 
-vehicles_with_params:
-  type: pandas.FeatherDataset
-  filepath: data/04_feature/vehicles_with_params.feather
+vehicles_with_params_partition:
+  type: partitions.PartitionedDataset
+  path: data/07_model_output/vehicles_with_params
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
 
 # Reporting datasets
 vehicles_evaluated_partition:
