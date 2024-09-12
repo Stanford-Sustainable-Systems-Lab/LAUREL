@@ -78,17 +78,28 @@ class GeoPackageDataset(AbstractDataset[gpd.GeoDataFrame, gpd.GeoDataFrame]):
         self,
         gdf: gpd.GeoDataFrame,
     ) -> None:
-        """Saves geographic data to the specified filepath."""
+        """Saves geographic data to the specified filepath.
+
+        If the "layer" argument is a string, then the GeoDataFrame will be saved to a
+        layer with the name given by "layer" using the currently set geometry.
+
+        If the "layer" argument is a dictionary, then the GeoDataFrame will be saved
+        to a layer with the name given by the key of layer and the geometry in the
+        column of the GeoDataFrame indexed by the value of the dict.
+        """
         save_path = get_filepath_str(self._filepath, self._protocol)
         save_args = deepcopy(self._save_args)
         layers = save_args.pop("layer")
-        if isinstance(layers, str):
-            layers = [layers]
-        geosers = {lyr: gdf[lyr] for lyr in layers}
-        gdf = gdf.drop(columns=layers)
-        for lyr in layers:
-            gdf = gdf.set_geometry(geosers[lyr])
-            gdf.to_file(save_path, layer=lyr, **save_args)
+        if isinstance(layers, str):  # Save out the GeoDataFrame using layer as the name
+            gdf.to_file(save_path, layer=layers, **save_args)
+        elif isinstance(layers, dict):  # Save out different layers for each geometry
+            geosers = {name: gdf[geom_col] for name, geom_col in layers.items()}
+            gdf = gdf.drop(columns=list(layers.values()))
+            for name, geom in geosers.items():
+                gdf = gdf.set_geometry(geom)
+                gdf.to_file(save_path, layer=name, **save_args)
+        else:
+            raise NotImplementedError()
 
     def _describe(self) -> dict[str, Any]:
         return {

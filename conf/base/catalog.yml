@@ -117,15 +117,15 @@ vehicle_trajectory:
   save_args:
     index: True
     layer:
-      - dwells
-      - trips
+      dwells: dwells
+      trips: trips
     
 navistar_by_state:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
   filepath: data/07_model_output/navistar_by_state.gpkg
   save_args:
     index: True
-    layer: geometry
+    layer: navistar_by_state
 
 ### Scenario configurations
 scenario_configs:
