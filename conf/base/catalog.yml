@@ -7,6 +7,12 @@ vius_home_base_state_raw:
   type: text.TextDataset
   filepath: data/01_raw/VIUS/vius_home_base_state_url.txt
 
+state_boundaries:
+  type: megaPLuG.datasets.geodatabase.GeoDataBaseDataset
+  filepath: data/01_raw/Census_Geographies/cb_2023_us_all_20m.gdb
+  load_args:
+    layer: cb_2023_us_state_20m
+
 # Preprocessed datasets
 dwells:
   type: pandas.FeatherDataset
