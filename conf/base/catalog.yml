@@ -117,6 +117,22 @@ vehicle_depots_geoms:
   load_args:
     layer: vehicle_depots
 
+vehicle_trajectory:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/07_model_output/vehicle_trajectory.gpkg
+  save_args:
+    index: True
+    layer:
+      - dwells
+      - trips
+    
+navistar_by_state:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/07_model_output/navistar_by_state.gpkg
+  save_args:
+    index: True
+    layer: geometry
+
 ### Scenario configurations
 scenario_configs:
   type: partitions.PartitionedDataset
