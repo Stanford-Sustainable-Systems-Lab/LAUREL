@@ -9,6 +9,7 @@ from .nodes import (
     calc_derived_trip_cols,
     create_dwells,
     format_trips_columns,
+    get_vius_by_home_base_state,
     strip_vehicle_attrs,
 )
 
@@ -39,6 +40,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["trips_derived", "params:create_dwells"],
                 outputs="dwells",
                 name="create_dwells",
+            ),
+            node(
+                func=get_vius_by_home_base_state,
+                inputs=[
+                    "vius_home_base_state_raw",
+                    "params:get_vius_by_home_base_state",
+                ],
+                outputs="vius_home_base_state",
+                name="get_vius_by_home_base_state",
+                tags="downloads",
             ),
         ],
     )

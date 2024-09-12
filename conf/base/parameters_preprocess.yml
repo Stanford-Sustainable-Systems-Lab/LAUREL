@@ -47,3 +47,14 @@ create_dwells:
     trip_dist: trip_miles
     trip_dur: trip_hrs
   load_into_memory: True
+
+get_vius_by_home_base_state:
+  col_renamer:
+    home_base_state: HBSTATE_LABEL
+    n_vehs: VCOUNT
+    veh_miles: VMILE
+    avg_miles_per_veh: AMILE
+  multipliers:
+    n_vehs: 1000
+    veh_miles: 1000000
+  index_col: home_base_state

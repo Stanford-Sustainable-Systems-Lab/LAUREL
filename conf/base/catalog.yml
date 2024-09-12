@@ -3,6 +3,10 @@ navistar:
   type: dask.ParquetDataset
   filepath: data/01_raw/Navistar/stanford_dataset_v2/
 
+vius_home_base_state_raw:
+  type: text.TextDataset
+  filepath: data/01_raw/VIUS/vius_home_base_state_url.txt
+
 # Preprocessed datasets
 dwells:
   type: pandas.FeatherDataset
@@ -31,6 +35,10 @@ vehicle_location_pairs_clustered:
 vehicle_location_pairs_labelled:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vehicle_location_pairs_labelled.feather
+
+vius_home_base_state:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/VIUS/vius_home_base_state.feather
 
 # Electrification simulation datasets
 vehicles_evaluated_partition:
