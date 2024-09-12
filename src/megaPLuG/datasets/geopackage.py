@@ -58,6 +58,8 @@ class GeoPackageDataset(AbstractDataset[gpd.GeoDataFrame, gpd.GeoDataFrame]):
         self._load_args = deepcopy(self.DEFAULT_LOAD_ARGS)
         if load_args is not None:
             self._load_args.update(load_args)
+            if isinstance(self._load_args["layer"], list):
+                raise NotImplementedError(f"{type(self)} can only load a single layer.")
         self._save_args = deepcopy(self.DEFAULT_SAVE_ARGS)
         if save_args is not None:
             self._save_args.update(save_args)
@@ -78,7 +80,15 @@ class GeoPackageDataset(AbstractDataset[gpd.GeoDataFrame, gpd.GeoDataFrame]):
     ) -> None:
         """Saves geographic data to the specified filepath."""
         save_path = get_filepath_str(self._filepath, self._protocol)
-        gdf.to_file(save_path, **self._save_args)
+        save_args = deepcopy(self._save_args)
+        layers = save_args.pop("layer")
+        if isinstance(layers, str):
+            layers = [layers]
+        geosers = {lyr: gdf[lyr] for lyr in layers}
+        gdf = gdf.drop(columns=layers)
+        for lyr in layers:
+            gdf = gdf.set_geometry(geosers[lyr])
+            gdf.to_file(save_path, layer=lyr, **save_args)
 
     def _describe(self) -> dict[str, Any]:
         return {
