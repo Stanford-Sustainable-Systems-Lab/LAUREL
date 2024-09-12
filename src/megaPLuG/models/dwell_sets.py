@@ -237,7 +237,7 @@ class DwellSet:
         if inplace:
             new = self
         else:
-            new = self.copy_without_data()
+            new = copy.deepcopy(self)
 
         # Pre-allocate target columns
         for col in self.sum_cols:
@@ -341,7 +341,7 @@ class DwellSet:
         if inplace:
             new = self
         else:
-            new = self.copy_without_data()
+            new = copy.deepcopy(self)
 
         # Pre-allocate target column
         new.data.loc[:, f"{self.reset}_{keep_mask_col}"] = False
