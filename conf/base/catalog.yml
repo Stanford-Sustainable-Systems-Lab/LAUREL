@@ -72,16 +72,19 @@ vehicles_with_params_partition:
 # Reporting datasets
 vehicles_evaluated_partition:
   type: partitions.PartitionedDataset
-  path: data/07_model_output/vehicles_evaluated
+  path: data/08_reporting/vehicles_evaluated
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
-report_by_hex:
-  type: pandas.CSVDataset
-  filepath: data/08_reporting/report_by_hex.csv
-  save_args:
-    index: True
+report_by_hex_partition:
+  type: partitions.PartitionedDataset
+  path: data/08_reporting/report_by_hex
+  dataset:
+    type: pandas.CSVDataset
+    save_args:
+      index: True
+  filename_suffix: ".csv"
 
 report_by_hex_with_geoms:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
