@@ -619,39 +619,21 @@ class DwellSet:
         dw.end = DEFAULT_COLUMN_NAMES["end"]
         return dw
 
-    def to_hex_profiles(self) -> dd.DataFrame | pd.DataFrame:
+    def to_events(self) -> dd.DataFrame | pd.DataFrame:
         """Convert dwells into hexagon event profiles."""
-        if self.data.index.name in self.get_tracked_cols():
-            drop = False
-        else:
-            drop = True
-
         if self.seq_names is None:
-            raise RuntimeError(
-                "Sequence names must be set before calling 'to_hex_profiles'."
-            )
-        tcol = DwellSet._get_seq_name_tail(self.seq_names[0], self.start)
+            raise RuntimeError("Sequence names must be set before calling 'to_events'.")
 
-        id_cols = [self.veh, self.hex]
-        if self.is_dask:
-            events = self.data.map_partitions(
-                DwellSet._dwells_to_events_grp,
-                id_cols=id_cols,
-                seq_names=self.seq_names,
-                drop_cur_idx=drop,
-            )
-        else:
-            events = DwellSet._dwells_to_events_grp(
-                dw=self.data,
-                id_cols=id_cols,
-                seq_names=self.seq_names,
-                drop_cur_idx=drop,
-            )
-
-        # Sort by hexagon and time
-        events = DwellSet._sort_by_grp_time(
-            df=events, grp_col=self.hex, time_col=tcol, drop_cur_idx=True
+        drop_idx = False if self.data.index.name in self.get_tracked_cols() else True
+        kws = dict(
+            id_cols=[self.veh, self.hex],
+            seq_names=self.seq_names,
+            drop_cur_idx=drop_idx,
         )
+        if self.is_dask:
+            events = self.data.map_partitions(DwellSet._dwells_to_events_grp, **kws)
+        else:
+            events = DwellSet._dwells_to_events_grp(dw=self.data, **kws)
         return events
 
     @staticmethod

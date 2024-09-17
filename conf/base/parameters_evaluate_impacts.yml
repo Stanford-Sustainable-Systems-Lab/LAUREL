@@ -4,6 +4,17 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.1/configuration/parameters.html
 
+summarize_vehicles:
+  dead_energy_col: dwell_start_kwh
+
+profiles_from_dwells:
+  seq_names:
+    - dwell_start
+    - dwell_end
+  event_col: hex_kw_diff
+  energy_col: charge_kwh
+  dwell_dur_col: dwell_time_hrs
+
 report_by_hex:
   id_cols:
     location: hex_id

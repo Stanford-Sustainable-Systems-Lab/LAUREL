@@ -95,11 +95,3 @@ simulate_charging_choice:
   output_cols: # The order must match that of the numpy array output of the inner function
     - dwell_start_kwh
     - charge_kwh
-
-summarize_vehicles:
-  dead_energy_col: dwell_start_kwh
-
-events_from_dwells:
-  seq_names:
-    - dwell_start
-    - dwell_end

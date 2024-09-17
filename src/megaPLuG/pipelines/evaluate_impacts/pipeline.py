@@ -12,7 +12,7 @@ from megaPLuG.scenarios.manage_scenarios import (
 )
 
 from .nodes import (
-    get_hex_events_from_dwells,
+    get_load_profiles,
     report_by_hex,
     summarize_vehicles,
 )
@@ -50,14 +50,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="summarize_vehicles",
             ),
             node(
-                func=get_hex_events_from_dwells,
-                inputs=["dwell_obj_eval", "params:events_from_dwells"],
-                outputs="events",
-                name="get_hex_events_from_dwells",
+                func=get_load_profiles,
+                inputs=["dwell_obj_eval", "params:profiles_from_dwells"],
+                outputs="profiles",
+                name="get_load_profiles",
             ),
             node(
                 func=report_by_hex,
-                inputs=["events", "params:report_by_hex"],
+                inputs=["profiles", "params:report_by_hex"],
                 outputs="report_by_hex",
                 name="report_by_hex",
             ),

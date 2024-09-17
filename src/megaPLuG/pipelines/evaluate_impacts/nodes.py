@@ -26,22 +26,37 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     return vehs
 
 
-def get_hex_events_from_dwells(dw: DwellSet, params: dict) -> pd.DataFrame:
-    """Convert vehicle dwells to hexagon events."""
-    hex_kw_cols = [f"{seqn}_hex_kw_diff" for seqn in params["seq_names"]]
-    dw.data[hex_kw_cols[0]] = dw.data["charge_kwh"] / dw.data["dwell_time_hrs"]
-    dw.data[hex_kw_cols[1]] = -dw.data[hex_kw_cols[0]]
+def get_load_profiles(dw: DwellSet, params: dict) -> pd.DataFrame:
+    """Convert vehicle dwells to hexagon load profiles.
 
-    dw.data = dw.data.dropna(subset=hex_kw_cols)
+    Depending on the charging management algorithm, the transformation to events from
+    dwells may occur before or after the power levels. For systems which treat each
+    dwell independently, then sending to events after calculating power makes sense. In
+    contrast, for systems which consider dwells together, then sending to events before
+    calculating power makes sense.
+    """
     dw.seq_names = params["seq_names"]
-    events = dw.to_hex_profiles()
-    return events
-
-
-def report_by_hex(events: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Report results by hex."""
-    profs = events.groupby(params["id_cols"]["location"])[params["event_col"]].cumsum()
+    hex_kw_cols = [f"{seqn}_{params['event_col']}" for seqn in dw.seq_names]
+    dw.data[hex_kw_cols[0]] = (
+        dw.data[params["energy_col"]] / dw.data[params["dwell_dur_col"]]
+    )
+    dw.data[hex_kw_cols[1]] = -dw.data[hex_kw_cols[0]]
+    dw.data = dw.data.dropna(subset=hex_kw_cols)
+    events = dw.to_events()
+    # Sort by hexagon and time
+    events = DwellSet._sort_by_grp_time(
+        df=events,
+        grp_col=dw.hex,
+        time_col=DwellSet._get_seq_name_tail(dw.seq_names[0], dw.start),
+        drop_cur_idx=True,
+    )
+    profs = events.groupby(dw.hex)[params["event_col"]].cumsum()
     profs = profs.to_frame()
+    return profs
+
+
+def report_by_hex(profs: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Report results by hex."""
     peaks = profs.groupby(params["id_cols"]["location"]).agg(
         peak_kw=pd.NamedAgg(params["event_col"], "max")
     )
