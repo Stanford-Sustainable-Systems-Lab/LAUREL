@@ -19,6 +19,6 @@ report_by_hex:
     time: timestamp_utc
   event_col: power_kw
 
-add_geometries:
+to_geospatial:
   hex_col: hex_id
-  crs: EPSG:4326
+  geom_type: polygon

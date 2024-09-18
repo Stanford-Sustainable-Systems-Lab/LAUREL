@@ -10,7 +10,7 @@ import pandas as pd
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.manage_charging import _MANAGER_MAP
-from megaPLuG.utils.h3 import cells_to_polygons
+from megaPLuG.utils.h3 import add_geometries
 
 logger = logging.getLogger(__name__)
 
@@ -54,15 +54,7 @@ def report_by_hex(profs: pd.DataFrame, params: dict) -> pd.DataFrame:
     return peaks
 
 
-def add_geometries(df: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
+def to_geospatial(df: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
     """Augment a pandas DataFrame with an H3 id column with the H3 geometries."""
-    hcol = params["hex_col"]
-    if hcol in df.columns:
-        id_ser = df[hcol]
-    elif hcol in df.index.names:
-        id_ser = df.index.get_level_values(hcol).to_series()
-    else:
-        raise RuntimeError(f"'{hcol}' not found in DataFrame columns or index.")
-
-    hexes = gpd.GeoDataFrame(df, geometry=cells_to_polygons(id_ser))
+    hexes = add_geometries(df, **params)
     return hexes
