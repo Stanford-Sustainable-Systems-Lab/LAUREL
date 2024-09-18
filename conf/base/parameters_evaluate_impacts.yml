@@ -9,17 +9,15 @@ summarize_vehicles:
 
 profiles_from_dwells:
   charging_manager: MinPowerChargingManager
-  seq_names:
-    - dwell_start
-    - dwell_end
   energy_col: charge_kwh
   dwell_dur_col: dwell_time_hrs
+  profile_col: power_kw
 
 report_by_hex:
   id_cols:
     location: hex_id
     time: timestamp_utc
-  event_col: hex_kw_diff
+  event_col: power_kw
 
 add_geometries:
   hex_col: hex_id

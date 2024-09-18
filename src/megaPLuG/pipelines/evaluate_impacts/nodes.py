@@ -41,9 +41,8 @@ def get_load_profiles(dw: DwellSet, params: dict) -> pd.DataFrame:
         dw=dw,
         energy=params["energy_col"],
         dur=params["dwell_dur_col"],
-        seq_names=params["seq_names"],
     )
-    profs = manager.get_load_profiles()
+    profs = manager.get_load_profiles(prof_col=params["profile_col"])
     return profs
 
 
