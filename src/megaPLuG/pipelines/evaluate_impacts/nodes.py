@@ -49,7 +49,7 @@ def get_load_profiles(dw: DwellSet, params: dict) -> pd.DataFrame:
 def report_by_hex(profs: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Report results by hex."""
     peaks = profs.groupby(params["id_cols"]["location"]).agg(
-        peak_kw=pd.NamedAgg(params["event_col"], "max")
+        peak_kw=pd.NamedAgg(params["power_col"], "max")
     )
     return peaks
 

@@ -17,7 +17,7 @@ report_by_hex:
   id_cols:
     location: hex_id
     time: timestamp_utc
-  event_col: power_kw
+  power_col: power_kw
 
 to_geospatial:
   hex_col: hex_id
