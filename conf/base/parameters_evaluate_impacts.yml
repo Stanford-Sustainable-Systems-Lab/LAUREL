@@ -8,10 +8,10 @@ summarize_vehicles:
   dead_energy_col: dwell_start_kwh
 
 profiles_from_dwells:
+  charging_manager: MinPowerChargingManager
   seq_names:
     - dwell_start
     - dwell_end
-  event_col: hex_kw_diff
   energy_col: charge_kwh
   dwell_dur_col: dwell_time_hrs
 

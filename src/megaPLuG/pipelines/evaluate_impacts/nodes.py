@@ -9,6 +9,7 @@ import geopandas as gpd
 import pandas as pd
 
 from megaPLuG.models.dwell_sets import DwellSet
+from megaPLuG.models.manage_charging import _MANAGER_MAP
 from megaPLuG.utils.h3 import cells_to_polygons
 
 logger = logging.getLogger(__name__)
@@ -35,23 +36,14 @@ def get_load_profiles(dw: DwellSet, params: dict) -> pd.DataFrame:
     contrast, for systems which consider dwells together, then sending to events before
     calculating power makes sense.
     """
-    dw.seq_names = params["seq_names"]
-    hex_kw_cols = [f"{seqn}_{params['event_col']}" for seqn in dw.seq_names]
-    dw.data[hex_kw_cols[0]] = (
-        dw.data[params["energy_col"]] / dw.data[params["dwell_dur_col"]]
+    manager_cls = _MANAGER_MAP[params["charging_manager"]]
+    manager = manager_cls(
+        dw=dw,
+        energy=params["energy_col"],
+        dur=params["dwell_dur_col"],
+        seq_names=params["seq_names"],
     )
-    dw.data[hex_kw_cols[1]] = -dw.data[hex_kw_cols[0]]
-    dw.data = dw.data.dropna(subset=hex_kw_cols)
-    events = dw.to_events()
-    # Sort by hexagon and time
-    events = DwellSet._sort_by_grp_time(
-        df=events,
-        grp_col=dw.hex,
-        time_col=DwellSet._get_seq_name_tail(dw.seq_names[0], dw.start),
-        drop_cur_idx=True,
-    )
-    profs = events.groupby(dw.hex)[params["event_col"]].cumsum()
-    profs = profs.to_frame()
+    profs = manager.get_load_profiles()
     return profs
 
 
