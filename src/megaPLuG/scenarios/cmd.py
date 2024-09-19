@@ -64,7 +64,7 @@ class ScenarioBashWriter:
             lines.append(conf_finder)
             lines.append(cmds)
         else:
-            lines.append(f"for SLURM_ARRAY_TASK_ID in `seq 1 {n_tasks}`; do")
+            lines.append(f"for SLURM_ARRAY_TASK_ID in `seq 0 {n_tasks - 1}`; do")
             lines.append(f"\t{conf_finder}")
             lines.append(f"\t{cmds}")
             lines.append("done")
