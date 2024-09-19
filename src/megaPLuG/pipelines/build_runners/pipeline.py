@@ -5,9 +5,8 @@ generated using Kedro 0.18.13
 
 from kedro.pipeline import Pipeline, node, pipeline
 
-from megaPLuG.scenarios.manage_cmd_calls import generate_bash_script
-
-from .nodes import generate_scenario_configs
+from megaPLuG.scenarios.build import generate_scenario_configs
+from megaPLuG.scenarios.cmd import generate_bash_script
 
 
 def create_pipeline(**kwargs) -> Pipeline:
@@ -15,7 +14,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             node(
                 func=generate_scenario_configs,
-                inputs="parameters",
+                inputs=["params:scenario_params", "parameters"],
                 outputs="scenario_configs",
                 name="generate_scenario_configs",
             ),

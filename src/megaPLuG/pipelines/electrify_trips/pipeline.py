@@ -6,7 +6,7 @@ generated using Kedro 0.19.1
 from kedro.pipeline import Pipeline, node, pipeline
 
 from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
-from megaPLuG.scenarios.manage_scenarios import write_scenario_partition
+from megaPLuG.scenarios.io import write_scenario_partition
 
 from .nodes import (
     calc_energy_use,

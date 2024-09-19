@@ -1,15 +1,18 @@
 from pathlib import Path
+from typing import Self
+
+from .build import AbstractScenarioBuilder
 
 
 class ScenarioBashWriter:
     """Class to write Bash scripts to call kedro scenarios."""
 
-    def __init__(self, name: str, command: str) -> None:
+    def __init__(self: Self, name: str, command: str) -> None:
         self.name = name
         assert command in ["salloc", "sbatch", "local"]
         self.command = command
 
-    def build_slurm_request(self, resources: dict, reporting: dict = None) -> str:
+    def build_slurm_request(self: Self, resources: dict, reporting: dict = None) -> str:
         """Build the SLURM request in `sbatch` or `salloc` form."""
         # Set up resources
         if resources is None:
@@ -32,7 +35,7 @@ class ScenarioBashWriter:
         return slurm_opts
 
     def build_kedro_run(
-        self,
+        self: Self,
         params: dict,
         prefix: str = "",
         n_tasks: int = 1,
@@ -69,11 +72,11 @@ class ScenarioBashWriter:
         return kedro_runner
 
     def compile(
-        self,
+        self: Self,
         params: dict,
-        configs: dict = None,
         resources: dict = None,
         reporting: dict = None,
+        n_tasks: int = None,
     ) -> str:
         """Compile the commands into a single multi-line string."""
         lines = ["#!/bin/bash"]
@@ -83,10 +86,6 @@ class ScenarioBashWriter:
             )
             lines += [slurm_opts]
 
-        if configs is None:
-            n_tasks = None
-        else:
-            n_tasks = len(configs)
         kedro_run = self.build_kedro_run(
             prefix=params["prefix"],
             params=params["kedro"],
@@ -111,15 +110,17 @@ class ScenarioBashWriter:
 
 def generate_bash_script(
     command: str,
-    scenario: dict,
+    builder: AbstractScenarioBuilder,
     cmd_params: dict = None,
-    configs: dict = None,
     resources: dict = None,
     reporting: dict = None,
 ) -> dict[Path:str]:
     """Generate Bash script for running many scenarios."""
-    writer = ScenarioBashWriter(name=scenario["name"], command=command)
+    writer = ScenarioBashWriter(name=builder.display_name, command=command)
     sh = writer.compile(
-        params=cmd_params, configs=configs, resources=resources, reporting=reporting
+        params=cmd_params,
+        n_tasks=builder.n_tasks,
+        resources=resources,
+        reporting=reporting,
     )
-    return {scenario["name"]: sh}
+    return {builder.display_name: sh}

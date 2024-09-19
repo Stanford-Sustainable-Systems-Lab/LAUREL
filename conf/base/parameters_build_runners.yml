@@ -28,10 +28,4 @@ cmd_line_calls:
     # params: Use this for command line parameters
 
 scenario_params:
-  name: test
-
-results_partition:
-  dir: test/task_0 # Don't include suffix, since this is handled by the catalog.yml
-  level_names:
-    - run_id
-    - task_id
+  builder: TestScenarioBuilder
