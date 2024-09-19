@@ -18,8 +18,12 @@ profiles_from_dwells:
 report_by_hex:
   id_cols:
     location: hex_id
-    time: timestamp_utc
+    time: time
   power_col: power_kw
+  timezone_col: timezone
+  local_time_attrs:
+    - day_of_week
+    - hour
   drop_cols:
     - veh_id
 

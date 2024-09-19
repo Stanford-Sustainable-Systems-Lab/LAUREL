@@ -7,10 +7,12 @@ import logging
 
 import geopandas as gpd
 import pandas as pd
+from timezonefinder import TimezoneFinder
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.manage_charging import _MANAGER_MAP
 from megaPLuG.utils.h3 import add_geometries
+from megaPLuG.utils.time import calc_local_time_attrs, get_timezone_from_hex
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +48,28 @@ def report_by_hex(profs: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Report results by hex."""
     orig_idx = profs.index.names
     profs = profs.reset_index()
-    max_idx = profs.groupby(params["id_cols"]["location"])[params["power_col"]].idxmax()
+    id_cols = params["id_cols"]
+    loc_col = id_cols["location"]
+    time_col = id_cols["time"]
+
+    logger.info("Finding peaks")
+    max_idx = profs.groupby(loc_col)[params["power_col"]].idxmax()
     peaks = profs.loc[max_idx]
+
+    logger.info("Getting time zones")
+    tf = TimezoneFinder(in_memory=True)
+    peaks[params["timezone_col"]] = peaks[loc_col].transform(
+        get_timezone_from_hex, tf=tf
+    )
+
+    logger.info("Calculating local time attributes")
+    peaks = calc_local_time_attrs(
+        df=peaks,
+        time_cols=time_col,
+        attrs=params["local_time_attrs"],
+        tz_col=params["timezone_col"],
+    )
+
     peaks = peaks.set_index(orig_idx)
     peaks = peaks.drop(columns=params["drop_cols"])
     return peaks
