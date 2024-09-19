@@ -8,9 +8,11 @@ summarize_vehicles:
   dead_energy_col: dwell_start_kwh
 
 profiles_from_dwells:
-  charging_manager: MinPowerChargingManager
-  energy_col: charge_kwh
-  dwell_dur_col: dwell_time_hrs
+  charging_manager: ImmediateChargingManager
+  input_cols: # keys should match the keyword arguments of the charging manager
+    energy: charge_kwh
+    dur: dwell_time_hrs
+    max_power: max_power_kw
   profile_col: power_kw
 
 report_by_hex:

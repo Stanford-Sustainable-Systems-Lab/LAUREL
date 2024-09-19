@@ -10,11 +10,20 @@ logger = logging.getLogger(__name__)
 
 
 class AbstractChargingManager(ABC):
-    """This class sets the interface for all concrete charging managers."""
+    """This class sets the interface for all concrete charging managers.
+
+    Attributes:
+        dw: DwellSet that this ChargingManager will compute over
+        energy: name of the column within dw containing the required energy for each dwell
+        dur: name of the column within dw containing the duration of the dwell
+        max_power: name of the column within dw containing the maximum charging power for this dwell
+        cost: name of the column giving the cost which was promised during the charging choice model
+    """
 
     _dw = None
     _energy = None
     _dur = None
+    _max_power = None
     _cost = None
 
     def __init__(
@@ -22,12 +31,14 @@ class AbstractChargingManager(ABC):
         dw: DwellSet,
         energy: str,
         dur: str,
+        max_power: str,
         cost: str = None,
     ) -> None:
         """Initialize the ChargingManager."""
         self.dw = dw
         self.energy = energy
         self.dur = dur
+        self.max_power = max_power
         self.cost = cost
 
     @abstractmethod
@@ -52,6 +63,15 @@ class AbstractChargingManager(ABC):
     def dur(self, value):
         self.dw._rename_idx_col(value, self._dur)
         self._dur = value
+
+    @property
+    def max_power(self):
+        return self._max_power
+
+    @max_power.setter
+    def max_power(self, value):
+        self.dw._rename_idx_col(value, self._max_power)
+        self._max_power = value
 
     @property
     def cost(self):
@@ -125,6 +145,26 @@ class MinPowerChargingManager(IndependentDwellChargingManager):
         self.dw.data[pwr_cols[0]] = self.dw.data[self.energy] / self.dw.data[self.dur]
         self.dw.data[time_cols[-1]] = self.dw.data[self.dw.end]
         self.dw.data[pwr_cols[-1]] = -self.dw.data[pwr_cols[0]]
+        return self
+
+
+class ImmediateChargingManager(IndependentDwellChargingManager):
+    """Charge the vehicles at maximum available power as soon as possible."""
+
+    seq_names = ["dwell_start", "charge_end"]
+
+    def set_dwell_events(self) -> Self:
+        pwr_cols = [f"{seqn}_{self.suffixes['power']}" for seqn in self.seq_names]
+        time_cols = [f"{seqn}_{self.suffixes['time']}" for seqn in self.seq_names]
+        self.dw.data[time_cols[0]] = self.dw.data[self.dw.start]
+        self.dw.data[pwr_cols[0]] = self.dw.data[self.max_power]
+        # Assumes that units are kWh, kW, and hours
+        charge_hrs = self.dw.data[self.energy] / self.dw.data[self.max_power]
+        charge_time = pd.to_timedelta(charge_hrs, unit="hour")
+        charge_end = (self.dw.data[self.dw.start] + charge_time).dt.round(freq="s")
+        charge_end = charge_end.clip(upper=self.dw.data[self.dw.end])
+        self.dw.data[time_cols[-1]] = charge_end
+        self.dw.data[pwr_cols[-1]] = -self.dw.data[self.max_power]
         return self
 
 

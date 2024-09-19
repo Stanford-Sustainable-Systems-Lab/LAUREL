@@ -37,11 +37,7 @@ def get_load_profiles(dw: DwellSet, params: dict) -> pd.DataFrame:
     calculating power makes sense.
     """
     manager_cls = _MANAGER_MAP[params["charging_manager"]]
-    manager = manager_cls(
-        dw=dw,
-        energy=params["energy_col"],
-        dur=params["dwell_dur_col"],
-    )
+    manager = manager_cls(dw=dw, **params["input_cols"])
     profs = manager.get_load_profiles(prof_col=params["profile_col"])
     return profs
 
