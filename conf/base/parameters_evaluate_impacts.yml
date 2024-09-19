@@ -20,6 +20,8 @@ report_by_hex:
     location: hex_id
     time: timestamp_utc
   power_col: power_kw
+  drop_cols:
+    - veh_id
 
 to_geospatial:
   hex_col: hex_id
