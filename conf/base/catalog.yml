@@ -57,35 +57,35 @@ vius_weight_class:
 # Electrification simulation datasets
 dwells_with_charging_partition:
   type: partitions.PartitionedDataset
-  path: data/07_model_output/dwells_with_charging
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/dwells_with_charging"
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
 vehicles_with_params_partition:
   type: partitions.PartitionedDataset
-  path: data/07_model_output/vehicles_with_params
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/vehicles_with_params"
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
 vehicles_evaluated_partition:
   type: partitions.PartitionedDataset
-  path: data/07_model_output/vehicles_evaluated
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/vehicles_evaluated"
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
 report_by_hex_partition:
   type: partitions.PartitionedDataset
-  path: data/07_model_output/report_by_hex
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_hex"
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
 report_by_hex_with_geoms:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
-  filepath: data/07_model_output/report_by_hex.gpkg
+  filepath: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_hex.gpkg"
   save_args:
     layer: peak_kw
 
