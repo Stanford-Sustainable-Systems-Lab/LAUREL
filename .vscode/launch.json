@@ -13,6 +13,16 @@
             "justMyCode": true
         },
         {
+            "name": "Kedro: Build Runners",
+            "type": "debugpy",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "module": "kedro",
+            "args": ["run", "--pipeline=build_runners"]
+            // Any other arguments should be passed as a comma-seperated-list
+            // e.g "args": ["run", "--pipeline", "pipeline_name"]
+        },
+        {
             "name": "Kedro: Preprocess",
             "type": "debugpy",
             "request": "launch",
