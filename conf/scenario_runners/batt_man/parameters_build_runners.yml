@@ -29,10 +29,11 @@ cmd_line_calls:
 
 scenario_params:
   builder: BatteryManageScenarioBuilder
-  battery_capacities_kwh:
+  battery_capacities_kwh: # These are only used for home-base, Class 8 vehicles
     - 450
     - 600
     - 750
     - 900
   charging_managers:
     - MinPowerChargingManager
+    - ImmediateChargingManager
