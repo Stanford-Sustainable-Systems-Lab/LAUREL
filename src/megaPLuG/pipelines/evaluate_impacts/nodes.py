@@ -38,6 +38,10 @@ def get_load_profiles(dw: DwellSet, params: dict) -> pd.DataFrame:
     contrast, for systems which consider dwells together, then sending to events before
     calculating power makes sense.
     """
+    # Drop dwells with NaN charging energy, which probably resulted from vehicle deaths
+    dw.data = dw.data.dropna(subset=params["input_cols"]["energy"])
+
+    # Manage charging energy into power
     manager_cls = _MANAGER_MAP[params["charging_manager"]]
     manager = manager_cls(dw=dw, **params["input_cols"])
     profs = manager.get_load_profiles(prof_col=params["profile_col"])
