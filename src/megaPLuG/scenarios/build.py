@@ -13,6 +13,7 @@ class AbstractScenarioBuilder(ABC):
     """
 
     scen_param_key: str = "results_partition"
+    n_tasks_generated: int = None
 
     def __init__(self, scen_params: dict, all_params: dict) -> None:
         self.scen_params = scen_params
@@ -70,6 +71,7 @@ class AbstractScenarioBuilder(ABC):
         for task, (path, scen) in enumerate(zip(paths, scen_params)):
             cur_part = self._build_single_partition(pth=path, params=scen, task_id=task)
             parts.update(cur_part)
+        self.n_tasks_generated = len(parts)
         return parts
 
     @staticmethod
@@ -122,4 +124,4 @@ def generate_scenario_configs(scen_params: dict, all_params: dict) -> dict:
         raise NotImplementedError(f"Scenario builder {bldr_name} not yet implemented.")
     builder = builder_cls(scen_params=scen_params, all_params=all_params)
     parts = builder.build_configs()
-    return parts
+    return (parts, builder)

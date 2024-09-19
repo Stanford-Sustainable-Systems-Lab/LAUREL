@@ -15,16 +15,15 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=generate_scenario_configs,
                 inputs=["params:scenario_params", "parameters"],
-                outputs="scenario_configs",
+                outputs=["scenario_configs", "scenario_builder"],
                 name="generate_scenario_configs",
             ),
             node(
                 func=generate_bash_script,
                 inputs=[
                     "params:slurm_command",
-                    "params:scenario_params",
+                    "scenario_builder",
                     "params:cmd_line_calls",
-                    "scenario_configs",
                     "params:slurm_resources",
                     "params:slurm_reporting",
                 ],

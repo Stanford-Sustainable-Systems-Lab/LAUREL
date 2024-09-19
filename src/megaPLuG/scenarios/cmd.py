@@ -119,7 +119,7 @@ def generate_bash_script(
     writer = ScenarioBashWriter(name=builder.display_name, command=command)
     sh = writer.compile(
         params=cmd_params,
-        n_tasks=builder.n_tasks,
+        n_tasks=builder.n_tasks_generated,
         resources=resources,
         reporting=reporting,
     )
