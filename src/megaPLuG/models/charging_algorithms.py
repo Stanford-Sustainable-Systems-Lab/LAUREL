@@ -13,6 +13,8 @@ def charge_soc_thresh(
     out_cols: list[str],
 ) -> pd.DataFrame:
     """Execute the charging strategy of charging below an SoC threshold."""
+    # TODO: When I generalize this, I should make sure that I can request which columns
+    # I want accumulated, and also build a facility for removing unneeded rows and columns.
     cur_veh = veh_params.loc[grp.name]
     cur_rng = np.random.default_rng(seed=cur_veh["random_seed"])
     rng_params = np.array([cur_veh["initial_soc_alpha"], cur_veh["initial_soc_beta"]])
