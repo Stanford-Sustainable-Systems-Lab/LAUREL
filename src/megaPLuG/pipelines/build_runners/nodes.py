@@ -4,24 +4,11 @@ generated using Kedro 0.18.13
 """
 
 import inspect
-from pathlib import Path
 
 from megaPLuG.scenarios.build import (  # noqa: F401
     AbstractScenarioBuilder,
     TestScenarioBuilder,
 )
-
-
-class TestAgainScenarioBuilder(AbstractScenarioBuilder):
-    """Builds a test scenario set with a single partition."""
-
-    display_name = "test"
-    partition_level_names = ["run_name", "task_id"]
-
-    def _build_param_dicts(self) -> tuple[list[Path], list[dict]]:
-        paths = [Path(self.display_name)]
-        scens = [{}]
-        return (paths, scens)
 
 
 def generate_scenario_configs(scen_params: dict, all_params: dict) -> dict:
