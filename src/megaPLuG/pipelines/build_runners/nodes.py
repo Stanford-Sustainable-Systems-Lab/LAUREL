@@ -4,11 +4,39 @@ generated using Kedro 0.18.13
 """
 
 import inspect
+from copy import deepcopy
+from itertools import product
+from pathlib import Path
 
 from megaPLuG.scenarios.build import (  # noqa: F401
     AbstractScenarioBuilder,
     TestScenarioBuilder,
 )
+
+
+class BatteryManageScenarioBuilder(AbstractScenarioBuilder):
+    """Create scenarios which scan across battery sizes and management strategies."""
+
+    display_name = "batt_man"
+    partition_level_names = ["run_name", "batt_set", "manage_set", "task_id"]
+
+    def _build_param_dicts(self) -> tuple[list[Path], list[dict]]:
+        paths, scens = [], []
+        batt_levels = self.scen_params["battery_capacities_kwh"]
+        manage_levels = self.scen_params["charging_managers"]
+        for batt, mngr in product(batt_levels, manage_levels):
+            pth = Path(self.display_name, f"batt_{batt}", mngr)
+            cur_vehs = deepcopy(self.params["vehicles"])
+            cur_vehs["battery_capacity_kwh"]["values"][True][8] = batt
+            cur_mngr = deepcopy(self.params["profiles_from_dwells"])
+            cur_mngr["charging_manager"] = mngr
+            scn = {
+                "vehicles": cur_vehs,
+                "profiles_from_dwells": cur_mngr,
+            }
+            paths.append(pth)
+            scens.append(scn)
+        return (paths, scens)
 
 
 def generate_scenario_configs(scen_params: dict, all_params: dict) -> dict:
