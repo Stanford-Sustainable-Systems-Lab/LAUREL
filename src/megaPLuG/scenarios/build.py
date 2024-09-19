@@ -92,36 +92,3 @@ class TestScenarioBuilder(AbstractScenarioBuilder):
         paths = [Path(self.display_name)]
         scens = [{}]
         return (paths, scens)
-
-
-_BUILDER_MAP = {
-    k: v
-    for k, v in globals().items()
-    if isinstance(v, type)
-    and issubclass(v, AbstractScenarioBuilder)
-    and v is not AbstractScenarioBuilder
-}
-
-
-def generate_scenario_configs(scen_params: dict, all_params: dict) -> dict:
-    """Call the appropriate scenario configuration builder.
-
-    This function is meant to be called from a kedro pipeline directly.
-
-    Args:
-        scen_params: just the item in the "parameters" dictionary dedicated to giving
-            parameters for scenario building (e.g. builder name)
-        all_params: the whole "parameters" input dictionary, usually passed directly from
-            a kedro pipeline input.
-
-    Returns: The dictionary of scenario configuration partitions. Usually this would be
-    saved to a `kedro` partitioned dataset.
-    """
-    bldr_name = scen_params["builder"]
-    try:
-        builder_cls = _BUILDER_MAP[bldr_name]
-    except KeyError:
-        raise NotImplementedError(f"Scenario builder {bldr_name} not yet implemented.")
-    builder = builder_cls(scen_params=scen_params, all_params=all_params)
-    parts = builder.build_configs()
-    return (parts, builder)

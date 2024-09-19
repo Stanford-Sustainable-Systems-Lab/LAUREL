@@ -1,27 +1,10 @@
-"""
-This is a boilerplate pipeline 'build_runners'
-generated using Kedro 0.18.13
-"""
+"""This file should be copied into the nodes.py file of whatever `kedro` pipeline
+you want to run it in. This is so that you can define scenario builders outside of
+this package and then import them."""
 
 import inspect
-from pathlib import Path
 
-from megaPLuG.scenarios.build import (  # noqa: F401
-    AbstractScenarioBuilder,
-    TestScenarioBuilder,
-)
-
-
-class TestAgainScenarioBuilder(AbstractScenarioBuilder):
-    """Builds a test scenario set with a single partition."""
-
-    display_name = "test"
-    partition_level_names = ["run_name", "task_id"]
-
-    def _build_param_dicts(self) -> tuple[list[Path], list[dict]]:
-        paths = [Path(self.display_name)]
-        scens = [{}]
-        return (paths, scens)
+from .build import AbstractScenarioBuilder
 
 
 def generate_scenario_configs(scen_params: dict, all_params: dict) -> dict:
