@@ -24,7 +24,7 @@ def calc_time_zones_from_hexes(
     hex_arr = df[str_col].unique()
     logger.info("Identifying time zones for unique hexes")
     hexes = pd.DataFrame(data=hex_arr, columns=[str_col])
-    hexes[tz_col] = hexes[str_col].transform(_get_timezone_from_hex, tf=tf)
+    hexes[tz_col] = hexes[str_col].transform(get_timezone_from_hex, tf=tf)
     logger.info("Merging time zones back onto original dataframe")
     hexes = hexes.set_index(str_col)
     df = df.merge(hexes, how="left", left_on=str_col, right_index=True)
@@ -32,7 +32,7 @@ def calc_time_zones_from_hexes(
     return df
 
 
-def _get_timezone_from_hex(hex: int | str, tf: TimezoneFinder = None) -> str:
+def get_timezone_from_hex(hex: int | str, tf: TimezoneFinder = None) -> str:
     """Get the timezone string fror the h3 hexagon."""
     if tf is None:
         tf = TimezoneFinder(in_memory=True)
@@ -56,7 +56,7 @@ def calc_local_time_attrs(
     time_cols: str | list[str],
     attrs: str | list[str],
     tz_col: str,
-    sort_col: str,
+    sort_col: str = None,
     grp_cols: str | list[str] = None,
 ) -> pd.DataFrame:
     """Modifies the passed dataframe to also include local time attribute columns.
@@ -72,6 +72,8 @@ def calc_local_time_attrs(
     else:
         raise RuntimeError("grp_cols argument must be a string or list.")
 
+    if isinstance(time_cols, str):
+        time_cols = [time_cols]
     for tcol in time_cols:
         for a in attrs:
             new_name = get_local_time_attr_col_name(time_col=tcol, attr_name=a)
@@ -80,13 +82,18 @@ def calc_local_time_attrs(
     tqdm.pandas()
     df = df.groupby(grouper, group_keys=False).progress_apply(
         lambda g: _get_local_time_attr_by_tz(
-            g, tz=g.name[-1], utc_cols=time_cols, attrs=attrs
+            g,
+            tz=g.name if isinstance(g.name, str) else g.name[-1],
+            utc_cols=time_cols,
+            attrs=attrs,
         )
     )
-    logger.info("Sorting within each group.")
-    df = df.groupby(grp_cols, group_keys=False).progress_apply(
-        lambda grp: grp.sort_values(sort_col)
-    )
+
+    if sort_col is not None:
+        logger.info("Sorting within each group.")
+        df = df.groupby(grp_cols, group_keys=False).progress_apply(
+            lambda grp: grp.sort_values(sort_col)
+        )
     return df
 
 
