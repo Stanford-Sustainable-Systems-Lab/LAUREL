@@ -69,58 +69,58 @@ vehicles_with_params_partition:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
-# Reporting datasets
 vehicles_evaluated_partition:
   type: partitions.PartitionedDataset
-  path: data/08_reporting/vehicles_evaluated
+  path: data/07_model_output/vehicles_evaluated
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
 report_by_hex_partition:
   type: partitions.PartitionedDataset
-  path: data/08_reporting/report_by_hex
+  path: data/07_model_output/report_by_hex
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
 report_by_hex_with_geoms:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
-  filepath: data/08_reporting/report_by_hex.gpkg
+  filepath: data/07_model_output/report_by_hex.gpkg
   save_args:
     layer: peak_kw
 
 # Test datasets
 vehicle_representative_points:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
-  filepath: data/07_model_output/veh_rep_pts.gpkg
+  filepath: data/03_primary/veh_rep_pts.gpkg
   save_args:
     index: True
     layer: vehicle_representative_points
 
 vehicle_dwells:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
-  filepath: data/07_model_output/veh_dwells.gpkg
+  filepath: data/03_primary/veh_dwells.gpkg
   save_args:
     index: True
     layer: vehicle_dwells
 
 vehicle_depots:
   type: pandas.FeatherDataset
-  filepath: data/02_intermediate/vehicle_depots.feather
+  filepath: data/03_primary/vehicle_depots.feather
 
 vehicle_depots_geoms:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
-  filepath: data/07_model_output/vehicle_depots.gpkg
+  filepath: data/03_primary/vehicle_depots.gpkg
   save_args:
     index: True
     layer: vehicle_depots
   load_args:
     layer: vehicle_depots
 
+# Reporting datasets
 vehicle_trajectory:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
-  filepath: data/07_model_output/vehicle_trajectory.gpkg
+  filepath: data/08_reporting/vehicle_trajectory.gpkg
   save_args:
     index: True
     layer:
@@ -129,7 +129,7 @@ vehicle_trajectory:
     
 navistar_by_state:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
-  filepath: data/07_model_output/navistar_by_state.gpkg
+  filepath: data/08_reporting/navistar_by_state.gpkg
   save_args:
     index: True
     layer: navistar_by_state
