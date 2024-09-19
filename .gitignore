@@ -159,10 +159,10 @@ session_store.db
 *.ipynb
 
 # Auto-generated configs and bash scripts
-conf/scenario/*
+conf/scenarios/*
 !conf/scenarios/.gitkeep
-src/megaPLuG/scenario_runners/*
-!src/megaPLuG/scenario_runners/.gitkeep
+src/runners/*
+!src/runners/.gitkeep
 
 # Slurm files
 slurm_logs/*
