@@ -4,7 +4,7 @@ this package and then import them."""
 
 import inspect
 
-from .build import AbstractScenarioBuilder
+from .build import AbstractScenarioBuilder  # noqa: F401
 
 
 def generate_scenario_configs(scen_params: dict, all_params: dict) -> dict:
