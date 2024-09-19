@@ -112,5 +112,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="write_scenario_partition_vehs",
             ),
         ],
+        tags="scenario_run",
     )
     return pipe
