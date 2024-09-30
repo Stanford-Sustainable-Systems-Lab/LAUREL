@@ -14,6 +14,7 @@ profiles_from_dwells:
     dur: dwell_time_hrs
     max_power: max_power_kw
   profile_col: power_kw
+  duration_col: duration
 
 report_by_hex:
   id_cols:

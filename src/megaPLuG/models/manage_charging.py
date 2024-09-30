@@ -102,7 +102,7 @@ class IndependentDwellChargingManager(AbstractChargingManager):
         """Set the charging management power change events within the dwell."""
         pass
 
-    def get_load_profiles(self, prof_col: str) -> pd.DataFrame:
+    def get_load_profiles(self, prof_col: str, dur_col: str) -> pd.DataFrame:
         """Take dwells and convert to events."""
         checks = self.check_for_suffixes()
         if len(checks) > 0:
@@ -120,7 +120,11 @@ class IndependentDwellChargingManager(AbstractChargingManager):
             time_col=self.suffixes["time"],
             drop_cur_idx=True,
         )
-        events[prof_col] = events.groupby(self.dw.hex)[self.suffixes["power"]].cumsum()
+        event_grp = events.groupby(self.dw.hex)
+        events[prof_col] = event_grp[self.suffixes["power"]].cumsum()
+        events[dur_col] = event_grp[self.suffixes["time"]].transform(
+            lambda ser: ser.shift(-1) - ser
+        )
         events = events.drop(columns=[self.suffixes["power"]])
         return events
 
