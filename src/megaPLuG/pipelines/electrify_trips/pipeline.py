@@ -46,7 +46,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["dwell_obj_filtered_vehs", "params:locations"],
                 outputs="dwell_obj_w_avail",
                 name="set_charging_availability",
-                tags="frame:spatiotemporal",
+                tags="frame-spatiotemporal",
             ),
             node(
                 func=mark_substantial_dwells,
@@ -57,7 +57,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="dwell_obj_filtered_dwells",
                 name="mark_substantial_dwells",
-                tags="frame:spatiotemporal",
+                tags="frame-spatiotemporal",
             ),
             node(
                 func=mark_critical_days,
@@ -68,14 +68,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="dwell_obj_crit_days",
                 name="mark_critical_days",
-                tags="frame:spatiotemporal",
+                tags="frame-spatiotemporal",
             ),
             node(
                 func=filter_dwells,
                 inputs=["dwell_obj_crit_days", "params:filter_dwells"],
                 outputs="dwell_obj_crit_dwells",
                 name="filter_dwells",
-                tags="frame:spatiotemporal",
+                tags="frame-spatiotemporal",
             ),
             node(
                 func=calc_energy_use,
@@ -86,7 +86,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="dwell_obj_w_energy",
                 name="calc_energy_use",
-                tags="frame:energy",
+                tags="frame-energy",
             ),
             node(
                 func=simulate_charging_choice,
@@ -97,7 +97,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="dwell_obj_w_charging",
                 name="simulate_charging_choice",
-                tags="frame:charging_choice",
+                tags="frame-charging_choice",
             ),
             node(
                 func=save_dwell_set,

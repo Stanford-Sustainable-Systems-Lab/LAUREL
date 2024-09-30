@@ -54,14 +54,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["dwell_obj_eval", "params:profiles_from_dwells"],
                 outputs="profiles",
                 name="get_load_profiles",
-                tags="frame:charging_management",
+                tags="frame-charging_management",
             ),
             node(
                 func=report_by_hex,
                 inputs=["profiles", "params:report_by_hex"],
                 outputs="report_by_hex",
                 name="report_by_hex",
-                tags="frame:charging_management",
+                tags="frame-charging_management",
             ),
             # From here down is saving out results
             node(
