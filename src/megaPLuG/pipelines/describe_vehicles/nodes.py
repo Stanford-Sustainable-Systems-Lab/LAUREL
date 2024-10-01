@@ -39,8 +39,10 @@ def calc_inter_visit_stats(dw: DwellSet) -> DwellSet:
         calc_inter_visit_times, hex_col=dw.hex, end_col=dw.end, start_col=dw.start
     )
 
-    dw.data["cum_veh_miles"] = dw.data.groupby(dw.veh)[dw.trip_dist].cumsum()
-    dw.data["inter_visit_miles"] = dw.data.groupby([dw.veh, dw.hex])[
+    dw.data["cum_veh_miles"] = dw.data.groupby(dw.veh, sort=False)[
+        dw.trip_dist
+    ].cumsum()
+    dw.data["inter_visit_miles"] = dw.data.groupby([dw.veh, dw.hex], sort=False)[
         "cum_veh_miles"
     ].diff()
     dw.data = dw.data.drop(columns=["cum_veh_miles"])
@@ -51,14 +53,14 @@ def calc_inter_visit_times(
     grp: pd.DataFrame, hex_col: str, end_col: str, start_col: str
 ) -> pd.DataFrame:
     """Calculate inter-visit times, assuming that `grp` is from a single vehicle and sorted by time."""
-    prev_end_time = grp.groupby(hex_col)[end_col].shift(1)
+    prev_end_time = grp.groupby(hex_col, sort=False)[end_col].shift(1)
     grp.loc[:, "inter_visit_hrs"] = total_hours(grp[start_col] - prev_end_time)
     return grp
 
 
 def describe_veh_loc_pairs(dw: DwellSet) -> pd.DataFrame:
     """Describe each vehicle location pair with summary statistics."""
-    veh_locs = dw.data.groupby([dw.veh, dw.hex]).agg(
+    veh_locs = dw.data.groupby([dw.veh, dw.hex], sort=False).agg(
         n_visits=pd.NamedAgg("dwell_hrs", "count"),
         mean_inter_miles=pd.NamedAgg("inter_visit_miles", "mean"),
         med_inter_miles=pd.NamedAgg("inter_visit_miles", "median"),
@@ -69,12 +71,12 @@ def describe_veh_loc_pairs(dw: DwellSet) -> pd.DataFrame:
         med_dwell_hrs=pd.NamedAgg("dwell_hrs", "median"),
         tot_dwell_hrs=pd.NamedAgg("dwell_hrs", "sum"),
     )
-    veh_locs["dwell_hrs_ratio"] = veh_locs.groupby(dw.veh)["tot_dwell_hrs"].transform(
-        lambda s: s / s.sum()
-    )
-    veh_locs["visits_ratio"] = veh_locs.groupby(dw.veh)["n_visits"].transform(
-        lambda s: s / s.sum()
-    )
+    veh_locs["dwell_hrs_ratio"] = veh_locs.groupby(dw.veh, sort=False)[
+        "tot_dwell_hrs"
+    ].transform(lambda s: s / s.sum())
+    veh_locs["visits_ratio"] = veh_locs.groupby(dw.veh, sort=False)[
+        "n_visits"
+    ].transform(lambda s: s / s.sum())
     return veh_locs
 
 
@@ -138,7 +140,9 @@ def classify_vehicles(
     vehs: pd.DataFrame, veh_locs: pd.DataFrame, params: dict
 ) -> pd.DataFrame:
     """Classify vehicles by their route type, home base status, etc."""
-    veh_loc_cts = veh_locs.groupby(params["veh_col"])[params["loc_col"]].value_counts()
+    veh_loc_cts = veh_locs.groupby(params["veh_col"], sort=False)[
+        params["loc_col"]
+    ].value_counts()
     veh_loc_cts = veh_loc_cts.unstack(params["loc_col"])
     veh_loc_cts["has_home_base"] = veh_loc_cts["home_base"] > 0
     vehs = vehs.merge(

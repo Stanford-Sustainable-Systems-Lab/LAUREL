@@ -19,7 +19,7 @@ def find_time_weighted_centers(
 
     gdf["easting_wt"] = gdf.geometry.x * gdf[weight_col]
     gdf["northing_wt"] = gdf.geometry.y * gdf[weight_col]
-    centers = gdf.groupby(grp_col).agg(
+    centers = gdf.groupby(grp_col, sort=False).agg(
         {"easting_wt": "sum", "northing_wt": "sum", weight_col: "sum"}
     )
     gdf = gdf.drop(columns=["easting_wt", "northing_wt"])

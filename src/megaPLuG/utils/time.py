@@ -80,7 +80,7 @@ def calc_local_time_attrs(
             df[new_name] = 0  # May need to be adjusted for different attribute dtypes
     logger.info("Building time attribute columns")
     tqdm.pandas()
-    df = df.groupby(grouper, group_keys=False).progress_apply(
+    df = df.groupby(grouper, group_keys=False, sort=False).progress_apply(
         lambda g: _get_local_time_attr_by_tz(
             g,
             tz=g.name if isinstance(g.name, str) else g.name[-1],
@@ -91,7 +91,7 @@ def calc_local_time_attrs(
 
     if sort_col is not None:
         logger.info("Sorting within each group.")
-        df = df.groupby(grp_cols, group_keys=False).progress_apply(
+        df = df.groupby(grp_cols, group_keys=False, sort=False).progress_apply(
             lambda grp: grp.sort_values(sort_col)
         )
     return df

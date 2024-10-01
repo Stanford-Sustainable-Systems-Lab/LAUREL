@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Summarize the results for each vehicle."""
     dw.data["is_death"] = dw.data[params["dead_energy_col"]] < 0
-    n_deaths = dw.data.groupby(dw.veh)["is_death"].sum()
+    n_deaths = dw.data.groupby(dw.veh, sort=False)["is_death"].sum()
     n_deaths.name = "n_deaths"
     vehs = vehs.merge(n_deaths, how="inner", on=dw.veh)
 
@@ -60,7 +60,7 @@ def report_by_hex(profs: pd.DataFrame, params: dict) -> pd.DataFrame:
     time_col = id_cols["time"]
 
     logger.info("Finding peaks")
-    max_idx = profs.groupby(loc_col)[params["power_col"]].idxmax()
+    max_idx = profs.groupby(loc_col, sort=False)[params["power_col"]].idxmax()
     peaks = profs.loc[max_idx]
 
     logger.info("Getting time zones")

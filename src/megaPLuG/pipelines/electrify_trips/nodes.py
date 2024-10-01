@@ -119,7 +119,9 @@ def mark_critical_days(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellS
     is_critical = dw.data[crcol].astype("boolean")
     is_refresh = dw.data[refr_col].astype("boolean")
     dw.data[crcol] = (is_refresh & is_critical) ^ ~(is_refresh | pd.NA)
-    dw.data[crcol] = dw.data[crcol].groupby(dw.veh).bfill().fillna(True).astype(bool)
+    dw.data[crcol] = (
+        dw.data[crcol].groupby(dw.veh, sort=False).bfill().fillna(True).astype(bool)
+    )
     return dw
 
 
@@ -179,5 +181,7 @@ def simulate_charging_choice(
 
     # Run simulation
     tqdm.pandas()
-    dw.data = dw.data.groupby(dw.veh, group_keys=False).progress_apply(**kws)
+    dw.data = dw.data.groupby(dw.veh, group_keys=False, sort=False).progress_apply(
+        **kws
+    )
     return dw

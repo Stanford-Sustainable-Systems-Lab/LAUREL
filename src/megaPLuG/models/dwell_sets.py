@@ -252,12 +252,14 @@ class DwellSet:
         )
         if self.is_dask:
             kws.update(dict(meta=dd.utils.make_meta(self.data)))
-            new.data = self.data.groupby(self.veh, group_keys=False).apply(**kws)
-        else:
-            tqdm.pandas()
-            new.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
+            new.data = self.data.groupby(self.veh, group_keys=False, sort=False).apply(
                 **kws
             )
+        else:
+            tqdm.pandas()
+            new.data = self.data.groupby(
+                self.veh, group_keys=False, sort=False
+            ).progress_apply(**kws)
         if inplace:
             return None
         else:
@@ -376,12 +378,14 @@ class DwellSet:
         )
         if self.is_dask:
             kws.update(dict(meta=dd.utils.make_meta(self.data)))
-            new.data = self.data.groupby(self.veh, group_keys=False).apply(**kws)
-        else:
-            tqdm.pandas()
-            new.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
+            new.data = self.data.groupby(self.veh, group_keys=False, sort=False).apply(
                 **kws
             )
+        else:
+            tqdm.pandas()
+            new.data = self.data.groupby(
+                self.veh, group_keys=False, sort=False
+            ).progress_apply(**kws)
         if inplace:
             return None
         else:
@@ -418,14 +422,16 @@ class DwellSet:
         self.data[self.reset] = False
         reset_col_idx = self.data.columns.get_loc(self.reset)
         if self.is_dask:
-            self.data = self.data.groupby(self.veh, group_keys=False).apply(
+            self.data = self.data.groupby(self.veh, group_keys=False, sort=False).apply(
                 DwellSet._set_default_reset_col_grp,
                 reset_col_idx=reset_col_idx,
                 meta=dd.utils.make_meta(self.data),
             )
         else:
             tqdm.pandas()
-            self.data = self.data.groupby(self.veh, group_keys=False).progress_apply(
+            self.data = self.data.groupby(
+                self.veh, group_keys=False, sort=False
+            ).progress_apply(
                 DwellSet._set_default_reset_col_grp,
                 reset_col_idx=reset_col_idx,
             )

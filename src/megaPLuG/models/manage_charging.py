@@ -120,7 +120,7 @@ class IndependentDwellChargingManager(AbstractChargingManager):
             time_col=self.suffixes["time"],
             drop_cur_idx=True,
         )
-        event_grp = events.groupby(self.dw.hex)
+        event_grp = events.groupby(self.dw.hex, sort=False)
         events[prof_col] = event_grp[self.suffixes["power"]].cumsum()
         events[dur_col] = event_grp[self.suffixes["time"]].transform(
             lambda ser: ser.shift(-1) - ser
