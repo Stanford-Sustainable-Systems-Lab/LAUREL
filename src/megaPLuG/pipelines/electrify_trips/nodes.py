@@ -164,7 +164,7 @@ def simulate_charging_choice(
     # TODO: It may be important to check for groupby monotonic increasing.
     icols = params["input_cols"]
     for col in params["output_cols"]:
-        dw.data[col] = np.NaN  # Allocate columns to fill in, which avoids merging
+        dw.data[col] = np.nan  # Allocate columns to fill in, which avoids merging
 
     # Set arguments
     kws = dict(

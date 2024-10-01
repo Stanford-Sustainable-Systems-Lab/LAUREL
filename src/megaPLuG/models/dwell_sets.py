@@ -316,7 +316,7 @@ class DwellSet:
             else:
                 cum_sums = sums[i, :] + cum_sums
                 # cum_res will just reassign to itself, since the current reset is False
-        arr[~keep, :] = np.NaN
+        arr[~keep, :] = np.nan
         return arr
 
     def drop_masked(

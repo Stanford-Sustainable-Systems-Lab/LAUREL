@@ -46,7 +46,7 @@ def _charge_soc_thresh_core(
 ) -> np.ndarray:
     """Execute the charging strategy of charging below an SoC threshold."""
     nsteps = consumed_kwh.shape[0]
-    cur_energy = np.NaN
+    cur_energy = np.nan
     energy_tracker = np.empty((nsteps, 2))
     dwell_init_kwh, charge_kwh = 0, 1  # Set energy tracker index names
     for i in range(nsteps):
@@ -61,7 +61,7 @@ def _charge_soc_thresh_core(
                 cur_energy = 0
                 chg = batt_cap
             else:  # If not, then become/stay dead
-                chg = np.NaN
+                chg = np.nan
         elif cur_energy / batt_cap <= charge_soc:
             chg = np.minimum(batt_cap - cur_energy, avail_kwh)
         else:
