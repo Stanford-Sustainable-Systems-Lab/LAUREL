@@ -7,9 +7,8 @@ import logging
 
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 
-from megaPLuG.models.charging_algorithms import charge_soc_thresh
+from megaPLuG.models.charging_algorithms import SoCThreshChargingChoiceStrategy
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.utils.params import build_df_from_dict, flatten_dict
 from megaPLuG.utils.time import total_hours
@@ -164,24 +163,6 @@ def simulate_charging_choice(
 ) -> DwellSet:
     """Simulate the charging choices of each vehicle."""
     # TODO: It may be important to check for groupby monotonic increasing.
-    icols = params["input_cols"]
-    for col in params["output_cols"]:
-        dw.data[col] = np.nan  # Allocate columns to fill in, which avoids merging
-
-    # Set arguments
-    kws = dict(
-        func=charge_soc_thresh,
-        consumed_kwh_col=icols["consumed_kwh"],
-        avail_kw_col=icols["avail_kw"],
-        dwell_hrs_col=icols["dwell_hrs"],
-        reset_col=dw.reset,
-        veh_params=vehs,
-        out_cols=params["output_cols"],
-    )
-
-    # Run simulation
-    tqdm.pandas()
-    dw.data = dw.data.groupby(dw.veh, group_keys=False, sort=False).progress_apply(
-        **kws
-    )
+    strat = SoCThreshChargingChoiceStrategy(**params["input_cols"])
+    dw.data = strat.run(dwells=dw, vehs=vehs)
     return dw

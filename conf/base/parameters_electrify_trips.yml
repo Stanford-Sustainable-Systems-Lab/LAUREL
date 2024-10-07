@@ -90,8 +90,11 @@ calc_energy_use:
 simulate_charging_choice:
   input_cols:
     consumed_kwh: energy_use_kwh
-    avail_kw: max_power_kw
     dwell_hrs: dwell_time_hrs
-  output_cols: # The order must match that of the numpy array output of the inner function
-    - dwell_start_kwh
-    - charge_kwh
+    avail_kw: max_power_kw
+    reset: reset_state_before_keep_dwells
+    batt_cap: battery_capacity_kwh
+    random_seed: random_seed
+    rng_alpha: initial_soc_alpha
+    rng_beta: initial_soc_beta
+    charge_soc: charge_soc_thresh
