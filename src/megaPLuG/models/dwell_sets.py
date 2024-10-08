@@ -223,24 +223,50 @@ class DwellSet:
         else:
             new = copy.deepcopy(self)
 
+        kws = dict(
+            keep_mask_col=keep_mask_col,
+            accum_cols=accum_cols,
+            reset_col=self.reset,
+            veh_col=self.veh,
+            replace_dtypes=self._replace_dtypes,
+        )
+        if self.is_dask:
+            new.data = new.data.map_partitions(self._accum_masked_df, **kws)
+        else:
+            new.data = self._accum_masked_df(df=new.data, **kws)
+
+        if inplace:
+            return None
+        else:
+            return new
+
+    @staticmethod
+    def _accum_masked_df(
+        df: pd.DataFrame,
+        keep_mask_col: str,
+        accum_cols: str | list[str],
+        reset_col: str,
+        veh_col: str,
+        replace_dtypes: dict[str, str],
+    ) -> pd.DataFrame:
         if isinstance(accum_cols, str):
             accum_cols = [accum_cols]
 
-        logic_cols = [keep_mask_col, self.reset]
-        logic_df = new.data.loc[:, logic_cols]
-        logic_df = logic_df.rename(columns={keep_mask_col: "keep", new.reset: "reset"})
-        logic_dtypes = new._get_recarray_dtypes(logic_df)
+        logic_renamer = {keep_mask_col: "keep", reset_col: "reset"}
+        logic_df = df.loc[:, list(logic_renamer.keys())]
+        logic_df = logic_df.rename(columns=logic_renamer)
+        logic_dtypes = DwellSet._get_recarray_dtypes(logic_df, replace_dtypes)
         logic_recs = logic_df.to_records(column_dtypes=logic_dtypes, index=False)
 
-        vals = {col: new.data[col].values for col in accum_cols}
+        vals = {col: df[col].values for col in accum_cols}
         outs = {col: np.empty_like(vals[col]) for col in accum_cols}
 
         # Using pandas groupby indices to move over dwell recarray
-        grp_idxs = new.data.groupby(new.veh).indices
+        grp_idxs = df.groupby(veh_col).indices
         for grp, idxs in tqdm(grp_idxs.items()):
             logics = logic_recs[idxs]
             for col in accum_cols:
-                outs[col][idxs] = new._accum_masked_grp_core(
+                outs[col][idxs] = DwellSet._accum_masked_core(
                     logics=logics,
                     vals=vals[col][idxs],
                     outs=outs[col][idxs],
@@ -249,19 +275,18 @@ class DwellSet:
         # Build output dataframe
         outs = {f"{k}_{keep_mask_col}": v for k, v in outs.items()}
         out_df = pd.DataFrame.from_dict(outs, orient="columns")
-        out_df.index = new.data.index
+        out_df.index = df.index
 
         out_df = out_df.convert_dtypes()
-        out_df.loc[~new.data[keep_mask_col], :] = pd.NA
+        out_df.loc[~df[keep_mask_col], :] = pd.NA
 
-        new.data = pd.concat([new.data, out_df], axis=1)
+        df = pd.concat([df, out_df], axis=1)
+        return df
 
-        if inplace:
-            return None
-        else:
-            return new
-
-    def _get_recarray_dtypes(self, df: pd.DataFrame) -> dict[str, str]:
+    @staticmethod
+    def _get_recarray_dtypes(
+        df: pd.DataFrame, replace_dtypes: dict[str, str]
+    ) -> dict[str, str]:
         """Convert a DataFrame to a Record Array using opinionated type conversions.
 
         Note: Boolean values seem to not convert as bytes, so I will use a small unsigned
@@ -270,12 +295,12 @@ class DwellSet:
         col_dtypes = {}
         for col, dtype in zip(df.columns, df.dtypes):
             if dtype.name == np.bool.__name__:
-                col_dtypes.update({col: self._replace_dtypes[dtype.name]})
+                col_dtypes.update({col: replace_dtypes[dtype.name]})
         return col_dtypes
 
     @staticmethod
     @njit
-    def _accum_masked_grp_core(
+    def _accum_masked_core(
         logics: np.recarray,
         vals: np.ndarray,
         outs: np.ndarray,
