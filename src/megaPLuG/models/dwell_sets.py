@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from megaPLuG.utils.h3 import add_geometries
 from numba import njit
-from numba.extending import overload
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
@@ -233,31 +232,27 @@ class DwellSet:
         logic_dtypes = new._get_recarray_dtypes(logic_df)
         logic_recs = logic_df.to_records(column_dtypes=logic_dtypes, index=False)
 
-        accum_df = new.data.loc[:, accum_cols]
-        accum_renamer = {c: f"{c}_{keep_mask_col}" for c in accum_df.columns}
-        accum_df = accum_df.rename(columns=accum_renamer)
-        accum_dtypes = new._get_recarray_dtypes(accum_df)
-        accum_recs = accum_df.to_records(column_dtypes=accum_dtypes, index=False)
+        vals = {col: new.data[col].values for col in accum_cols}
+        outs = {col: np.empty_like(vals[col]) for col in accum_cols}
 
+        # Using pandas groupby indices to move over dwell recarray
         grp_idxs = new.data.groupby(new.veh).indices
-        outs = np.recarray((accum_recs.shape[0],), dtype=accum_recs.dtype)
-        for grp, idxs in tqdm(
-            grp_idxs.items()
-        ):  # Using pandas groupby indices to move over dwell recarray
-            outs[idxs] = new._accum_masked_grp_core(
-                logics=logic_recs[idxs],
-                vals=accum_recs[idxs],
-                nvals=len(accum_recs.dtype),
-                outs=outs[idxs],
-            )
-        out_df = pd.DataFrame.from_records(outs, index=new.data.index)
+        for grp, idxs in tqdm(grp_idxs.items()):
+            logics = logic_recs[idxs]
+            for col in accum_cols:
+                outs[col][idxs] = new._accum_masked_grp_core(
+                    logics=logics,
+                    vals=vals[col][idxs],
+                    outs=outs[col][idxs],
+                )
 
-        # # TODO: Ensure that illogical values in accumulated columns get marked
-        # outs[~logics["keep"]] = np.nan
+        # Build output dataframe
+        outs = {f"{k}_{keep_mask_col}": v for k, v in outs.items()}
+        out_df = pd.DataFrame.from_dict(outs, orient="columns")
+        out_df.index = new.data.index
 
-        # # TODO: Ensure that boolean reset column gets treated correctly if it was used
-        # out_reset_col = accum_renamer[new.reset]
-        # out_df[out_reset_col] = out_df[out_reset_col].astype(bool)
+        out_df = out_df.convert_dtypes()
+        out_df.loc[~new.data[keep_mask_col], :] = pd.NA
 
         new.data = pd.concat([new.data, out_df], axis=1)
 
@@ -282,32 +277,25 @@ class DwellSet:
     @njit
     def _accum_masked_grp_core(
         logics: np.recarray,
-        vals: np.recarray,
-        nvals: int,
-        outs: np.recarray,
+        vals: np.ndarray,
+        outs: np.ndarray,
     ) -> np.recarray:
         nsteps = logics.shape[0]
         if not nsteps == vals.shape[0] == outs.shape[0]:
             raise RuntimeError("The three arrays must have the same length.")
 
-        cum_sums = np.zeros(shape=(1,), dtype=vals.dtype)
+        cum_sum = 0
         for i in range(nsteps):
             if logics["keep"][i]:
-                # If we do reset, then the operation is just a copy of the original
-                if not logics["reset"][i]:  # With no reset, we apply accumulation
-                    for j in range(nvals):  # get_num_fields(vals):
-                        cur_val = vals[i][j]
-                        cur_sum = cum_sums[i][j]
-                        outs[i][j] = cur_val + cur_sum
-                    # outs["reset"][i] = cum_res # Assuming that this will happen automatically with sum
-                for j in range(nvals):  # get_num_fields(vals):
-                    cum_sums[0][j] = 0
+                if logics["reset"][i]:  # With reset, we just copy the original
+                    outs[i] = vals[i]
+                else:  # With no reset, we apply accumulation
+                    outs[i] = vals[i] + cum_sum
+                cum_sum = 0
             elif logics["reset"][i]:  # Implicitly, this is reset and not keep
-                cum_sums[0] = vals[i]
+                cum_sum = vals[i]
             else:
-                for j in range(nvals):  # get_num_fields(vals):
-                    cum_sums[i][j] = vals[i][j] + cum_sums[0][j]
-                # cum_res will just reassign to itself, since the current reset is False
+                cum_sum = vals[i] + cum_sum
         return outs
 
     def drop_masked(
@@ -683,14 +671,3 @@ def load_dwell_set(dwells: pd.DataFrame, params: dict) -> DwellSet:
 
 def save_dwell_set(dw: DwellSet) -> pd.DataFrame:
     return dw.data
-
-
-def get_num_fields(recarr):
-    pass
-
-
-@overload(get_num_fields)
-def ol_get_num_fields(recarr):
-    nfields = len(recarr.dtype.fields)
-    print(f"Type inference time, has {nfields} fields")
-    return lambda recarr: nfields
