@@ -262,7 +262,7 @@ class DwellSet:
         logic_recs = logic_df.to_records(column_dtypes=logic_dtypes, index=False)
 
         vals = {col: df[col].values for col in accum_cols}
-        outs = {col: np.empty_like(vals[col]) for col in accum_cols}
+        outs = {col: np.zeros_like(vals[col]) for col in accum_cols}
 
         # Using pandas groupby indices to move over dwell recarray
         grp_idxs = df.groupby(veh_col).indices
@@ -276,14 +276,15 @@ class DwellSet:
                 )
 
         # Build output dataframe
-        outs = {f"{k}_{keep_mask_col}": v for k, v in outs.items()}
-        out_df = pd.DataFrame.from_dict(outs, orient="columns")
-        out_df.index = df.index
+        def _get_new_col_name(col: str) -> str:
+            return f"{col}_{keep_mask_col}"
 
-        out_df = out_df.convert_dtypes()
-        out_df.loc[~df[keep_mask_col], :] = pd.NA
+        for col in accum_cols:
+            new_col = _get_new_col_name(col)
+            df[new_col] = outs[col]
+            df[new_col] = df[new_col].convert_dtypes()
+            df.loc[~df[keep_mask_col], new_col] = pd.NA
 
-        df = pd.concat([df, out_df], axis=1)
         return df
 
     @staticmethod
@@ -307,7 +308,7 @@ class DwellSet:
         logics: np.recarray,
         vals: np.ndarray,
         outs: np.ndarray,
-    ) -> np.recarray:
+    ) -> np.ndarray:
         nsteps = logics.shape[0]
         if not nsteps == vals.shape[0] == outs.shape[0]:
             raise RuntimeError("The three arrays must have the same length.")
