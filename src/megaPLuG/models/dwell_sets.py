@@ -202,7 +202,7 @@ class DwellSet:
     def accum_masked(
         self,
         keep_mask_col: str,
-        accum_cols: str | list[str],
+        accum_cols: str | list[str] = None,
         inplace: bool = False,
     ) -> Self | None:
         """Filter out individual dwells while merging trips together.
@@ -222,6 +222,9 @@ class DwellSet:
             new = self
         else:
             new = copy.deepcopy(self)
+
+        if accum_cols is None:
+            accum_cols = [self.trip_dist, self.trip_dur, self.reset]
 
         kws = dict(
             keep_mask_col=keep_mask_col,
