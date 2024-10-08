@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from megaPLuG.utils.h3 import add_geometries
 from numba import njit
+from numba.extending import overload
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ class DwellSet:
     _reset = None
     _seq_names = None
     _verify_sorting = None
+    _replace_dtypes: dict = {np.bool.__name__: "u1"}
     data = None
     is_dask = False
 
@@ -201,6 +203,7 @@ class DwellSet:
     def accum_masked(
         self,
         keep_mask_col: str,
+        accum_cols: str | list[str],
         inplace: bool = False,
     ) -> Self | None:
         """Filter out individual dwells while merging trips together.
@@ -216,110 +219,96 @@ class DwellSet:
         if self.verify_sorting:
             self.sort_by_veh_time()
 
-        sums_master_dtype = np.result_type(*self.data[self.sum_cols].dtypes.values)
-        for col in self.sum_cols:
-            self.data[col] = self.data[col].astype(sums_master_dtype)
-
-        # Force numba compilation
-        base = np.array(
-            [True, False, True]
-        )  # Just an example array of the correct dtype
-        sums_base = np.expand_dims(base.astype(sums_master_dtype), axis=1)
-        if len(self.sum_cols) > 1:
-            sums_base = np.hstack([sums_base] * len(self.sum_cols))
-        _ = DwellSet._accum_masked_grp_core(
-            keep=base,
-            sums=sums_base,
-            reset=base,
-        )
         if inplace:
             new = self
         else:
             new = copy.deepcopy(self)
 
-        # Pre-allocate target columns
-        for col in self.sum_cols:
-            new_name = f"{col}_{keep_mask_col}"
-            new.data[new_name] = 0.0  # Decimal is very important here, makes float
-            new.data[new_name] = new.data[new_name].astype(sums_master_dtype)
-        new.data[f"{self.reset}_{keep_mask_col}"] = False
+        if isinstance(accum_cols, str):
+            accum_cols = [accum_cols]
 
-        kws = dict(
-            func=DwellSet._accum_masked_grp,
-            keep_mask_col=keep_mask_col,
-            sum_cols=self.sum_cols,
-            reset_col=self.reset,
-        )
-        if self.is_dask:
-            kws.update(dict(meta=dd.utils.make_meta(self.data)))
-            new.data = self.data.groupby(self.veh, group_keys=False, sort=False).apply(
-                **kws
+        logic_cols = [keep_mask_col, self.reset]
+        logic_df = new.data.loc[:, logic_cols]
+        logic_df = logic_df.rename(columns={keep_mask_col: "keep", new.reset: "reset"})
+        logic_dtypes = new._get_recarray_dtypes(logic_df)
+        logic_recs = logic_df.to_records(column_dtypes=logic_dtypes, index=False)
+
+        accum_df = new.data.loc[:, accum_cols]
+        accum_renamer = {c: f"{c}_{keep_mask_col}" for c in accum_df.columns}
+        accum_df = accum_df.rename(columns=accum_renamer)
+        accum_dtypes = new._get_recarray_dtypes(accum_df)
+        accum_recs = accum_df.to_records(column_dtypes=accum_dtypes, index=False)
+
+        grp_idxs = new.data.groupby(new.veh).indices
+        outs = np.recarray((accum_recs.shape[0],), dtype=accum_recs.dtype)
+        for grp, idxs in tqdm(
+            grp_idxs.items()
+        ):  # Using pandas groupby indices to move over dwell recarray
+            outs[idxs] = new._accum_masked_grp_core(
+                logics=logic_recs[idxs],
+                vals=accum_recs[idxs],
+                nvals=len(accum_recs.dtype),
+                outs=outs[idxs],
             )
-        else:
-            tqdm.pandas()
-            new.data = self.data.groupby(
-                self.veh, group_keys=False, sort=False
-            ).progress_apply(**kws)
+        out_df = pd.DataFrame.from_records(outs, index=new.data.index)
+
+        # # TODO: Ensure that illogical values in accumulated columns get marked
+        # outs[~logics["keep"]] = np.nan
+
+        # # TODO: Ensure that boolean reset column gets treated correctly if it was used
+        # out_reset_col = accum_renamer[new.reset]
+        # out_df[out_reset_col] = out_df[out_reset_col].astype(bool)
+
+        new.data = pd.concat([new.data, out_df], axis=1)
+
         if inplace:
             return None
         else:
             return new
 
-    @staticmethod
-    def _accum_masked_grp(
-        grp: pd.DataFrame,
-        keep_mask_col: str,
-        sum_cols: str | list[str],
-        reset_col: str,
-    ) -> pd.DataFrame:
-        if isinstance(sum_cols, str):
-            sum_cols = [sum_cols]
-            sums = np.expand_dims(grp[sum_cols].values, axis=1)
-        else:
-            sums = grp[sum_cols].values
+    def _get_recarray_dtypes(self, df: pd.DataFrame) -> dict[str, str]:
+        """Convert a DataFrame to a Record Array using opinionated type conversions.
 
-        arr = DwellSet._accum_masked_grp_core(
-            keep=grp[keep_mask_col].values,
-            sums=sums,
-            reset=grp[reset_col].values,
-        )
-
-        for i, col in enumerate(sum_cols):
-            new_name = f"{col}_{keep_mask_col}"
-            grp.loc[:, new_name] = arr[:, i]
-        grp.loc[:, f"{reset_col}_{keep_mask_col}"] = arr[:, -1].astype(bool)
-        return grp
+        Note: Boolean values seem to not convert as bytes, so I will use a small unsigned
+        integer instead
+        """
+        col_dtypes = {}
+        for col, dtype in zip(df.columns, df.dtypes):
+            if dtype.name == np.bool.__name__:
+                col_dtypes.update({col: self._replace_dtypes[dtype.name]})
+        return col_dtypes
 
     @staticmethod
     @njit
     def _accum_masked_grp_core(
-        keep: np.ndarray,
-        sums: np.ndarray,
-        reset: np.ndarray,
-    ) -> pd.DataFrame:
-        nsteps = keep.shape[0]
-        if not nsteps == reset.shape[0] == sums.shape[0]:
+        logics: np.recarray,
+        vals: np.recarray,
+        nvals: int,
+        outs: np.recarray,
+    ) -> np.recarray:
+        nsteps = logics.shape[0]
+        if not nsteps == vals.shape[0] == outs.shape[0]:
             raise RuntimeError("The three arrays must have the same length.")
-        arr = np.hstack((sums, np.expand_dims(reset, axis=1)))
 
-        cum_sums = np.zeros(sums.shape[1], dtype=sums.dtype)
-        cum_res = False
+        cum_sums = np.zeros(shape=(1,), dtype=vals.dtype)
         for i in range(nsteps):
-            if keep[i]:
+            if logics["keep"][i]:
                 # If we do reset, then the operation is just a copy of the original
-                if not reset[i]:  # With no reset, we apply accumulation
-                    arr[i, :-1] = sums[i, :] + cum_sums
-                    arr[i, -1] = cum_res
-                cum_sums[:] = 0
-                cum_res = False
-            elif reset[i]:  # Implicitly, this is reset and not keep
-                cum_sums = sums[i, :]
-                cum_res = True
+                if not logics["reset"][i]:  # With no reset, we apply accumulation
+                    for j in range(nvals):  # get_num_fields(vals):
+                        cur_val = vals[i][j]
+                        cur_sum = cum_sums[i][j]
+                        outs[i][j] = cur_val + cur_sum
+                    # outs["reset"][i] = cum_res # Assuming that this will happen automatically with sum
+                for j in range(nvals):  # get_num_fields(vals):
+                    cum_sums[0][j] = 0
+            elif logics["reset"][i]:  # Implicitly, this is reset and not keep
+                cum_sums[0] = vals[i]
             else:
-                cum_sums = sums[i, :] + cum_sums
+                for j in range(nvals):  # get_num_fields(vals):
+                    cum_sums[i][j] = vals[i][j] + cum_sums[0][j]
                 # cum_res will just reassign to itself, since the current reset is False
-        arr[~keep, :] = np.nan
-        return arr
+        return outs
 
     def drop_masked(
         self, keep_mask_col: str, inplace: bool = False, drop_mask_col: bool = True
@@ -694,3 +683,14 @@ def load_dwell_set(dwells: pd.DataFrame, params: dict) -> DwellSet:
 
 def save_dwell_set(dw: DwellSet) -> pd.DataFrame:
     return dw.data
+
+
+def get_num_fields(recarr):
+    pass
+
+
+@overload(get_num_fields)
+def ol_get_num_fields(recarr):
+    nfields = len(recarr.dtype.fields)
+    print(f"Type inference time, has {nfields} fields")
+    return lambda recarr: nfields
