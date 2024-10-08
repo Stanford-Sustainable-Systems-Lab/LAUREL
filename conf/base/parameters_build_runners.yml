@@ -7,8 +7,7 @@
 slurm_command: local # Valid values are "sbatch" and "salloc"
 
 slurm_reporting:
-  output: slurm_logs/%x.%j.out # Note use of * wildcard to be replaced with job-name, which comes in from 
-  error: slurm_logs/%x.%j.err
+  output: slurm_logs/%x_%A_%a.log
   mail-user: passow@stanford.edu
   mail-type: ALL
 
