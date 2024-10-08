@@ -102,7 +102,7 @@ def mark_critical_days(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellS
     refr_col = params["refresh_col"]
     refr_locs = set(params["refresh_locations"])
     dw.data[refr_col] = dw.data[params["loc_col"]].isin(refr_locs)
-    dw.accum_masked(refr_col, inplace=True)
+    dw.accum_masked(refr_col, accum_cols=dw.trip_dist, inplace=True)
 
     # Apply vehicle-specific estimated range
     vehs["range_estim"] = vehs[params["batt_cap_col"]] / vehs[params["consump_col"]]
@@ -133,7 +133,8 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     dw.data["keep_dwells"] = dw.data[flt_cols["substantial_soc"]] & (
         dw.data[flt_cols["refresh"]] | dw.data[flt_cols["crit"]]
     )
-    dw.accum_masked("keep_dwells", inplace=True)
+    accum_cols = [dw.trip_dist, dw.trip_dur, dw.reset]
+    dw.accum_masked("keep_dwells", accum_cols=accum_cols, inplace=True)
 
     dw.data["keep_dwells"] = dw.data["keep_dwells"].astype("boolean")
     dw.data["keep_dwells"] = dw.data["keep_dwells"].replace(False, pd.NA)
@@ -162,7 +163,7 @@ def simulate_charging_choice(
     dw: DwellSet, vehs: pd.DataFrame, params: dict
 ) -> DwellSet:
     """Simulate the charging choices of each vehicle."""
-    # TODO: It may be important to check for groupby monotonic increasing.
+    dw.sort_by_veh_time()
     strat = SoCThreshChargingChoiceStrategy(**params["input_cols"])
     dw.data = strat.run(dwells=dw, vehs=vehs)
     return dw
