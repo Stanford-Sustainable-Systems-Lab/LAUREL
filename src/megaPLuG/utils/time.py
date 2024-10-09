@@ -2,7 +2,9 @@ import logging
 
 import h3.api.basic_str as h3_str
 import h3.api.numpy_int as h3
+import numpy as np
 import pandas as pd
+from numba import jit
 from timezonefinder import TimezoneFinder
 from tqdm import tqdm
 
@@ -129,3 +131,34 @@ def get_local_time_attr_col_name(time_col: str, attr_name: str) -> str:
 def total_hours(s: pd.Series) -> pd.Series:
     """Get the total number of hours from a series of timedeltas."""
     return s.dt.total_seconds() / SECS_PER_HOUR
+
+
+@jit
+def calc_avg_time_of_day(t: np.ndarray, full_day: float) -> float:
+    """Calculate the average time of day, dealing with midnight.
+
+    Note: When two times are diametrically opposed to each other, the default average
+    is the greater of the two possible averages.
+
+    Args:
+        t: the array of times-of-day
+        full_day: the maximum value that t takes before resetting to zero (e.g. 24 for
+            24 hours in a day)
+
+    Returns: float of average hour-of-day in t
+    """
+    ratio = 2 * np.pi / full_day
+    rads = ratio * t
+    xs, ys = np.cos(rads), np.sin(rads)
+    xavg, yavg = np.mean(xs), np.mean(ys)
+    ravg = np.arctan2(yavg, xavg)
+    tavg = ravg / ratio
+    if tavg < 0:
+        tavg += full_day
+
+    devs = np.mod(rads - ravg, 2 * np.pi)
+    devs = np.where(devs > np.pi, devs - 2 * np.pi, devs)
+    devs = np.where(devs < -np.pi, devs + 2 * np.pi, devs)
+    rstd = np.std(devs)
+    tstd = rstd / ratio
+    return tavg, tstd
