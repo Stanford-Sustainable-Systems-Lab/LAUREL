@@ -17,6 +17,12 @@ state_boundaries:
   load_args:
     layer: cb_2023_us_state_20m
 
+substations:
+  type: megaPLuG.datasets.geodatabase.GeoDataBaseDataset
+  filepath: data/01_raw/ICA_Maps/PGE/ICADisplay.gdb
+  load_args:
+    layer: Substations
+
 # Preprocessed datasets
 dwells:
   type: pandas.FeatherDataset
@@ -45,6 +51,10 @@ vehicle_location_pairs_clustered:
 vehicle_location_pairs_labelled:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vehicle_location_pairs_labelled.feather
+
+substation_location_corresp:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/substation_location_corresp.feather
 
 vius_home_base_state:
   type: pandas.FeatherDataset
