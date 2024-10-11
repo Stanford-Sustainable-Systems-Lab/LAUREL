@@ -687,7 +687,7 @@ class DwellSet:
             raise RuntimeError("The column does not include the desired sequence name.")
         return matches[0]
 
-    def to_geodataframe(self, geom_type: str = "point") -> Self:
+    def to_geodataframe(self, geom_type: str = "point") -> None:
         """Convert the underlying dataset into a GeoDataFrame."""
         self.data = add_geometries(self.data, hex_col=self.hex, geom_type=geom_type)
 
