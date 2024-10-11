@@ -113,7 +113,7 @@ contourpy==1.2.1
     # via matplotlib
 cookiecutter==2.6.0
     # via kedro
-cvxpy==1.5.1
+cvxpy==1.5.3
     # via megaplug
 cycler==0.12.1
     # via matplotlib
@@ -145,8 +145,9 @@ docutils==0.21.2
     # via sphinx
 dynaconf==3.2.5
     # via kedro
-ecos==2.0.13
+ecos==2.0.14
     # via cvxpy
+    # via megaplug
 entrypoints==0.4
     # via jupyter-client
 esbonio==0.16.4
@@ -438,8 +439,9 @@ opt-einsum==3.3.0
     # via jax
 orjson==3.10.0
     # via kedro-viz
-osqp==0.6.4
+osqp==0.6.7.post1
     # via cvxpy
+    # via megaplug
 overrides==7.7.0
     # via jupyter-server
 packaging==23.2
@@ -632,8 +634,9 @@ scipy==1.13.0
     # via scikit-learn
     # via scs
     # via xarray-einstats
-scs==3.2.4.post1
+scs==3.2.7
     # via cvxpy
+    # via megaplug
 seaborn==0.13.2
     # via megaplug
 secure==0.3.0
