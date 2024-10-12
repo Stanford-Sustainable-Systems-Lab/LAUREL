@@ -14,7 +14,7 @@ from megaPLuG.scenarios.io import (
 from .nodes import (
     assign_regions,
     get_load_profiles,
-    report_by_hex,
+    report_by_region,
     summarize_vehicles,
 )
 
@@ -65,10 +65,10 @@ def create_pipeline(**kwargs) -> Pipeline:
                 tags="frame-charging_management",
             ),
             node(
-                func=report_by_hex,
-                inputs=["profiles", "hex_region_corresp", "params:report_by_hex"],
-                outputs="report_by_hex",
-                name="report_by_hex",
+                func=report_by_region,
+                inputs=["profiles", "hex_region_corresp", "params:report_by_region"],
+                outputs="report_by_region",
+                name="report_by_region",
                 tags="frame-charging_management",
             ),
             # From here down is saving out results
@@ -80,8 +80,8 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             node(
                 func=write_scenario_partition,
-                inputs=["report_by_hex", "params:results_partition"],
-                outputs="report_by_hex_partition",
+                inputs=["report_by_region", "params:results_partition"],
+                outputs="report_by_region_partition",
                 name="write_scenario_partition_hexes",
             ),
         ],

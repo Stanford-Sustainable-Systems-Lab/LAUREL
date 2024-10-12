@@ -86,16 +86,16 @@ vehicles_evaluated_partition:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
-report_by_hex_partition:
+report_by_region_partition:
   type: partitions.PartitionedDataset
-  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_hex"
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region"
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
-report_by_hex_with_geoms:
+report_by_region_with_geoms:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
-  filepath: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_hex.gpkg"
+  filepath: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region.gpkg"
   save_args:
     layer: peak_kw
 

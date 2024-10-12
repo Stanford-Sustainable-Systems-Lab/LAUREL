@@ -17,7 +17,7 @@ profiles_from_dwells:
   profile_col: power_kw
   duration_col: duration
 
-report_by_hex:
+report_by_region:
   id_cols:
     location: substation_id
     time: time

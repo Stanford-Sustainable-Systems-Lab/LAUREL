@@ -57,7 +57,7 @@ def get_load_profiles(dw: DwellSet, params: dict) -> pd.DataFrame:
     return profs
 
 
-def report_by_hex(
+def report_by_region(
     profs: pd.DataFrame, hex_regions: pd.DataFrame, params: dict
 ) -> pd.DataFrame:
     """Report results by hex."""
