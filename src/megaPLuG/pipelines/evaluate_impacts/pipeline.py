@@ -12,6 +12,7 @@ from megaPLuG.scenarios.io import (
 )
 
 from .nodes import (
+    assign_regions,
     get_load_profiles,
     report_by_hex,
     summarize_vehicles,
@@ -50,15 +51,22 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="summarize_vehicles",
             ),
             node(
+                func=assign_regions,
+                inputs=["dwell_obj_eval", "hex_region_corresp"],
+                outputs="dwell_obj_w_regions",
+                name="assign_regions",
+                tags="frame-charging_management",
+            ),
+            node(
                 func=get_load_profiles,
-                inputs=["dwell_obj_eval", "params:profiles_from_dwells"],
+                inputs=["dwell_obj_w_regions", "params:profiles_from_dwells"],
                 outputs="profiles",
                 name="get_load_profiles",
                 tags="frame-charging_management",
             ),
             node(
                 func=report_by_hex,
-                inputs=["profiles", "params:report_by_hex"],
+                inputs=["profiles", "hex_region_corresp", "params:report_by_hex"],
                 outputs="report_by_hex",
                 name="report_by_hex",
                 tags="frame-charging_management",
