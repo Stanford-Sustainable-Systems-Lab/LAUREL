@@ -71,3 +71,9 @@ def _cells_to_geom_wrapper(
     geoms = f(hexes)
     gdf = gdf.set_geometry(geoms)
     return gdf
+
+
+def to_geospatial(df: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
+    """Augment a pandas DataFrame with an H3 id column with the H3 geometries."""
+    hexes = add_geometries(df, **params)
+    return hexes

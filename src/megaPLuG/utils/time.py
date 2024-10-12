@@ -53,6 +53,12 @@ def get_timezone_from_hex(hex: int | str, tf: TimezoneFinder = None) -> str:
     return tz_str
 
 
+def get_timezones(hexes: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Get the timezones based on the hexagons."""
+    hexes = calc_time_zones_from_hexes(df=hexes, hex_col=params["hex_col"])
+    return hexes
+
+
 def calc_local_time_attrs(
     df: pd.DataFrame,
     time_cols: str | list[str],
