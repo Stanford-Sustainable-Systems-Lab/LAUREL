@@ -52,9 +52,9 @@ vehicle_location_pairs_labelled:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vehicle_location_pairs_labelled.feather
 
-substation_location_corresp:
+hex_region_corresp:
   type: pandas.FeatherDataset
-  filepath: data/02_intermediate/substation_location_corresp.feather
+  filepath: data/02_intermediate/hex_region_corresp.feather
 
 vius_home_base_state:
   type: pandas.FeatherDataset

@@ -10,16 +10,19 @@ from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.utils.h3 import add_geometries
 
 
+def get_hex_geoms(dw: DwellSet, params: dict) -> gpd.GeoDataFrame:
+    """Get hexagon geometries for each unique hexagon."""
+    hexes = pd.DataFrame(dw.data[dw.hex].unique(), columns=[dw.hex])
+    hexes = add_geometries(hexes, hex_col=dw.hex, geom_type=params["geom_type"])
+    return hexes
+
+
 def build_substation_location_corresp(
-    dw: DwellSet,
+    hexes: gpd.GeoDataFrame,
     substs: gpd.GeoDataFrame,
     params: dict,
 ) -> pd.DataFrame:
     """Build a correspondence table between substations and charging locations."""
-
-    hexes = pd.DataFrame(dw.data[dw.hex].unique(), columns=[dw.hex])
-    hexes = add_geometries(hexes, hex_col=dw.hex)
-
     territory = substs.geometry.unary_union.convex_hull.buffer(
         params["territory_buffer_meters"]
     )
