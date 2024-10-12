@@ -35,4 +35,5 @@ def build_substation_location_corresp(
     corresp = corresp.drop(columns=["index_right", "geometry"])
     corresp = corresp.rename(columns={v: k for k, v in renamer.items()})
     corresp = corresp.reset_index(drop=True)
+    corresp = corresp.convert_dtypes()
     return corresp
