@@ -26,7 +26,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "substations",
                     "params:substation_location_corresp",
                 ],
-                outputs="substation_location_corresp",
+                outputs="hex_region_corresp",
                 name="build_substation_location_corresp",
             ),
         ]
