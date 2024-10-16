@@ -5,8 +5,8 @@ import h3.api.numpy_int as h3
 import numpy as np
 import pandas as pd
 from numba import jit
-from timezonefinder import TimezoneFinder
 from tqdm import tqdm
+from tzfpy import get_tz
 
 logger = logging.getLogger(__name__)
 
@@ -19,37 +19,34 @@ def calc_time_zones_from_hexes(
     tz_col: str = "tz",
 ) -> pd.DataFrame:
     """Find the time zone for each row of a dataframe based on an H3 hexagon column."""
-    tf = TimezoneFinder(in_memory=True)
-    str_col = f"{hex_col}_str"
+    orig_idx = df.index.names
+    if orig_idx != [None]:
+        df = df.reset_index()
     logger.info("Getting unique hexes")
+    str_col = f"{hex_col}_str"
     df[str_col] = df[hex_col].transform(h3.h3_to_string)
     hex_arr = df[str_col].unique()
     logger.info("Identifying time zones for unique hexes")
     hexes = pd.DataFrame(data=hex_arr, columns=[str_col])
-    hexes[tz_col] = hexes[str_col].transform(get_timezone_from_hex, tf=tf)
+    hexes[tz_col] = hexes[str_col].transform(get_timezone_from_hex)
     logger.info("Merging time zones back onto original dataframe")
     hexes = hexes.set_index(str_col)
     df = df.merge(hexes, how="left", left_on=str_col, right_index=True)
     df = df.drop(columns=[str_col])
+    if orig_idx != [None]:
+        df = df.set_index(orig_idx)
     return df
 
 
-def get_timezone_from_hex(hex: int | str, tf: TimezoneFinder = None) -> str:
+def get_timezone_from_hex(hex: int | str) -> str:
     """Get the timezone string fror the h3 hexagon."""
-    if tf is None:
-        tf = TimezoneFinder(in_memory=True)
-
-    # # Consider shortcutting to cut runtime by about 40%, but this is approximate.
-    # par_hex = h3.h3_to_parent(hex, res=3)
-    # poly_id = tf.shortcut_mapping[par_hex][0]
-    # tz_str = tf.zone_name_from_poly_id(poly_id=poly_id)
     if isinstance(hex, int):
-        lat, lng = h3.h3_to_geo(hex)
+        lat, lng = h3.cell_to_latlng(hex)
     elif isinstance(hex, str):
-        lat, lng = h3_str.h3_to_geo(hex)
+        lat, lng = h3_str.cell_to_latlng(hex)
     else:
         raise RuntimeError("Hex argument came in as neither a string nor an integer.")
-    tz_str = tf.timezone_at(lng=lng, lat=lat)
+    tz_str = get_tz(lng=lng, lat=lat)
     return tz_str
 
 
