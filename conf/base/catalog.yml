@@ -13,9 +13,9 @@ vius_weight_class_raw:
 
 state_boundaries:
   type: megaPLuG.datasets.geodatabase.GeoDataBaseDataset
-  filepath: data/01_raw/Census_Geographies/cb_2023_us_all_20m.gdb
+  filepath: data/01_raw/Census_Geographies/cb_2023_us_all_500k.gdb
   load_args:
-    layer: cb_2023_us_state_20m
+    layer: cb_2023_us_state_500k
 
 substations:
   type: megaPLuG.datasets.geodatabase.GeoDataBaseDataset
