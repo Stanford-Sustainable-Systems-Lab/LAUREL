@@ -4,11 +4,23 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.3/configuration/parameters.html
 
-get_hex_geoms:
-  geom_type: polygon
+govt_areas:
+  filters:
+    STUSPS:
+      value_isin:
+        - CA
 
-substation_location_corresp:
-  territory_buffer_meters: 15000
+utility_territories:
+  buffer_dist_meters: 15000
+
+get_hexes_by_area:
+  group_cols:
+    - STUSPS
+    - utility
+  hex_col: hex_id
+
+nearest_infra_corresp:
+  hex_col: hex_id
   substation_col_renamer:
     substation_name: SUBNAME
     substation_id: SUBSTATIONID
