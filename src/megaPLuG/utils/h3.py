@@ -8,6 +8,7 @@ import pandas as pd
 from shapely import Polygon
 
 H3_CRS = "EPSG:4326"
+H3_DEFAULT_RESOLUTION = 8
 
 
 def str_to_h3(s: pd.Series) -> pd.Series:
@@ -76,4 +77,46 @@ def _cells_to_geom_wrapper(
 def to_geospatial(df: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
     """Augment a pandas DataFrame with an H3 id column with the H3 geometries."""
     hexes = add_geometries(df, **params)
+    return hexes
+
+
+def cells_to_poly(hser: pd.Series) -> h3.H3Shape:
+    """Generate a region (multi-)polygon from a series of hexagon ids.
+
+    This will often be useful in a groupby setting. For example:
+        df.groupby("region_id")["hex_id"].agg(cells_to_poly)
+    """
+    geo = h3.cells_to_h3shape(hser.unique())
+    return geo
+
+
+def cells_to_region_polygons(
+    corresp: pd.DataFrame, hex_col: str, region_col: str
+) -> gpd.GeoDataFrame:
+    """Build a set of geometries from a hex-region correspondence."""
+    regions = corresp.groupby(region_col)[hex_col].agg(cells_to_poly)
+    regions = gpd.GeoSeries(regions, name="geometry", crs=H3_CRS)
+    regions = regions.reset_index()
+    return regions
+
+
+def region_polygons_to_cells(
+    geos: gpd.GeoDataFrame, grp_cols: str | list[str], hex_col: str
+) -> pd.DataFrame:
+    """Convert a GeoDataFrame of (multi-)polygons to a longer dataframe of H3 cells."""
+    if isinstance(grp_cols, str):
+        grp_cols = [grp_cols]
+
+    geos = geos.to_crs(H3_CRS)
+
+    def _geo_to_cell_ser(gser: gpd.GeoSeries) -> pd.Series:
+        unified = gser.union_all()
+        hexes = h3.geo_to_cells(unified, res=H3_DEFAULT_RESOLUTION)
+        hexes = pd.Series(hexes)
+        return hexes
+
+    hexes = geos.groupby(grp_cols).geometry.apply(_geo_to_cell_ser)
+    hexes = hexes.droplevel(-1, axis="index")
+    hexes.name = hex_col
+    hexes = hexes.to_frame()
     return hexes
