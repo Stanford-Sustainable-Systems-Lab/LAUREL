@@ -83,6 +83,7 @@ def describe_veh_loc_pairs(dw: DwellSet) -> pd.DataFrame:
 def cluster_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Cluster vehicle-location pairs to uncover latent groups."""
     # Prepare for clustering by standardizing variables
+    logger.info("Select feature variables")
     clusterable = deepcopy(veh_locs.dropna(axis=0))
     drop_cols = np.setdiff1d(clusterable.columns, params["feature_cols"])
     clusterable = clusterable.drop(columns=drop_cols)
