@@ -26,3 +26,7 @@ report_by_region:
   local_time_attrs:
     - day_of_week
     - hour
+
+add_region_geoms:
+  hex_col: hex_id
+  region_col: substation_id
