@@ -12,6 +12,7 @@ from megaPLuG.scenarios.io import (
 )
 
 from .nodes import (
+    add_region_geoms,
     assign_regions,
     get_load_profiles,
     report_by_region,
@@ -87,4 +88,20 @@ def create_pipeline(**kwargs) -> Pipeline:
         ],
         tags="scenario_run",
     )
-    return pipe
+
+    geo_pipe = pipeline(
+        [
+            node(
+                func=add_region_geoms,
+                inputs=[
+                    "report_by_region",
+                    "hex_region_corresp",
+                    "params:add_region_geoms",
+                ],
+                outputs="report_by_region_with_geoms",
+                name="add_region_geoms",
+            )
+        ],
+    )
+
+    return pipe + geo_pipe

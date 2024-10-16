@@ -5,11 +5,13 @@ generated using Kedro 0.19.1
 
 import logging
 
+import geopandas as gpd
 import pandas as pd
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.manage_charging import _MANAGER_MAP
-from megaPLuG.utils.time import calc_local_time_attrs
+from megaPLuG.utils.h3 import cells_to_region_polygons
+from megaPLuG.utils.time import calc_local_time_attrs, total_hours
 
 logger = logging.getLogger(__name__)
 
@@ -84,3 +86,28 @@ def report_by_region(
 
     peaks = peaks.set_index(orig_idx)
     return peaks
+
+
+def add_region_geoms(
+    results: pd.DataFrame,
+    hex_regions: pd.DataFrame,
+    params: dict,
+) -> gpd.GeoDataFrame:
+    """Add region geometries to the reporting by region."""
+    reg_polys = cells_to_region_polygons(
+        corresp=hex_regions.reset_index(),
+        hex_col=params["hex_col"],
+        region_col=params["region_col"],
+    )
+    results = results.merge(reg_polys, on=params["region_col"])
+    res_geos = gpd.GeoDataFrame(results, geometry="geometry")
+
+    changed_cols = []
+    for col in res_geos.columns:
+        if pd.api.types.is_timedelta64_dtype(res_geos[col]):
+            res_geos[f"{col}_hrs"] = total_hours(res_geos[col])
+            changed_cols.append(col)
+
+    res_geos = res_geos.drop(columns=changed_cols)
+
+    return res_geos
