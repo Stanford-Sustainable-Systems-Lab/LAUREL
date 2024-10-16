@@ -24,7 +24,7 @@ def calc_time_zones_from_hexes(
         df = df.reset_index()
     logger.info("Getting unique hexes")
     str_col = f"{hex_col}_str"
-    df[str_col] = df[hex_col].transform(h3.h3_to_string)
+    df[str_col] = df[hex_col].transform(h3.int_to_str)
     hex_arr = df[str_col].unique()
     logger.info("Identifying time zones for unique hexes")
     hexes = pd.DataFrame(data=hex_arr, columns=[str_col])
