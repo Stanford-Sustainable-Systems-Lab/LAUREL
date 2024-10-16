@@ -95,7 +95,7 @@ report_by_region_partition:
 
 report_by_region_with_geoms:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
-  filepath: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region.gpkg"
+  filepath: data/07_model_output/report_by_region_single_run.gpkg
   save_args:
     layer: peak_kw
 
