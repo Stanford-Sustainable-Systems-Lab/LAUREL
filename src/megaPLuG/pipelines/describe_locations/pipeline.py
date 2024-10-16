@@ -5,40 +5,57 @@ generated using Kedro 0.19.3
 
 from kedro.pipeline import Pipeline, node, pipeline
 
-from megaPLuG.models.dwell_sets import load_dwell_set
+from megaPLuG.utils.data import filter_by_vals_in_cols
 from megaPLuG.utils.time import get_timezones
 
-from .nodes import build_substation_location_corresp, get_hex_geoms
+from .nodes import (
+    build_analysis_areas,
+    build_nearest_infra_corresp,
+    build_utility_territory,
+    get_hexes_by_area,
+)
 
 
 def create_pipeline(**kwargs) -> Pipeline:
     pipe = pipeline(
         [
             node(
-                func=load_dwell_set,
-                inputs=["dwells", "params:load_dwell_set"],
-                outputs="dwell_obj_desc_locs",
-                name="load_dwell_set_desc_locs",
+                func=build_utility_territory,
+                inputs=["substations", "params:utility_territories"],
+                outputs="territories",
+                name="build_utility_territory",
             ),
             node(
-                func=get_hex_geoms,
-                inputs=["dwell_obj_desc_locs", "params:get_hex_geoms"],
-                outputs="hex_geoms",
-                name="get_hex_geoms",
+                func=filter_by_vals_in_cols,
+                inputs=["state_boundaries", "params:govt_areas"],
+                outputs="govt_areas",
+                name="filter_by_vals_in_cols",
             ),
             node(
-                func=build_substation_location_corresp,
+                func=build_analysis_areas,
+                inputs=["govt_areas", "territories"],
+                outputs="analysis_areas",
+                name="build_analysis_areas",
+            ),
+            node(
+                func=get_hexes_by_area,
+                inputs=["analysis_areas", "params:get_hexes_by_area"],
+                outputs="hex_area_corresp",
+                name="get_hexes_by_area",
+            ),
+            node(
+                func=build_nearest_infra_corresp,
                 inputs=[
-                    "hex_geoms",
+                    "hex_area_corresp",
                     "substations",
-                    "params:substation_location_corresp",
+                    "params:nearest_infra_corresp",
                 ],
-                outputs="hex_region_corresp_raw",
-                name="build_substation_location_corresp",
+                outputs="hex_infra_corresp",
+                name="build_nearest_infra_corresp",
             ),
             node(
                 func=get_timezones,
-                inputs=["hex_region_corresp_raw", "params:get_timezones"],
+                inputs=["hex_infra_corresp", "params:get_timezones"],
                 outputs="hex_region_corresp",
                 name="get_timezones",
             ),

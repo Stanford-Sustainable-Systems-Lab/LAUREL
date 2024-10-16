@@ -6,37 +6,64 @@ generated using Kedro 0.19.3
 import geopandas as gpd
 import pandas as pd
 
-from megaPLuG.models.dwell_sets import DwellSet
-from megaPLuG.utils.h3 import add_geometries
+from megaPLuG.utils.h3 import cells_to_points, region_polygons_to_cells
 
 
-def get_hex_geoms(dw: DwellSet, params: dict) -> gpd.GeoDataFrame:
-    """Get hexagon geometries for each unique hexagon."""
-    hexes = pd.DataFrame(dw.data[dw.hex].unique(), columns=[dw.hex])
-    hexes = add_geometries(hexes, hex_col=dw.hex, geom_type=params["geom_type"])
+def build_utility_territory(infra: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
+    """Build a utility territory from a set of substation coordinates."""
+    geo = infra.geometry.union_all().convex_hull.buffer(params["buffer_dist_meters"])
+    utilities = pd.DataFrame.from_dict(
+        {
+            "utility": ["PG_and_E"],
+            "territory": geo,
+        }
+    )
+    utilities = gpd.GeoDataFrame(data=utilities, geometry="territory", crs=infra.crs)
+    return utilities
+
+
+def build_analysis_areas(
+    govt: gpd.GeoDataFrame,
+    infra: gpd.GeoDataFrame,
+) -> gpd.GeoDataFrame:
+    """Build the set of mutually-exclusive, collectively-exhaustive polygons which
+    cover the study area (e.g. state boundaries, utility territories).
+    """
+    govt = govt.to_crs(infra.crs)
+    areas = govt.overlay(infra, how="intersection")
+    return areas
+
+
+def get_hexes_by_area(areas: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
+    """Get hexagon geometries for each study area."""
+    hexes = region_polygons_to_cells(
+        geos=areas,
+        grp_cols=params["group_cols"],
+        hex_col=params["hex_col"],
+    )
+    hexes = hexes.reset_index()
+    hexes = hexes.set_index(params["hex_col"])
     return hexes
 
 
-def build_substation_location_corresp(
-    hexes: gpd.GeoDataFrame,
-    substs: gpd.GeoDataFrame,
+def build_nearest_infra_corresp(
+    hexes: pd.DataFrame,
+    infra: gpd.GeoDataFrame,
     params: dict,
 ) -> pd.DataFrame:
     """Build a correspondence table between substations and charging locations."""
-    territory = substs.geometry.unary_union.convex_hull.buffer(
-        params["territory_buffer_meters"]
-    )
-    territory = gpd.GeoSeries(territory, crs=substs.crs)
-    territory = territory.to_crs(hexes.crs)
-    territory = territory.geometry[0]
-
-    hexes_in = hexes.loc[hexes.geometry.within(territory)]
-    hexes_in = hexes_in.to_crs(substs.crs)
+    orig_idx = hexes.index.names
+    if orig_idx != [None]:
+        hexes = hexes.reset_index()
+    hexes = gpd.GeoDataFrame(hexes, geometry=cells_to_points(hexes[params["hex_col"]]))
+    hexes = hexes.to_crs(infra.crs)
     renamer = params["substation_col_renamer"]
-    substs_merge = substs.loc[:, list(renamer.values()) + ["geometry"]]
-    corresp = hexes_in.sjoin_nearest(substs_merge, how="left")
-    corresp = corresp.drop(columns=["index_right", "geometry"])
+    infra_merge = infra.loc[:, list(renamer.values()) + [infra.geometry.name]]
+    corresp = hexes.sjoin_nearest(infra_merge, how="left")
+    corresp = corresp.drop(columns=["index_right", infra.geometry.name])
     corresp = corresp.rename(columns={v: k for k, v in renamer.items()})
     corresp = corresp.reset_index(drop=True)
     corresp = corresp.convert_dtypes()
+    if orig_idx != [None]:
+        corresp = corresp.set_index(orig_idx)
     return corresp
