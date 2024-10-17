@@ -3,10 +3,14 @@ This is a boilerplate pipeline 'describe_locations'
 generated using Kedro 0.19.3
 """
 
+import logging
+
 import geopandas as gpd
 import pandas as pd
 
 from megaPLuG.utils.h3 import cells_to_points, region_polygons_to_cells
+
+logger = logging.getLogger(__name__)
 
 
 def build_utility_territory(infra: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
@@ -64,6 +68,13 @@ def build_nearest_infra_corresp(
     corresp = corresp.rename(columns={v: k for k, v in renamer.items()})
     corresp = corresp.reset_index(drop=True)
     corresp = corresp.convert_dtypes()
+    n_orig = len(corresp)
+    corresp = corresp.drop_duplicates(subset=params["hex_col"])
+    n_fin = len(corresp)
+    if n_fin < n_orig:
+        logger.warning(
+            f"Dropped {n_orig - n_fin} duplicated values from the nearest infrastructure correspondence."
+        )
     if orig_idx != [None]:
         corresp = corresp.set_index(orig_idx)
     return corresp
