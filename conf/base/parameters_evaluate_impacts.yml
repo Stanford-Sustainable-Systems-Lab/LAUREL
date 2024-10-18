@@ -17,7 +17,7 @@ profiles_from_dwells:
   profile_col: power_kw
   duration_col: duration
 
-report_by_region:
+report_by_region_peaks:
   id_cols:
     location: substation_id
     time: time
@@ -26,6 +26,23 @@ report_by_region:
   local_time_attrs:
     - day_of_week
     - hour
+
+report_by_region_quantiles:
+  columns:
+    time: time
+    duration: duration
+    power: power_kw
+    region: substation_id
+    tz: tz
+  freq: 1h
+  quantiles:
+    - 0.00
+    - 0.05
+    - 0.40
+    - 0.50
+    - 0.60
+    - 0.95
+    - 1.00
 
 add_region_geoms:
   hex_col: hex_id

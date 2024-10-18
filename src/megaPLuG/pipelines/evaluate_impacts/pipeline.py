@@ -15,7 +15,8 @@ from .nodes import (
     add_region_geoms,
     assign_regions,
     get_load_profiles,
-    report_by_region,
+    report_by_region_peaks,
+    report_by_region_quantiles,
     summarize_vehicles,
 )
 
@@ -66,10 +67,25 @@ def create_pipeline(**kwargs) -> Pipeline:
                 tags="frame-charging_management",
             ),
             node(
-                func=report_by_region,
-                inputs=["profiles", "hex_region_corresp", "params:report_by_region"],
-                outputs="report_by_region",
-                name="report_by_region",
+                func=report_by_region_peaks,
+                inputs=[
+                    "profiles",
+                    "hex_region_corresp",
+                    "params:report_by_region_peaks",
+                ],
+                outputs="report_by_region_peaks",
+                name="report_by_region_peaks",
+                tags="frame-charging_management",
+            ),
+            node(
+                func=report_by_region_quantiles,
+                inputs=[
+                    "profiles",
+                    "hex_region_corresp",
+                    "params:report_by_region_quantiles",
+                ],
+                outputs="report_by_region_quantiles",
+                name="report_by_region_quantiles",
                 tags="frame-charging_management",
             ),
             # From here down is saving out results
@@ -81,9 +97,15 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             node(
                 func=write_scenario_partition,
-                inputs=["report_by_region", "params:results_partition"],
-                outputs="report_by_region_partition",
-                name="write_scenario_partition_hexes",
+                inputs=["report_by_region_peaks", "params:results_partition"],
+                outputs="report_by_region_peaks_partition",
+                name="write_scenario_partition_hexes_peaks",
+            ),
+            node(
+                func=write_scenario_partition,
+                inputs=["report_by_region_quantiles", "params:results_partition"],
+                outputs="report_by_region_quantiles_partition",
+                name="write_scenario_partition_hexes_quants",
             ),
         ],
         tags="scenario_run",
@@ -94,11 +116,11 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=add_region_geoms,
                 inputs=[
-                    "report_by_region",
+                    "report_by_region_peaks",
                     "hex_region_corresp",
                     "params:add_region_geoms",
                 ],
-                outputs="report_by_region_with_geoms",
+                outputs="report_by_region_peaks_with_geoms",
                 name="add_region_geoms",
             )
         ],

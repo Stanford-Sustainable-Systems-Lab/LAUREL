@@ -86,14 +86,21 @@ vehicles_evaluated_partition:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
-report_by_region_partition:
+report_by_region_peaks_partition:
   type: partitions.PartitionedDataset
-  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region"
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_peaks"
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
-report_by_region_with_geoms:
+report_by_region_quantiles_partition:
+  type: partitions.PartitionedDataset
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_quantiles"
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
+
+report_by_region_peaks_with_geoms:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
   filepath: data/07_model_output/report_by_region_single_run.gpkg
   save_args:
@@ -126,6 +133,14 @@ vehicle_depots_geoms:
     layer: vehicle_depots
   load_args:
     layer: vehicle_depots
+
+clusterable_veh_locs:
+  type: pandas.FeatherDataset
+  filepath: data/04_feature/clusterable_veh_locs.feather
+
+profiles:
+  type: pandas.FeatherDataset
+  filepath: data/04_feature/profiles.feather
 
 # Reporting datasets
 vehicle_trajectory:
