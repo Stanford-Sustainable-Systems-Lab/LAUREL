@@ -43,7 +43,7 @@ class LoadProfileQuantileSummarizer:
         # First drop the observations with no duration or zero power
         nonzero = profiles.dropna(subset=[self.dur_col])
         nonzero = nonzero.reset_index()
-        drop_idx = nonzero.loc[nonzero["power_kw"] == 0].index
+        drop_idx = nonzero.loc[nonzero[self.power_col] == 0].index
         nonzero = nonzero.drop(index=drop_idx)
 
         # Then apply expansion
