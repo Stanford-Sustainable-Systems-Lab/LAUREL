@@ -93,3 +93,12 @@ def filter_by_vals_in_cols(
         keep_cols += [df.geometry.name]
     filtered = df.loc[filt_ser, keep_cols]
     return filtered
+
+
+def get_basic_dtype_ser(ser: pd.Series) -> pd.Series:
+    if pd.api.types.is_integer_dtype(ser):
+        return ser.astype(np.int64)  # or 'int64' if appropriate
+    elif pd.api.types.is_float_dtype(ser):
+        return ser.astype(np.float64)
+    else:
+        raise RuntimeError("No available non-nullable dtype!")
