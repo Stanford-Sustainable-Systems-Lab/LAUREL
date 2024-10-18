@@ -17,8 +17,7 @@ class LoadProfileQuantileSummarizer:
     dur_col: str
     power_col: str
     region_col: str
-    freq: str = "1h"
-    np_time_type: str = "datetime64[h]"
+    freq: str
     quantiles: np.ndarray
     # TODO: Separate this out into the subclass
     WEEKEND_FIRST_DAY = 5
@@ -29,12 +28,14 @@ class LoadProfileQuantileSummarizer:
         dur_col: str,
         power_col: str,
         region_col: str,
+        freq: str,
         quantiles: np.ndarray,
     ) -> None:
         self.time_col = time_col
         self.dur_col = dur_col
         self.power_col = power_col
         self.region_col = region_col
+        self.freq = freq
         self.quantiles = quantiles
 
     def summarize(self: Self, profiles: pd.DataFrame) -> pd.DataFrame:
@@ -98,17 +99,18 @@ class LoadProfileQuantileSummarizer:
     def _expand_events_wrapper(self: Self, df: pd.DataFrame) -> pd.DataFrame:
         """Convert pandas Series to numpy arrays and set dtypes for self._expand_events_core()."""
         orig_time_type = df[self.time_col].dtype
-        starts = df[self.time_col].values.astype(self.np_time_type)
-        ends = (df[self.time_col] + df[self.dur_col]).values.astype(self.np_time_type)
+        starts = df[self.time_col].dt.floor(self.freq)
+        ends = (df[self.time_col] + df[self.dur_col]).dt.floor(self.freq)
 
         out_ids, out_times, out_vals = self._expand_events_core(
-            starts=starts.astype(np.int64),
-            ends=ends.astype(np.int64),
+            starts=starts.values.astype(np.int64),
+            ends=ends.values.astype(np.int64),
             vals=df[self.power_col].values,
             ids=df[self.region_col].values,
+            tstep_ns=pd.Timedelta(self.freq).value,
         )
 
-        out_times = pd.to_datetime(out_times.astype(self.np_time_type), utc=True)
+        out_times = pd.to_datetime(out_times.astype("datetime64[ns]"), utc=True)
         out_times = out_times.astype(orig_time_type)
         out = pd.DataFrame(
             {
@@ -126,6 +128,7 @@ class LoadProfileQuantileSummarizer:
         ends: np.ndarray[np.int64],
         vals: np.ndarray,
         ids: np.ndarray,
+        tstep_ns: int,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Expand out events to cover all intermediate time units given their start and end
         timestamps.
@@ -134,8 +137,8 @@ class LoadProfileQuantileSummarizer:
         which have been cast to integer.
         """
         n_periods = starts.shape[0]
-        ends_plus = ends + 1
-        n_stamps = ends_plus - starts
+        ends_plus = ends + tstep_ns
+        n_stamps = np.floor_divide(ends_plus - starts, tstep_ns)
         tot_stamps = np.sum(n_stamps)
         times_exp = np.zeros(tot_stamps, dtype=starts.dtype)
         vals_exp = np.zeros(tot_stamps, dtype=vals.dtype)
@@ -145,8 +148,8 @@ class LoadProfileQuantileSummarizer:
             next_cursor = cursor + n_stamps[i]
             idxs = np.arange(cursor, next_cursor, dtype=np.int64)
             times_exp[idxs] = np.arange(
-                starts[i], ends_plus[i], dtype=times_exp.dtype
-            )  # This will work fine for hours, but not for other units
+                starts[i], ends_plus[i], tstep_ns, dtype=times_exp.dtype
+            )
             vals_exp[idxs] = vals[i]
             ids_exp[idxs] = ids[i]
             cursor = next_cursor
