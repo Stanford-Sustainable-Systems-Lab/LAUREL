@@ -13,6 +13,7 @@ class HourOfWeekdayGrouper:
     time_col: str
     tz_col: str
     count_col: str = "possible_count"
+    _time_group_cols: list[str] = ["is_weekend", "time_local_hour"]
 
     def __init__(
         self: Self,
@@ -24,7 +25,7 @@ class HourOfWeekdayGrouper:
 
     @property
     def time_group_cols(self: Self) -> list[str]:
-        return ["is_weekend", "time_local_hour"]
+        return self._time_group_cols
 
     def add_group_classes(self: Self, df: pd.DataFrame) -> pd.DataFrame:
         """Add the group classes columns to a dataframe."""
