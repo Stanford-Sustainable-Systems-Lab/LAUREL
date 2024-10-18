@@ -47,13 +47,13 @@ class LoadProfileQuantileSummarizer:
         nonzero = nonzero.drop(index=drop_idx)
 
         # Then apply expansion
-        nonzero_exp = self._expand_events(nonzero)
+        nonzero_exp = self.expand_events(nonzero)
 
         logger.info("Grouping events")
-        grped_nonzero = self._group_events(nonzero_exp)
+        grped_nonzero = self.group_events(nonzero_exp)
 
         logger.info("Calculating quantiles")
-        quantiles = self._calc_sparse_quantiles(grped_nonzero)
+        quantiles = self.calc_sparse_quantiles(grped_nonzero)
         return quantiles
 
     # TODO: Make this an abstract method as well
@@ -80,7 +80,7 @@ class LoadProfileQuantileSummarizer:
         grps = grps.loc[:, self.time_group_cols]
         return grps
 
-    def _expand_events(self: Self, events: pd.DataFrame) -> pd.DataFrame:
+    def expand_events(self: Self, events: pd.DataFrame) -> pd.DataFrame:
         """Expand out events to cover all intermediate time units given their start and
         end timestamps.
         """
@@ -155,7 +155,7 @@ class LoadProfileQuantileSummarizer:
             cursor = next_cursor
         return ids_exp, times_exp, vals_exp
 
-    def _group_events(self: Self, events: pd.DataFrame) -> pd.DataFrame:
+    def group_events(self: Self, events: pd.DataFrame) -> pd.DataFrame:
         """Group events by the groups defined in `build_grouper_cols`."""
         grouper = [self.region_col, pd.Grouper(key=self.time_col, freq=self.freq)]
         events = events.groupby(grouper)[self.power_col].max()
@@ -172,7 +172,7 @@ class LoadProfileQuantileSummarizer:
         events = pd.concat([events, grouper_cols], axis=1)
         return events
 
-    def _calc_sparse_quantiles(self: Self, events: pd.DataFrame) -> pd.DataFrame:
+    def calc_sparse_quantiles(self: Self, events: pd.DataFrame) -> pd.DataFrame:
         """Calculate quantiles using observations paired with the count of possible
         observations to represent zeros.
         """
