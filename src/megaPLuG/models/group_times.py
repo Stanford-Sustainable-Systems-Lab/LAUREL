@@ -9,7 +9,7 @@ WEEKEND_FIRST_DAY = 5
 class HourOfWeekdayGrouper:
     """Note: This class has only been tested with the frequency of '1h'."""
 
-    freq: str
+    freq: str = "1h"
     time_col: str
     tz_col: str
     count_col: str = "possible_count"
@@ -18,9 +18,7 @@ class HourOfWeekdayGrouper:
         self: Self,
         time_col: str,
         tz_col: str,
-        freq: str,
     ) -> None:
-        self.freq = freq
         self.time_col = time_col
         self.tz_col = tz_col
 
@@ -40,6 +38,22 @@ class HourOfWeekdayGrouper:
         df["is_weekend"] = df[dow_col] >= WEEKEND_FIRST_DAY
         df = df.drop(columns=[dow_col])
         return df
+
+    def get_all_classes(self: Self, tz: str = "America/Los_Angeles") -> pd.DataFrame:
+        """Get all the possible classes created by this grouper over the course of a year."""
+        frame_start = pd.Timestamp(0)
+        frame_end = frame_start + pd.DateOffset(years=1)
+        poss_times = pd.date_range(
+            start=frame_start, end=frame_end, freq=self.freq, tz="UTC"
+        )
+        poss_times = (
+            poss_times.to_series(name=self.time_col).reset_index(drop=True).to_frame()
+        )
+        poss_times[self.tz_col] = tz
+        poss_classes = self.add_group_classes(poss_times)
+        poss_classes = poss_classes[self.time_group_cols].drop_duplicates()
+        poss_classes = poss_classes.sort_values(self.time_group_cols)
+        return poss_classes
 
     def get_possible_obs_counts(self: Self, events: pd.DataFrame) -> pd.DataFrame:
         """Get the counts of possible observations by time group between the first and
