@@ -29,6 +29,7 @@ def calc_time_zones_from_hexes(
     logger.info("Identifying time zones for unique hexes")
     hexes = pd.DataFrame(data=hex_arr, columns=[str_col])
     hexes[tz_col] = hexes[str_col].transform(get_timezone_from_hex)
+    hexes[tz_col] = pd.Categorical(hexes[tz_col])
     logger.info("Merging time zones back onto original dataframe")
     hexes = hexes.set_index(str_col)
     df = df.merge(hexes, how="left", left_on=str_col, right_index=True)
@@ -85,7 +86,9 @@ def calc_local_time_attrs(
             df[new_name] = 0  # May need to be adjusted for different attribute dtypes
     logger.info("Building time attribute columns")
     tqdm.pandas()
-    df = df.groupby(grouper, group_keys=False, sort=False).progress_apply(
+    df = df.groupby(
+        grouper, group_keys=False, sort=False, observed=True
+    ).progress_apply(
         lambda g: _get_local_time_attr_by_tz(
             g,
             tz=g.name if isinstance(g.name, str) else g.name[-1],
@@ -96,9 +99,9 @@ def calc_local_time_attrs(
 
     if sort_col is not None:
         logger.info("Sorting within each group.")
-        df = df.groupby(grp_cols, group_keys=False, sort=False).progress_apply(
-            lambda grp: grp.sort_values(sort_col)
-        )
+        df = df.groupby(
+            grp_cols, group_keys=False, sort=False, observed=True
+        ).progress_apply(lambda grp: grp.sort_values(sort_col))
     return df
 
 
