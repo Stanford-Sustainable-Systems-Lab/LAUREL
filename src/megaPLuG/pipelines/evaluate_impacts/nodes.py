@@ -50,11 +50,13 @@ def get_load_profiles(dw: DwellSet, params: dict) -> pd.DataFrame:
     calculating power makes sense.
     """
     # Drop dwells with NaN charging energy, which probably resulted from vehicle deaths
-    dw.data = dw.data.dropna(subset=params["input_cols"]["energy"])
+    icols = params["input_cols"]
+    drop_cols = [icols["energy"], icols["region"]]
+    dw.data = dw.data.dropna(subset=drop_cols)
 
     # Manage charging energy into power
     manager_cls = _MANAGER_MAP[params["charging_manager"]]
-    manager = manager_cls(dw=dw, **params["input_cols"])
+    manager = manager_cls(dw=dw, **icols)
     profs = manager.get_load_profiles(
         prof_col=params["profile_col"],
         dur_col=params["duration_col"],
@@ -128,7 +130,6 @@ def report_by_region_quantiles(
     grouper = HourOfWeekdayGrouper(
         time_col=pcols["time"],
         tz_col=pcols["tz"],
-        freq=params["freq"],
     )
     grped_nonzero = grouper.add_group_classes(grped_nonzero)
     group_counts_tz = grouper.get_possible_obs_counts(grped_nonzero)
