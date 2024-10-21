@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Self
 
-from .build import AbstractScenarioBuilder
+from .build import ScenarioBuilder
 
 
 class ScenarioBashWriter:
@@ -110,7 +110,7 @@ class ScenarioBashWriter:
 
 def generate_bash_script(
     command: str,
-    builder: AbstractScenarioBuilder,
+    builder: ScenarioBuilder,
     cmd_params: dict = None,
     resources: dict = None,
     reporting: dict = None,

@@ -9,12 +9,12 @@ from itertools import product
 from pathlib import Path
 
 from megaPLuG.scenarios.build import (  # noqa: F401
-    AbstractScenarioBuilder,
+    ScenarioBuilder,
     TestScenarioBuilder,
 )
 
 
-class BatteryManageScenarioBuilder(AbstractScenarioBuilder):
+class BatteryManageScenarioBuilder(ScenarioBuilder):
     """Create scenarios which scan across battery sizes and management strategies."""
 
     display_name = "batt_man"
@@ -54,7 +54,7 @@ def generate_scenario_configs(scen_params: dict, all_params: dict) -> dict:
     saved to a `kedro` partitioned dataset.
     """
     bldr_map = {}
-    base_cls = AbstractScenarioBuilder
+    base_cls = ScenarioBuilder
     for name, obj in globals().items():
         if inspect.isclass(obj) and issubclass(obj, base_cls) and obj is not base_cls:
             bldr_map.update({name: obj})

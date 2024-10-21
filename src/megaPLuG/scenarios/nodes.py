@@ -4,7 +4,7 @@ this package and then import them."""
 
 import inspect
 
-from .build import AbstractScenarioBuilder  # noqa: F401
+from .build import ScenarioBuilder  # noqa: F401
 
 
 def generate_scenario_configs(scen_params: dict, all_params: dict) -> dict:
@@ -22,7 +22,7 @@ def generate_scenario_configs(scen_params: dict, all_params: dict) -> dict:
     saved to a `kedro` partitioned dataset.
     """
     bldr_map = {}
-    base_cls = AbstractScenarioBuilder
+    base_cls = ScenarioBuilder
     for name, obj in globals().items():
         if inspect.isclass(obj) and issubclass(obj, base_cls) and obj is not base_cls:
             bldr_map.update({name: obj})

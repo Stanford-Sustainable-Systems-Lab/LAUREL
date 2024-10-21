@@ -5,7 +5,7 @@ from typing import Self
 import numpy as np
 
 
-class AbstractScenarioBuilder(ABC):
+class ScenarioBuilder(ABC):
     """This class sets the interface for scenario builders. These builders use
     the `kedro` configuration file system to create many runs with different parameters.
     The `SLURM_ARRAY_TASK_ID` environment variable within SLURM is used to sweep across
@@ -82,7 +82,7 @@ class AbstractScenarioBuilder(ABC):
         return int(num)
 
 
-class TestScenarioBuilder(AbstractScenarioBuilder):
+class TestScenarioBuilder(ScenarioBuilder):
     """Builds a test scenario set with a single partition."""
 
     display_name = "test"
