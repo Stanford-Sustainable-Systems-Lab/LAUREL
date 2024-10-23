@@ -27,7 +27,7 @@ class ScenarioBuilder(ABC):
 
     @property
     @abstractmethod
-    def partition_level_names(self) -> list[str]:
+    def partition_level_names(self) -> tuple[str]:
         """Get the partition level names used to explain the partition levels."""
         pass  # Implement this in the concrete classes by setting the attribute partition_level_names
 
@@ -86,7 +86,7 @@ class TestScenarioBuilder(ScenarioBuilder):
     """Builds a test scenario set with a single partition."""
 
     display_name = "test"
-    partition_level_names = ["run_name", "task_id"]
+    partition_level_names = ("run_name", "task_id")
 
     def _build_param_dicts(self) -> tuple[list[Path], list[dict]]:
         paths = [Path(self.display_name)]

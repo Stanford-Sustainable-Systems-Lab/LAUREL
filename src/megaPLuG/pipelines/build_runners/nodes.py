@@ -21,7 +21,7 @@ class BatteryManageScenarioBuilder(ScenarioBuilder):
     """Create scenarios which scan across battery sizes and management strategies."""
 
     display_name = "batt_man"
-    partition_level_names = ["run_name", "batt_set", "manage_set", "task_id"]
+    partition_level_names = ("run_name", "batt_set", "manage_set", "task_id")
 
     def _build_param_dicts(self) -> tuple[list[Path], list[dict]]:
         paths, scens = [], []
