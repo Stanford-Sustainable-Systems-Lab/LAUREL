@@ -6,7 +6,7 @@ from typing import Self
 
 import pandas as pd
 
-from .build import ScenarioBuilder
+from .build import ScenarioBuilder, TestScenarioBuilder
 
 
 class ScenarioReader(ABC):
@@ -164,3 +164,16 @@ class ScenarioReader(ABC):
             raise NotImplementedError()
         report_ls.sort()
         return report_ls
+
+
+class TestScenarioReader(ScenarioReader):
+    """Read test scenarios."""
+
+    builder = TestScenarioBuilder
+    metadata_names = ()
+
+    def extract_metadata(self: Self, path: Path) -> tuple:
+        return ()
+
+    def name_scenario(self: Self, path: Path) -> str:
+        return "Test"
