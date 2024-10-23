@@ -1,4 +1,6 @@
 import dask.dataframe as dd
+import geopandas as gpd
+import numpy as np
 import pandas as pd
 
 
@@ -69,3 +71,34 @@ def get_multi_col_merger(
         raise NotImplementedError
 
     return df[src_cols[0]] * col_0_max + df[src_cols[1]]
+
+
+def filter_by_vals_in_cols(
+    df: pd.DataFrame | gpd.GeoDataFrame, params: dict
+) -> pd.DataFrame | gpd.GeoDataFrame:
+    """Filter dataframe so that columns contain only the values listed in values.
+
+    The different columns are and'ed or or'ed together based on the params.
+    """
+    filt_ser = np.ones(len(df), dtype=np.bool)
+    keep_cols = []
+    for col, filt in params["filters"].items():
+        cur_ser = df[col].isin(filt["value_isin"])
+        if "joining_bool" not in filt or filt["joining_bool"].upper() == "AND":
+            filt_ser &= cur_ser
+        elif filt["joining_bool"].upper() == "OR":
+            filt_ser |= cur_ser
+        keep_cols.append(col)
+    if isinstance(df, gpd.GeoDataFrame):
+        keep_cols += [df.geometry.name]
+    filtered = df.loc[filt_ser, keep_cols]
+    return filtered
+
+
+def get_basic_dtype_ser(ser: pd.Series) -> pd.Series:
+    if pd.api.types.is_integer_dtype(ser):
+        return ser.astype(np.int64)  # or 'int64' if appropriate
+    elif pd.api.types.is_float_dtype(ser):
+        return ser.astype(np.float64)
+    else:
+        raise RuntimeError("No available non-nullable dtype!")

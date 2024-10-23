@@ -629,14 +629,14 @@ class DwellSet:
         dw.end = DEFAULT_COLUMN_NAMES["end"]
         return dw
 
-    def to_events(self) -> dd.DataFrame | pd.DataFrame:
+    def to_events(self: Self, id_cols: list[str] = None) -> dd.DataFrame | pd.DataFrame:
         """Convert dwells into hexagon event profiles."""
         if self.seq_names is None:
             raise RuntimeError("Sequence names must be set before calling 'to_events'.")
 
         drop_idx = False if self.data.index.name in self.get_tracked_cols() else True
         kws = dict(
-            id_cols=[self.veh, self.hex],
+            id_cols=id_cols if id_cols is not None else [self.veh, self.hex],
             seq_names=self.seq_names,
             drop_cur_idx=drop_idx,
         )
@@ -687,7 +687,7 @@ class DwellSet:
             raise RuntimeError("The column does not include the desired sequence name.")
         return matches[0]
 
-    def to_geodataframe(self, geom_type: str = "point") -> Self:
+    def to_geodataframe(self, geom_type: str = "point") -> None:
         """Convert the underlying dataset into a GeoDataFrame."""
         self.data = add_geometries(self.data, hex_col=self.hex, geom_type=geom_type)
 

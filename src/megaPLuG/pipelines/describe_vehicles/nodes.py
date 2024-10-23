@@ -83,19 +83,24 @@ def describe_veh_loc_pairs(dw: DwellSet) -> pd.DataFrame:
 def cluster_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Cluster vehicle-location pairs to uncover latent groups."""
     # Prepare for clustering by standardizing variables
+    logger.info("Select feature variables")
     clusterable = deepcopy(veh_locs.dropna(axis=0))
     drop_cols = np.setdiff1d(clusterable.columns, params["feature_cols"])
     clusterable = clusterable.drop(columns=drop_cols)
 
     spars = params["sample"]
     if spars["active"]:
-        clusterable = clusterable.sample(n=spars["n"], random_state=spars["seed"])
+        n = spars["n"]
+        logger.info(f"Sample {n} observations")
+        clusterable = clusterable.sample(n=n, random_state=spars["seed"])
 
+    logger.info("Log-transform and mean-std scale features.")
     for col in clusterable.columns:
         if not col.endswith("_ratio"):
             # Ratio columns would not benefit from spread reduction of log1p
             clusterable.loc[:, col] = clusterable[col] + 1
-    clusterable = np.log10(clusterable)
+        if not col.endswith("_entropy"):
+            clusterable.loc[:, col] = np.log10(clusterable[col])
     scaler = StandardScaler()
     clusterable = pd.DataFrame(
         data=scaler.fit_transform(clusterable),
@@ -116,6 +121,7 @@ def cluster_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
         index=clusterable.index,
         columns=[params["cluster_col"]],
     )
+    clusters[params["cluster_col"]] = pd.Categorical(clusters[params["cluster_col"]])
     veh_locs = veh_locs.merge(clusters, left_index=True, right_index=True)
     return veh_locs
 

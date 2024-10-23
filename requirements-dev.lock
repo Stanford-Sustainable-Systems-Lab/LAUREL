@@ -46,7 +46,6 @@ asttokens==2.4.1
     # via stack-data
 attrs==23.2.0
     # via cattrs
-    # via fiona
     # via jsonschema
     # via kedro
     # via lsprotocol
@@ -62,6 +61,8 @@ bleach==6.1.0
     # via nbconvert
 bokeh==3.4.0
     # via dask
+branca==0.8.0
+    # via folium
 build==1.2.1
     # via kedro
 cachetools==5.3.3
@@ -70,13 +71,11 @@ cattrs==23.2.3
     # via lsprotocol
     # via pygls
 certifi==2024.2.2
-    # via fiona
     # via pyogrio
     # via pyproj
     # via requests
 cffi==1.16.0
     # via argon2-cffi-bindings
-    # via timezonefinder
 cfgv==3.4.0
     # via pre-commit
 chardet==5.2.0
@@ -87,20 +86,13 @@ clarabel==0.7.1
     # via cvxpy
 click==8.1.7
     # via click-default-group
-    # via click-plugins
-    # via cligj
     # via cookiecutter
     # via dask
     # via distributed
-    # via fiona
     # via kedro
     # via uvicorn
 click-default-group==1.2.4
     # via kedro-viz
-click-plugins==1.1.1
-    # via fiona
-cligj==0.7.2
-    # via fiona
 cloudpickle==3.0.0
     # via dask
     # via distributed
@@ -160,8 +152,8 @@ fastjsonschema==2.19.1
     # via nbformat
 filelock==3.13.4
     # via virtualenv
-fiona==1.9.6
-    # via geopandas
+folium==0.18.0
+    # via megaplug
 fonttools==4.51.0
     # via matplotlib
 fqdn==1.5.1
@@ -175,7 +167,7 @@ fsspec==2024.3.1
     # via triad
 gast==0.5.4
     # via tensorflow-probability
-geopandas==0.14.4
+geopandas==1.0.1
     # via dask-geopandas
     # via megaplug
 gitdb==4.0.11
@@ -192,9 +184,8 @@ gurobipy==10.0.3
     # via megaplug
 h11==0.14.0
     # via uvicorn
-h3==3.7.7
+h3==4.1.1
     # via megaplug
-    # via timezonefinder
 h5netcdf==1.3.0
     # via arviz
 h5py==3.11.0
@@ -242,9 +233,11 @@ jedi==0.19.1
     # via ipython
 jinja2==3.1.3
     # via bokeh
+    # via branca
     # via cookiecutter
     # via dask
     # via distributed
+    # via folium
     # via jupyter-server
     # via jupyterlab
     # via jupyterlab-server
@@ -326,7 +319,7 @@ kedro-datasets==3.0.0
     # via megaplug
 kedro-telemetry==0.3.2
     # via megaplug
-kedro-viz==9.1.0
+kedro-viz==10.0.0
     # via megaplug
 kiwisolver==1.4.5
     # via matplotlib
@@ -341,6 +334,8 @@ lsprotocol==2023.0.1
     # via pygls
 lz4==4.3.3
     # via dask
+mapclassify==2.8.1
+    # via megaplug
 markdown-it-py==3.0.0
     # via rich
 markupsafe==2.1.5
@@ -389,6 +384,7 @@ nest-asyncio==1.6.0
     # via notebook
 networkx==3.3
     # via kedro-viz
+    # via mapclassify
 nodeenv==1.8.0
     # via pre-commit
 notebook==6.5.6
@@ -406,10 +402,12 @@ numpy==2.0.2
     # via cvxpy
     # via dask
     # via ecos
+    # via folium
     # via geopandas
     # via h5py
     # via jax
     # via jaxlib
+    # via mapclassify
     # via matplotlib
     # via megaplug
     # via ml-dtypes
@@ -427,7 +425,6 @@ numpy==2.0.2
     # via seaborn
     # via shapely
     # via tensorflow-probability
-    # via timezonefinder
     # via triad
     # via xarray
     # via xarray-einstats
@@ -476,6 +473,7 @@ pandas==2.2.2
     # via geopandas
     # via kedro-datasets
     # via kedro-viz
+    # via mapclassify
     # via megaplug
     # via seaborn
     # via triad
@@ -544,6 +542,7 @@ pygments==2.17.2
     # via rich
     # via sphinx
 pyogrio==0.9.0
+    # via geopandas
     # via megaplug
 pyparsing==3.1.2
     # via matplotlib
@@ -567,8 +566,9 @@ python-slugify==8.0.4
     # via cookiecutter
 pytoolconfig==1.3.1
     # via rope
-pytz==2024.1
+pytz==2024.2
     # via pandas
+    # via tzfpy
 pyyaml==6.0.1
     # via bokeh
     # via cookiecutter
@@ -599,6 +599,7 @@ referencing==0.34.0
     # via jupyter-events
 requests==2.31.0
     # via cookiecutter
+    # via folium
     # via jupyterlab-server
     # via kedro-telemetry
     # via sphinx
@@ -621,6 +622,7 @@ ruamel-yaml==0.18.6
 ruamel-yaml-clib==0.2.8
     # via ruamel-yaml
 scikit-learn==1.4.2
+    # via mapclassify
     # via megaplug
 scipy==1.13.0
     # via arviz
@@ -629,6 +631,7 @@ scipy==1.13.0
     # via ecos
     # via jax
     # via jaxlib
+    # via mapclassify
     # via osqp
     # via qdldl
     # via scikit-learn
@@ -649,14 +652,12 @@ setuptools==69.2.0
     # via arviz
     # via fs
     # via nodeenv
-    # via timezonefinder
 shapely==2.0.6
     # via dask-geopandas
     # via geopandas
 six==1.16.0
     # via asttokens
     # via bleach
-    # via fiona
     # via fs
     # via python-dateutil
     # via rfc3339-validator
@@ -709,8 +710,6 @@ text-unidecode==1.3
     # via python-slugify
 threadpoolctl==3.4.0
     # via scikit-learn
-timezonefinder==6.5.2
-    # via megaplug
 tinycss2==1.2.1
     # via nbconvert
 toml==0.10.2
@@ -721,7 +720,6 @@ toolz==0.12.1
     # via partd
 toposort==1.10
     # via kedro
-    # via kedro-viz
 tornado==6.4
     # via bokeh
     # via distributed
@@ -766,12 +764,14 @@ typing-extensions==4.11.0
     # via strawberry-graphql
 tzdata==2024.1
     # via pandas
+tzfpy==0.15.6
+    # via megaplug
 uri-template==1.3.0
     # via jsonschema
 urllib3==2.2.1
     # via distributed
     # via requests
-uvicorn==0.29.0
+uvicorn==0.32.0
     # via kedro-viz
 uvloop==0.19.0
     # via uvicorn
@@ -801,6 +801,7 @@ xarray-einstats==0.7.0
     # via arviz
 xyzservices==2024.4.0
     # via bokeh
+    # via folium
 y-py==0.6.2
     # via jupyter-ydoc
     # via ypy-websocket

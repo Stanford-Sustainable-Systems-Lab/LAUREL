@@ -43,6 +43,16 @@
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
         {
+            "name": "Kedro: Describe Locations",
+            "type": "debugpy",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "module": "kedro",
+            "args": ["run", "--async", "--pipeline=describe_locations", "--env=scenarios/test/task_0"]
+            // Any other arguments should be passed as a comma-seperated-list
+            // e.g "args": ["run", "--pipeline", "pipeline_name"]
+        },
+        {
             "name": "Kedro: Electrify Trips",
             "type": "debugpy",
             "request": "launch",

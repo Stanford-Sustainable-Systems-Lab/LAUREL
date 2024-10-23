@@ -1,0 +1,29 @@
+# This is a boilerplate parameters config generated for pipeline 'describe_locations'
+# using Kedro 0.19.3.
+#
+# Documentation for this file format can be found in "Parameters"
+# Link: https://docs.kedro.org/en/0.19.3/configuration/parameters.html
+
+govt_areas:
+  filters:
+    STUSPS:
+      value_isin:
+        - CA
+
+utility_territories:
+  buffer_dist_meters: 15000
+
+get_hexes_by_area:
+  group_cols:
+    - STUSPS
+    - utility
+  hex_col: hex_id
+
+nearest_infra_corresp:
+  hex_col: hex_id
+  substation_col_renamer:
+    substation_name: SUBNAME
+    substation_id: SUBSTATIONID
+
+get_timezones:
+  hex_col: hex_id

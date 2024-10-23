@@ -5,29 +5,45 @@
 # Link: https://docs.kedro.org/en/0.19.1/configuration/parameters.html
 
 summarize_vehicles:
-  dead_energy_col: dwell_start_kwh
+  dead_energy_col: dwell_init_kwh
 
 profiles_from_dwells:
   charging_manager: ImmediateChargingManager
   input_cols: # keys should match the keyword arguments of the charging manager
     energy: charge_kwh
-    dur: dwell_time_hrs
+    duration: dwell_time_hrs
     max_power: max_power_kw
+    region: substation_id
   profile_col: power_kw
   duration_col: duration
 
-report_by_hex:
+report_by_region_peaks:
   id_cols:
-    location: hex_id
+    location: substation_id
     time: time
   power_col: power_kw
-  timezone_col: timezone
+  timezone_col: tz
   local_time_attrs:
     - day_of_week
     - hour
-  drop_cols:
-    - veh_id
 
-to_geospatial:
+report_by_region_quantiles:
+  columns:
+    time: time
+    duration: duration
+    power: power_kw
+    region: substation_id
+    tz: tz
+  freq: 1h
+  quantiles:
+    - 0.00
+    - 0.05
+    - 0.40
+    - 0.50
+    - 0.60
+    - 0.95
+    - 1.00
+
+add_region_geoms:
   hex_col: hex_id
-  geom_type: polygon
+  region_col: substation_id

@@ -6,13 +6,15 @@ generated using Kedro 0.19.1
 import logging
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
-from timezonefinder import TimezoneFinder
 
 from megaPLuG.models.dwell_sets import DwellSet
+from megaPLuG.models.group_times import HourOfWeekdayGrouper
 from megaPLuG.models.manage_charging import _MANAGER_MAP
-from megaPLuG.utils.h3 import add_geometries
-from megaPLuG.utils.time import calc_local_time_attrs, get_timezone_from_hex
+from megaPLuG.models.summarize import EventExpander, NonzeroGroupedSummarizer
+from megaPLuG.utils.h3 import cells_to_region_polygons
+from megaPLuG.utils.time import calc_local_time_attrs, total_hours
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,15 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     return vehs
 
 
+def assign_regions(dw: DwellSet, hex_regions: pd.DataFrame) -> DwellSet:
+    """Assign larger regions to the DwellSet based on hexagin ids."""
+    orig_idx = dw.data.index.names
+    dw.data = dw.data.reset_index()
+    dw.data = dw.data.merge(hex_regions, how="left", on=dw.hex)
+    dw.data = dw.data.set_index(orig_idx)
+    return dw
+
+
 def get_load_profiles(dw: DwellSet, params: dict) -> pd.DataFrame:
     """Convert vehicle dwells to hexagon load profiles.
 
@@ -39,11 +50,13 @@ def get_load_profiles(dw: DwellSet, params: dict) -> pd.DataFrame:
     calculating power makes sense.
     """
     # Drop dwells with NaN charging energy, which probably resulted from vehicle deaths
-    dw.data = dw.data.dropna(subset=params["input_cols"]["energy"])
+    icols = params["input_cols"]
+    drop_cols = [icols["energy"], icols["region"]]
+    dw.data = dw.data.dropna(subset=drop_cols)
 
     # Manage charging energy into power
     manager_cls = _MANAGER_MAP[params["charging_manager"]]
-    manager = manager_cls(dw=dw, **params["input_cols"])
+    manager = manager_cls(dw=dw, **icols)
     profs = manager.get_load_profiles(
         prof_col=params["profile_col"],
         dur_col=params["duration_col"],
@@ -51,7 +64,9 @@ def get_load_profiles(dw: DwellSet, params: dict) -> pd.DataFrame:
     return profs
 
 
-def report_by_hex(profs: pd.DataFrame, params: dict) -> pd.DataFrame:
+def report_by_region_peaks(
+    profs: pd.DataFrame, hex_regions: pd.DataFrame, params: dict
+) -> pd.DataFrame:
     """Report results by hex."""
     orig_idx = profs.index.names
     profs = profs.reset_index()
@@ -63,13 +78,10 @@ def report_by_hex(profs: pd.DataFrame, params: dict) -> pd.DataFrame:
     max_idx = profs.groupby(loc_col, sort=False)[params["power_col"]].idxmax()
     peaks = profs.loc[max_idx]
 
-    logger.info("Getting time zones")
-    tf = TimezoneFinder(in_memory=True)
-    peaks[params["timezone_col"]] = peaks[loc_col].transform(
-        get_timezone_from_hex, tf=tf
-    )
-
     logger.info("Calculating local time attributes")
+    hex_regions_merge = hex_regions.loc[:, [loc_col, params["timezone_col"]]]
+    hex_regions_merge = hex_regions_merge.drop_duplicates(subset=loc_col, keep="first")
+    peaks = peaks.merge(hex_regions_merge, how="left", on=loc_col)
     peaks = calc_local_time_attrs(
         df=peaks,
         time_cols=time_col,
@@ -78,11 +90,87 @@ def report_by_hex(profs: pd.DataFrame, params: dict) -> pd.DataFrame:
     )
 
     peaks = peaks.set_index(orig_idx)
-    peaks = peaks.drop(columns=params["drop_cols"])
     return peaks
 
 
-def to_geospatial(df: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
-    """Augment a pandas DataFrame with an H3 id column with the H3 geometries."""
-    hexes = add_geometries(df, **params)
-    return hexes
+def report_by_region_quantiles(
+    profs: pd.DataFrame,
+    hex_regions: pd.DataFrame,
+    params: dict,
+) -> pd.DataFrame:
+    """Report quantile summaries by region and time grouping."""
+    pcols = params["columns"]
+
+    logger.info("Remove all observations with unknown duration or zero power.")
+    # First drop the observations with no duration or zero power
+    nonzero = profs.dropna(subset=[pcols["duration"]])
+    nonzero = nonzero.reset_index()
+    drop_idx = nonzero.loc[nonzero[pcols["power"]] == 0].index
+    nonzero = nonzero.drop(index=drop_idx)
+
+    logger.info("Expand events to cover all groups across their duration")
+    # Then apply expansion
+    expander = EventExpander(
+        time_col=pcols["time"],
+        dur_col=pcols["duration"],
+        value_col=pcols["power"],
+        group_col=pcols["region"],
+        freq=params["freq"],
+    )
+    nonzero_exp = expander.expand_events(nonzero)
+
+    logger.info("Group events")
+    grouper = [pcols["region"], pd.Grouper(key=pcols["time"], freq=params["freq"])]
+    grped_nonzero = nonzero_exp.groupby(grouper)[pcols["power"]].max()
+    grped_nonzero = grped_nonzero.reset_index()
+
+    mrgr = hex_regions.reset_index()[[pcols["region"], "tz"]].drop_duplicates()
+    grped_nonzero = grped_nonzero.merge(mrgr, how="left", on=pcols["region"])
+
+    grouper = HourOfWeekdayGrouper(
+        time_col=pcols["time"],
+        tz_col=pcols["tz"],
+    )
+    grped_nonzero = grouper.add_group_classes(grped_nonzero)
+    group_counts_tz = grouper.get_possible_obs_counts(grped_nonzero)
+    group_counts_tz = group_counts_tz.reset_index()
+    grp_merge_cols = [pcols["tz"]] + grouper.time_group_cols
+    grped_nonzero = grped_nonzero.merge(group_counts_tz, how="left", on=grp_merge_cols)
+
+    logger.info("Calculate quantiles")
+    summ_cols = [pcols["region"]] + grouper.time_group_cols
+    summer = NonzeroGroupedSummarizer(
+        group_cols=summ_cols,
+        quantiles=np.array(params["quantiles"]),
+    )
+    quantiles = summer.summarize(
+        events=grped_nonzero,
+        value_col=pcols["power"],
+        possible_count_col="possible_count",
+    )
+    return quantiles
+
+
+def add_region_geoms(
+    results: pd.DataFrame,
+    hex_regions: pd.DataFrame,
+    params: dict,
+) -> gpd.GeoDataFrame:
+    """Add region geometries to the reporting by region."""
+    reg_polys = cells_to_region_polygons(
+        corresp=hex_regions.reset_index(),
+        hex_col=params["hex_col"],
+        region_col=params["region_col"],
+    )
+    results = results.merge(reg_polys, on=params["region_col"])
+    res_geos = gpd.GeoDataFrame(results, geometry="geometry")
+
+    changed_cols = []
+    for col in res_geos.columns:
+        if pd.api.types.is_timedelta64_dtype(res_geos[col]):
+            res_geos[f"{col}_hrs"] = total_hours(res_geos[col])
+            changed_cols.append(col)
+
+    res_geos = res_geos.drop(columns=changed_cols)
+
+    return res_geos

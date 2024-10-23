@@ -15,30 +15,34 @@ class AbstractChargingManager(ABC):
     Attributes:
         dw: DwellSet that this ChargingManager will compute over
         energy: name of the column within dw containing the required energy for each dwell
-        dur: name of the column within dw containing the duration of the dwell
+        duration: name of the column within dw containing the duration of the dwell
         max_power: name of the column within dw containing the maximum charging power for this dwell
+        region: name of the column containing the grouping variable for regions
         cost: name of the column giving the cost which was promised during the charging choice model
     """
 
-    _dw = None
-    _energy = None
-    _dur = None
-    _max_power = None
-    _cost = None
+    _dw: DwellSet = None
+    _energy: str = None
+    _duration: str = None
+    _max_power: str = None
+    _cost: str = None
+    _region: str = None
 
     def __init__(
         self,
         dw: DwellSet,
         energy: str,
-        dur: str,
+        duration: str,
         max_power: str,
+        region: str,
         cost: str = None,
     ) -> None:
         """Initialize the ChargingManager."""
         self.dw = dw
         self.energy = energy
-        self.dur = dur
+        self.duration = duration
         self.max_power = max_power
+        self.region = region
         self.cost = cost
 
     @abstractmethod
@@ -56,13 +60,13 @@ class AbstractChargingManager(ABC):
         self._energy = value
 
     @property
-    def dur(self):
-        return self._dur
+    def duration(self):
+        return self._duration
 
-    @dur.setter
-    def dur(self, value):
-        self.dw._rename_idx_col(value, self._dur)
-        self._dur = value
+    @duration.setter
+    def duration(self, value):
+        self.dw._rename_idx_col(value, self._duration)
+        self._duration = value
 
     @property
     def max_power(self):
@@ -72,6 +76,15 @@ class AbstractChargingManager(ABC):
     def max_power(self, value):
         self.dw._rename_idx_col(value, self._max_power)
         self._max_power = value
+
+    @property
+    def region(self):
+        return self._region
+
+    @region.setter
+    def region(self, value):
+        self.dw._rename_idx_col(value, self._region)
+        self._region = value
 
     @property
     def cost(self):
@@ -84,7 +97,7 @@ class AbstractChargingManager(ABC):
 
 
 class IndependentDwellChargingManager(AbstractChargingManager):
-    """Charge each dwell independently without considering influences within a location."""
+    """Charge each dwell independently without considering influences within a region."""
 
     suffixes = {
         "time": "time",
@@ -112,15 +125,16 @@ class IndependentDwellChargingManager(AbstractChargingManager):
         self = self.set_dwell_events()
         # self.dw.data = self.dw.data.dropna(subset=self.dw.seq_names)
         self.dw.seq_names = self.seq_names
-        events = self.dw.to_events()
-        # Sort by hexagon and time
+        events = self.dw.to_events(id_cols=[self.region])
+        # Sort by region and time
         events = DwellSet._sort_by_grp_time(
             df=events,
-            grp_col=self.dw.hex,
+            grp_col=self.region,
             time_col=self.suffixes["time"],
             drop_cur_idx=True,
         )
-        event_grp = events.groupby(self.dw.hex, sort=False)
+        event_grp = events.groupby(self.region, sort=False)
+        # Note: The vehicle and hexagon ids are rendered uninterpretable by the cumsum
         events[prof_col] = event_grp[self.suffixes["power"]].cumsum()
         events[dur_col] = event_grp[self.suffixes["time"]].transform(
             lambda ser: ser.shift(-1) - ser
@@ -146,7 +160,9 @@ class MinPowerChargingManager(IndependentDwellChargingManager):
         pwr_cols = [f"{seqn}_{self.suffixes['power']}" for seqn in self.seq_names]
         time_cols = [f"{seqn}_{self.suffixes['time']}" for seqn in self.seq_names]
         self.dw.data[time_cols[0]] = self.dw.data[self.dw.start]
-        self.dw.data[pwr_cols[0]] = self.dw.data[self.energy] / self.dw.data[self.dur]
+        self.dw.data[pwr_cols[0]] = (
+            self.dw.data[self.energy] / self.dw.data[self.duration]
+        )
         self.dw.data[time_cols[-1]] = self.dw.data[self.dw.end]
         self.dw.data[pwr_cols[-1]] = -self.dw.data[pwr_cols[0]]
         return self

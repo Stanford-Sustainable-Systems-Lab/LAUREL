@@ -12,8 +12,11 @@ from megaPLuG.scenarios.io import (
 )
 
 from .nodes import (
+    add_region_geoms,
+    assign_regions,
     get_load_profiles,
-    report_by_hex,
+    report_by_region_peaks,
+    report_by_region_quantiles,
     summarize_vehicles,
 )
 
@@ -50,17 +53,39 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="summarize_vehicles",
             ),
             node(
+                func=assign_regions,
+                inputs=["dwell_obj_eval", "hex_region_corresp"],
+                outputs="dwell_obj_w_regions",
+                name="assign_regions",
+                tags="frame-charging_management",
+            ),
+            node(
                 func=get_load_profiles,
-                inputs=["dwell_obj_eval", "params:profiles_from_dwells"],
+                inputs=["dwell_obj_w_regions", "params:profiles_from_dwells"],
                 outputs="profiles",
                 name="get_load_profiles",
                 tags="frame-charging_management",
             ),
             node(
-                func=report_by_hex,
-                inputs=["profiles", "params:report_by_hex"],
-                outputs="report_by_hex",
-                name="report_by_hex",
+                func=report_by_region_peaks,
+                inputs=[
+                    "profiles",
+                    "hex_region_corresp",
+                    "params:report_by_region_peaks",
+                ],
+                outputs="report_by_region_peaks",
+                name="report_by_region_peaks",
+                tags="frame-charging_management",
+            ),
+            node(
+                func=report_by_region_quantiles,
+                inputs=[
+                    "profiles",
+                    "hex_region_corresp",
+                    "params:report_by_region_quantiles",
+                ],
+                outputs="report_by_region_quantiles",
+                name="report_by_region_quantiles",
                 tags="frame-charging_management",
             ),
             # From here down is saving out results
@@ -72,11 +97,33 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             node(
                 func=write_scenario_partition,
-                inputs=["report_by_hex", "params:results_partition"],
-                outputs="report_by_hex_partition",
-                name="write_scenario_partition_hexes",
+                inputs=["report_by_region_peaks", "params:results_partition"],
+                outputs="report_by_region_peaks_partition",
+                name="write_scenario_partition_hexes_peaks",
+            ),
+            node(
+                func=write_scenario_partition,
+                inputs=["report_by_region_quantiles", "params:results_partition"],
+                outputs="report_by_region_quantiles_partition",
+                name="write_scenario_partition_hexes_quants",
             ),
         ],
         tags="scenario_run",
     )
-    return pipe
+
+    geo_pipe = pipeline(
+        [
+            node(
+                func=add_region_geoms,
+                inputs=[
+                    "report_by_region_peaks",
+                    "hex_region_corresp",
+                    "params:add_region_geoms",
+                ],
+                outputs="report_by_region_peaks_with_geoms",
+                name="add_region_geoms",
+            )
+        ],
+    )
+
+    return pipe + geo_pipe

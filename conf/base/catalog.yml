@@ -13,9 +13,15 @@ vius_weight_class_raw:
 
 state_boundaries:
   type: megaPLuG.datasets.geodatabase.GeoDataBaseDataset
-  filepath: data/01_raw/Census_Geographies/cb_2023_us_all_20m.gdb
+  filepath: data/01_raw/Census_Geographies/cb_2023_us_all_500k.gdb
   load_args:
-    layer: cb_2023_us_state_20m
+    layer: cb_2023_us_state_500k
+
+substations:
+  type: megaPLuG.datasets.geodatabase.GeoDataBaseDataset
+  filepath: data/01_raw/ICA_Maps/PGE/ICADisplay.gdb
+  load_args:
+    layer: Substations
 
 # Preprocessed datasets
 dwells:
@@ -45,6 +51,10 @@ vehicle_location_pairs_clustered:
 vehicle_location_pairs_labelled:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vehicle_location_pairs_labelled.feather
+
+hex_region_corresp:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/hex_region_corresp.feather
 
 vius_home_base_state:
   type: pandas.FeatherDataset
@@ -76,16 +86,23 @@ vehicles_evaluated_partition:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
-report_by_hex_partition:
+report_by_region_peaks_partition:
   type: partitions.PartitionedDataset
-  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_hex"
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_peaks"
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
-report_by_hex_with_geoms:
+report_by_region_quantiles_partition:
+  type: partitions.PartitionedDataset
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_quantiles"
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
+
+report_by_region_peaks_with_geoms:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
-  filepath: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_hex.gpkg"
+  filepath: data/07_model_output/report_by_region_single_run.gpkg
   save_args:
     layer: peak_kw
 
@@ -116,6 +133,14 @@ vehicle_depots_geoms:
     layer: vehicle_depots
   load_args:
     layer: vehicle_depots
+
+clusterable_veh_locs:
+  type: pandas.FeatherDataset
+  filepath: data/04_feature/clusterable_veh_locs.feather
+
+profiles:
+  type: pandas.FeatherDataset
+  filepath: data/04_feature/profiles.feather
 
 # Reporting datasets
 vehicle_trajectory:
