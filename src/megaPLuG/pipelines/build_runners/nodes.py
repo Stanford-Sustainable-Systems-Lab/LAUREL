@@ -4,14 +4,17 @@ generated using Kedro 0.18.13
 """
 
 import inspect
+import re
 from copy import deepcopy
 from itertools import product
 from pathlib import Path
+from typing import Self
 
 from megaPLuG.scenarios.build import (  # noqa: F401
     ScenarioBuilder,
     TestScenarioBuilder,
 )
+from megaPLuG.scenarios.read import ScenarioReader
 
 
 class BatteryManageScenarioBuilder(ScenarioBuilder):
@@ -37,6 +40,25 @@ class BatteryManageScenarioBuilder(ScenarioBuilder):
             paths.append(pth)
             scens.append(scn)
         return (paths, scens)
+
+
+class BatteryManageScenarioReader(ScenarioReader):
+    """Read scenarios which scan across battery sizes and management strategies."""
+
+    builder = BatteryManageScenarioBuilder
+    metadata_names = ("batt_kwh", "charge_management")
+
+    def extract_metadata(self: Self, path: Path) -> tuple:
+        batt_str, manage_str = path.parts[1], path.parts[2]
+        batt = int(re.search(r"(?<=batt_)(\d+)", batt_str).group())
+        manage = re.search(r"(.+)(?=ChargingManager)", manage_str).group()
+        return (batt, manage)
+
+    def name_scenario(self: Self, path: Path) -> str:
+        batt_str, manage_str = path.parts[1], path.parts[2]
+        batt_kwh = re.search(r"(?<=batt_)(\d+)", batt_str).group() + "kWh"
+        manage = re.search(r"(.+)(?=ChargingManager)", manage_str).group()
+        return self.concat_name_components(batt_kwh, manage)
 
 
 def generate_scenario_configs(scen_params: dict, all_params: dict) -> dict:
