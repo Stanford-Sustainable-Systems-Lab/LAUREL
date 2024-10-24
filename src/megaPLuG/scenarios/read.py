@@ -15,11 +15,17 @@ class ScenarioReader(ABC):
     combined datasets which are usable for post-hoc analysis."""
 
     builder: ScenarioBuilder
-    metadata_names: tuple[str]
+    metadata_level_names: tuple[str]
     scenario_name: str = "Scenario"
 
     def __init__(self: Self) -> None:
-        pass
+        meta_names = set(self.metadata_level_names)
+        build_names = set(self.builder.partition_level_names)
+        unmatched_names = meta_names - build_names
+        if len(unmatched_names) > 0:
+            raise RuntimeError(
+                f"Some of the metadata names don't correspond with partition_level_names of the builder: {unmatched_names}"
+            )
 
     @property
     @abstractmethod
@@ -29,15 +35,17 @@ class ScenarioReader(ABC):
 
     @property
     @abstractmethod
-    def metadata_names(self: Self) -> tuple[str]:
-        """Get the metadata element names."""
+    def metadata_level_names(self: Self) -> tuple[str]:
+        """Get the metadata element names. These must form a subset of the self.builder
+        partition_level_names attribute.
+        """
         pass
 
     @abstractmethod
     def extract_metadata(self: Self, path: Path) -> tuple:
         """Get the metadata encoded in the partition path.
 
-        These must correspond in ordering with `self.metadata_names`.
+        These must correspond in ordering with `self.metadata_level_names`.
         """
         pass  # TODO: This will receive a subset of the set_reporting_groups code
 
@@ -55,6 +63,15 @@ class ScenarioReader(ABC):
         concat = [str(level).replace("_", " ") for level in args]
         name = sep.join(concat)
         return name
+
+    def get_metadata_values(self: Self, path: Path) -> dict[str, str]:
+        """Get the parts from the current path which correspond to the metadata_levels."""
+        idxs = {
+            lev: self.builder.partition_level_names.index(lev)
+            for lev in self.metadata_level_names
+        }
+        levels = {lev: path.parts[i] for lev, i in idxs.items()}
+        return levels
 
     @staticmethod
     def select_partitions(
@@ -115,11 +132,11 @@ class ScenarioReader(ABC):
             cur_key = (names[pth], *metadata[pth])
             key_ls.append(cur_key)
 
-        names = [self.scenario_name] + [*self.metadata_names]
+        names = [self.scenario_name] + [*self.metadata_level_names]
         coll = pd.concat(df_ls, keys=key_ls, names=names)
         colnames = coll.columns.tolist()
-        coll = coll.reset_index(self.metadata_names)
-        coll = coll.loc[:, colnames + [*self.metadata_names]]
+        coll = coll.reset_index(self.metadata_level_names)
+        coll = coll.loc[:, colnames + [*self.metadata_level_names]]
         return coll
 
     def list_completed_partitions(
@@ -170,7 +187,7 @@ class TestScenarioReader(ScenarioReader):
     """Read test scenarios."""
 
     builder = TestScenarioBuilder
-    metadata_names = ()
+    metadata_level_names = ()
 
     def extract_metadata(self: Self, path: Path) -> tuple:
         return ()
