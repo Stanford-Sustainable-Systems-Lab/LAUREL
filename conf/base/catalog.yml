@@ -142,6 +142,10 @@ profiles:
   type: pandas.FeatherDataset
   filepath: data/04_feature/profiles.feather
 
+canonical_veh_locs:
+  type: pandas.CSVDataset
+  filepath: data/03_primary/canonical_veh_locs.csv
+
 # Reporting datasets
 vehicle_trajectory:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
