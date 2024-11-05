@@ -9,11 +9,14 @@ from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
 
 from .nodes import (
     calc_inter_visit_stats,
+    calc_vehicle_scaling_weights,
     classify_vehicles,
     describe_veh_loc_pairs,
     filter_substantial_dwells,
     label_veh_loc_pairs,
+    mark_location_regions,
     mark_locations,
+    mark_weight_class_group,
 )
 
 
@@ -66,7 +69,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "vehicle_location_pairs_labelled",
                     "params:classify_vehicles",
                 ],
-                outputs="vehicles_labelled",
+                outputs="vehicles_with_class",
                 name="classify_vehicles",
             ),
             node(
@@ -78,6 +81,39 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="dwell_obj_with_locations_desc_vehs",
                 name="mark_locations",
+            ),
+            node(
+                func=mark_weight_class_group,
+                inputs=[
+                    "vehicles_with_class",
+                    "params:weight_class_group",
+                ],
+                outputs="vehs_with_weight_class_group",
+                name="mark_weight_class_group",
+            ),
+            node(
+                func=mark_location_regions,
+                inputs=[
+                    "vehs_with_weight_class_group",
+                    "vehicle_location_pairs_labelled",
+                    "state_boundaries",
+                    "params:mark_location_regions",
+                    "params:load_dwell_set",
+                ],
+                outputs="vehs_with_regions",
+                name="mark_location_regions",
+            ),
+            node(
+                func=calc_vehicle_scaling_weights,
+                inputs=[
+                    "vehs_with_regions",
+                    "dwell_obj_with_locations_desc_vehs",
+                    "vius_weight_class",
+                    "vius_home_base_state",
+                    "params:vehicle_scaling_weights",
+                ],
+                outputs="vehicles_labelled",
+                name="calc_vehicle_scaling_weights",
             ),
             node(
                 func=save_dwell_set,

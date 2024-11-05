@@ -5,7 +5,9 @@ generated using Kedro 0.19.3
 
 import logging
 from copy import deepcopy
+from itertools import product
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 from sklearn.cluster import HDBSCAN
@@ -14,6 +16,7 @@ from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.utils.data import merge_on_int_cols
+from megaPLuG.utils.h3 import add_geometries
 from megaPLuG.utils.params import build_df_from_dict
 from megaPLuG.utils.time import total_hours
 
@@ -156,6 +159,95 @@ def classify_vehicles(
     )
     vehs.loc[vehs["has_home_base"].isna(), "has_home_base"] = False
     vehs["has_home_base"] = vehs["has_home_base"].astype(bool)
+    return vehs
+
+
+def mark_weight_class_group(vehs: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Mark the vehicles with VIUS weight class groups."""
+    wgt_corresp = build_df_from_dict(
+        params["values"],
+        id_cols=params["id_columns"],
+        value_col=params["value_col"],
+    )
+    orig_idx = vehs.index.names
+    vehs = vehs.reset_index()
+    vehs = vehs.merge(wgt_corresp, how="left", on=params["id_columns"])
+    vehs = vehs.set_index(orig_idx)
+    return vehs
+
+
+def mark_location_regions(
+    vehs: pd.DataFrame,
+    veh_locs: pd.DataFrame,
+    regions: gpd.GeoDataFrame,
+    params: dict,
+    dwell_params: dict,
+) -> pd.DataFrame:
+    """Mark the region of chosen locations by intersecting location points with region polygons."""
+    veh_col = dwell_params["veh"]
+    hex_col = dwell_params["hex"]
+    loc_col = params["location_col"]
+    loc_reg_col = params["location_region_col"]
+
+    veh_locs = veh_locs.reset_index()
+    bases = veh_locs.loc[
+        ~veh_locs[loc_col].isna(), [veh_col, hex_col, loc_col]
+    ].drop_duplicates()
+    bases = add_geometries(bases, hex_col=hex_col)
+    bases = bases.to_crs(regions.crs)
+    mrg = regions.loc[:, [params["region_name_col"], regions.geometry.name]]
+    base_regs = bases.sjoin(mrg, how="left")
+    base_regs = base_regs.rename(columns={params["region_name_col"]: loc_reg_col})
+    base_regs = base_regs.loc[:, [veh_col, loc_reg_col]].drop_duplicates(subset=veh_col)
+    base_regs = base_regs.set_index(veh_col)
+    vehs = vehs.merge(base_regs, how="left", on=veh_col)
+    vehs[loc_reg_col] = vehs[loc_reg_col].fillna(params["na_region_fill"])
+    return vehs
+
+
+def calc_vehicle_scaling_weights(
+    vehs: pd.DataFrame,
+    dw: DwellSet,
+    veh_class_weights: pd.DataFrame,
+    region_totals: pd.DataFrame,
+    params: dict,
+) -> pd.DataFrame:
+    """Calculate vehicle scaling weights based on vehicle miles traveled totals.
+
+    Right now, this uses region and weight class.
+    """
+    merge_cols = [params["location_region_col"], params["weight_class_col"]]
+    trip_veh_miles = dw.data.groupby(dw.veh)[dw.trip_dist].sum()
+    trip_veh_miles = vehs.merge(trip_veh_miles, how="left", on=dw.veh)
+    trip_miles = trip_veh_miles.groupby(merge_cols, observed=True)[dw.trip_dist].sum()
+    trips_name = f"{params['totals_col']}_trips"
+    trip_miles = trip_miles.to_frame().rename(columns={dw.trip_dist: trips_name})
+    scaler = pd.DataFrame(
+        product(region_totals.index, veh_class_weights.index), columns=merge_cols
+    )
+    veh_class_weights["wgt_cls_fctr"] = (
+        veh_class_weights[params["totals_col"]]
+        / veh_class_weights[params["totals_col"]].sum()
+    )
+    scaler = scaler.merge(veh_class_weights, how="left", on=params["weight_class_col"])
+    scaler = scaler.merge(
+        region_totals,
+        how="left",
+        on=params["location_region_col"],
+        suffixes=("_weight", "_region"),
+    )
+    scaler = scaler.merge(trip_miles, how="left", on=merge_cols)
+    region_name = f"{params['totals_col']}_region"
+
+    scaler[params["weight_col"]] = (
+        scaler[region_name] * scaler["wgt_cls_fctr"] / scaler[trips_name]
+    )
+
+    orig_idx = vehs.index.names
+    vehs = vehs.reset_index()
+    mrg = scaler.loc[:, merge_cols + [params["weight_col"]]]
+    vehs = vehs.merge(mrg, how="left", on=merge_cols)
+    vehs = vehs.set_index(orig_idx)
     return vehs
 
 

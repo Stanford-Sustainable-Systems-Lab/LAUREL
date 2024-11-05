@@ -42,3 +42,29 @@ classify_vehicles:
 mark_locations:
   veh_loc_cols:
     - location
+
+weight_class_group:
+  id_columns:
+    - vin_gvw
+  value_col: gvw_class
+  values:
+    1: Light Duty (Classes 1 and 2)
+    2: Light Duty (Classes 1 and 2)
+    3: Medium Duty (Classes 3, 4, 5, and 6)
+    4: Medium Duty (Classes 3, 4, 5, and 6)
+    5: Medium Duty (Classes 3, 4, 5, and 6)
+    6: Medium Duty (Classes 3, 4, 5, and 6)
+    7: Medium-Heavy Duty (Class 7)
+    8: Heavy Duty (Class 8)
+
+mark_location_regions:
+  na_region_fill: "Any State (including No Home Base and Not Reported)"
+  location_col: location
+  location_region_col: home_base_state
+  region_name_col: NAME
+
+vehicle_scaling_weights:
+  weight_col: weight
+  totals_col: veh_miles
+  location_region_col: home_base_state
+  weight_class_col: gvw_class
