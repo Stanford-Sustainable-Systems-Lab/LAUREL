@@ -7,6 +7,8 @@ from kedro.pipeline import Pipeline, node, pipeline
 
 from .nodes import (
     calc_derived_trip_cols,
+    clean_vius_by_home_base_state,
+    clean_vius_by_weight_class,
     create_dwells,
     format_trips_columns,
     get_vius_from_url,
@@ -47,8 +49,18 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "vius_home_base_state_raw",
                     "params:get_vius_by_home_base_state",
                 ],
-                outputs="vius_home_base_state",
+                outputs="vius_home_base_state_interim",
                 name="get_vius_by_home_base_state",
+                tags="downloads",
+            ),
+            node(
+                func=clean_vius_by_home_base_state,
+                inputs=[
+                    "vius_home_base_state_interim",
+                    "params:clean_vius_by_home_base_state",
+                ],
+                outputs="vius_home_base_state",
+                name="clean_vius_by_home_base_state",
                 tags="downloads",
             ),
             node(
@@ -57,8 +69,18 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "vius_weight_class_raw",
                     "params:get_vius_by_weight_class",
                 ],
-                outputs="vius_weight_class",
+                outputs="vius_weight_class_interim",
                 name="get_vius_by_weight_class",
+                tags="downloads",
+            ),
+            node(
+                func=clean_vius_by_weight_class,
+                inputs=[
+                    "vius_weight_class_interim",
+                    "params:clean_vius_by_weight_class",
+                ],
+                outputs="vius_weight_class",
+                name="clean_vius_by_weight_class",
                 tags="downloads",
             ),
         ],

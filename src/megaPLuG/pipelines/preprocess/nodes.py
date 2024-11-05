@@ -109,3 +109,20 @@ def get_vius_from_url(url: str, params: dict) -> pd.DataFrame:
 
     df = df.set_index(params["index_col"]).sort_index()
     return df
+
+
+def clean_vius_by_home_base_state(vius: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Clean the VIUS VMT by home base state table."""
+    vius = vius.drop(index=params["drop_idx_values"])
+    orig_idx = vius.index.names
+    vius = vius.reset_index()
+    for old, new in params["replace_values"].items():
+        vius = vius.replace(old, new)
+    vius = vius.set_index(orig_idx)
+    return vius
+
+
+def clean_vius_by_weight_class(weights: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Clean the VIUS VMT by weight class table."""
+    weights = weights.drop(index=params["drop_idx_values"])
+    return weights
