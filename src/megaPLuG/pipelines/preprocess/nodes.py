@@ -6,6 +6,7 @@ generated using Kedro 0.19.1
 import logging
 import re
 from io import StringIO
+from itertools import product
 
 import dask.dataframe as dd
 import pandas as pd
@@ -126,3 +127,30 @@ def clean_vius_by_weight_class(weights: pd.DataFrame, params: dict) -> pd.DataFr
     """Clean the VIUS VMT by weight class table."""
     weights = weights.drop(index=params["drop_idx_values"])
     return weights
+
+
+def build_vius_scaling_totals(
+    regions: pd.DataFrame, weights: pd.DataFrame, params: dict
+) -> pd.DataFrame:
+    """Build a scaling factor dependent on home base state and weight class.
+
+    Note that the VIUS top-level tables do not jointly tabulate along these two
+    dimensions, so we assume that they are independent.
+    """
+    id_cols = params["id_cols"]
+    scaler = pd.DataFrame(
+        product(regions.index, weights.index), columns=list(id_cols.values())
+    )
+    tot_col = params["totals_col"]
+    new_name = f"weight_class_factor_{params['totals_col']}"
+    weights[new_name] = weights[tot_col] / weights[tot_col].sum()
+    scaler = scaler.merge(weights, how="left", on=id_cols["weight_class"])
+    scaler = scaler.merge(
+        regions,
+        how="left",
+        on=id_cols["region"],
+        suffixes=("_weight", "_region"),
+    )
+
+    scaler[params["weight_col"]] = scaler[f"{tot_col}_region"] * scaler[new_name]
+    return scaler

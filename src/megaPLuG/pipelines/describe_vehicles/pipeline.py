@@ -107,9 +107,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=calc_vehicle_scaling_weights,
                 inputs=[
                     "vehs_with_regions",
-                    "dwell_obj_with_locations_desc_vehs",
-                    "vius_weight_class",
-                    "vius_home_base_state",
+                    "vius_scaling",
                     "params:vehicle_scaling_weights",
                 ],
                 outputs="vehicles_labelled",

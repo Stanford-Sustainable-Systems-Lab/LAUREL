@@ -80,3 +80,10 @@ clean_vius_by_home_base_state:
 clean_vius_by_weight_class:
   drop_idx_values:
     - Any Gross Vehicle Weight Rating Class
+
+build_vius_scaling_totals:
+  totals_col: n_vehs
+  weight_col: weight
+  id_cols:
+    region: home_base_state
+    weight_class: gvw_class

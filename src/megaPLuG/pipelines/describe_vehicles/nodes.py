@@ -5,7 +5,6 @@ generated using Kedro 0.19.3
 
 import logging
 from copy import deepcopy
-from itertools import product
 
 import geopandas as gpd
 import numpy as np
@@ -207,46 +206,30 @@ def mark_location_regions(
 
 def calc_vehicle_scaling_weights(
     vehs: pd.DataFrame,
-    dw: DwellSet,
-    veh_class_weights: pd.DataFrame,
-    region_totals: pd.DataFrame,
+    scaler: pd.DataFrame,
     params: dict,
 ) -> pd.DataFrame:
-    """Calculate vehicle scaling weights based on vehicle miles traveled totals.
+    """Calculate vehicle scaling weights based on vehicle count totals.
 
     Right now, this uses region and weight class.
     """
-    merge_cols = [params["location_region_col"], params["weight_class_col"]]
-    trip_veh_miles = dw.data.groupby(dw.veh)[dw.trip_dist].sum()
-    trip_veh_miles = vehs.merge(trip_veh_miles, how="left", on=dw.veh)
-    trip_miles = trip_veh_miles.groupby(merge_cols, observed=True)[dw.trip_dist].sum()
-    trips_name = f"{params['totals_col']}_trips"
-    trip_miles = trip_miles.to_frame().rename(columns={dw.trip_dist: trips_name})
-    scaler = pd.DataFrame(
-        product(region_totals.index, veh_class_weights.index), columns=merge_cols
-    )
-    veh_class_weights["wgt_cls_fctr"] = (
-        veh_class_weights[params["totals_col"]]
-        / veh_class_weights[params["totals_col"]].sum()
-    )
-    scaler = scaler.merge(veh_class_weights, how="left", on=params["weight_class_col"])
-    scaler = scaler.merge(
-        region_totals,
-        how="left",
-        on=params["location_region_col"],
-        suffixes=("_weight", "_region"),
-    )
-    scaler = scaler.merge(trip_miles, how="left", on=merge_cols)
-    region_name = f"{params['totals_col']}_region"
-
-    scaler[params["weight_col"]] = (
-        scaler[region_name] * scaler["wgt_cls_fctr"] / scaler[trips_name]
-    )
+    if len(params["summaries"]) > 1:
+        raise RuntimeError("One summary only is expected.")
+    grp_cols = params["group_cols"]
 
     orig_idx = vehs.index.names
     vehs = vehs.reset_index()
-    mrg = scaler.loc[:, merge_cols + [params["weight_col"]]]
-    vehs = vehs.merge(mrg, how="left", on=merge_cols)
+    trip_summ = vehs.groupby(grp_cols, observed=True).agg(params["summaries"])
+
+    trips_name = f"{params['totals_col']}_trips"
+    region_name = f"{params['totals_col']}_region"
+    summ_col = list(params["summaries"].keys())[0]
+    trip_summ = trip_summ.rename(columns={summ_col: trips_name})
+    scaler = scaler.merge(trip_summ, how="left", on=grp_cols)
+    scaler[params["weight_col"]] = scaler[region_name] / scaler[trips_name]
+
+    mrg = scaler.loc[:, grp_cols + [params["weight_col"]]]
+    vehs = vehs.merge(mrg, how="left", on=grp_cols)
     vehs = vehs.set_index(orig_idx)
     return vehs
 

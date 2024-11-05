@@ -64,7 +64,10 @@ mark_location_regions:
   region_name_col: NAME
 
 vehicle_scaling_weights:
+  group_cols:
+   - home_base_state
+   - gvw_class
+  summaries:
+    veh_id: nunique
   weight_col: weight
-  totals_col: veh_miles
-  location_region_col: home_base_state
-  weight_class_col: gvw_class
+  totals_col: n_vehs

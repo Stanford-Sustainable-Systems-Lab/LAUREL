@@ -64,6 +64,10 @@ vius_weight_class:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/VIUS/vius_weight_class.feather
 
+vius_scaling:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/vius_scaling.feather
+
 # Electrification simulation datasets
 dwells_with_charging_partition:
   type: partitions.PartitionedDataset

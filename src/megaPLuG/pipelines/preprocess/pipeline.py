@@ -6,6 +6,7 @@ generated using Kedro 0.19.1
 from kedro.pipeline import Pipeline, node, pipeline
 
 from .nodes import (
+    build_vius_scaling_totals,
     calc_derived_trip_cols,
     clean_vius_by_home_base_state,
     clean_vius_by_weight_class,
@@ -81,6 +82,17 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="vius_weight_class",
                 name="clean_vius_by_weight_class",
+                tags="downloads",
+            ),
+            node(
+                func=build_vius_scaling_totals,
+                inputs=[
+                    "vius_home_base_state",
+                    "vius_weight_class",
+                    "params:build_vius_scaling_totals",
+                ],
+                outputs="vius_scaling",
+                name="build_vius_scaling_totals",
                 tags="downloads",
             ),
         ],
