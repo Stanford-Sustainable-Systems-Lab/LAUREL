@@ -40,6 +40,18 @@ def assign_regions(dw: DwellSet, hex_regions: pd.DataFrame) -> DwellSet:
     return dw
 
 
+def assign_scale_up_factor(
+    dw: DwellSet, vehs: pd.DataFrame, params: dict
+) -> pd.DataFrame:
+    """Assign the factor by which each dwell's power will be scaled up."""
+    if params["apply_scaling"]:
+        mrg = vehs.loc[:, params["veh_cols"]]
+        dw.data = dw.data.merge(mrg, how="left", on=dw.veh)
+    else:
+        dw.data.loc[:, params["veh_cols"]] = 1.0
+    return dw
+
+
 def get_load_profiles(dw: DwellSet, params: dict) -> pd.DataFrame:
     """Convert vehicle dwells to hexagon load profiles.
 

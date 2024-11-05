@@ -7,6 +7,11 @@
 summarize_vehicles:
   dead_energy_col: dwell_init_kwh
 
+assign_scale_up_factor:
+  apply_scaling: True
+  veh_cols:
+    - weight
+
 profiles_from_dwells:
   charging_manager: ImmediateChargingManager
   input_cols: # keys should match the keyword arguments of the charging manager
@@ -14,6 +19,7 @@ profiles_from_dwells:
     duration: dwell_time_hrs
     max_power: max_power_kw
     region: substation_id
+    scale_up: weight
   profile_col: power_kw
   duration_col: duration
 

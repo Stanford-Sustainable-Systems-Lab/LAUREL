@@ -14,6 +14,7 @@ from megaPLuG.scenarios.io import (
 from .nodes import (
     add_region_geoms,
     assign_regions,
+    assign_scale_up_factor,
     get_load_profiles,
     report_by_region_peaks,
     report_by_region_quantiles,
@@ -60,8 +61,19 @@ def create_pipeline(**kwargs) -> Pipeline:
                 tags="frame-charging_management",
             ),
             node(
+                func=assign_scale_up_factor,
+                inputs=[
+                    "dwell_obj_w_regions",
+                    "vehicles_labelled",
+                    "params:assign_scale_up_factor",
+                ],
+                outputs="dwell_obj_w_scaling",
+                name="assign_scale_up_factor",
+                tags="frame-charging_management",
+            ),
+            node(
                 func=get_load_profiles,
-                inputs=["dwell_obj_w_regions", "params:profiles_from_dwells"],
+                inputs=["dwell_obj_w_scaling", "params:profiles_from_dwells"],
                 outputs="profiles",
                 name="get_load_profiles",
                 tags="frame-charging_management",

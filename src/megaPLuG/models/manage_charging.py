@@ -26,6 +26,7 @@ class AbstractChargingManager(ABC):
     _duration: str = None
     _max_power: str = None
     _cost: str = None
+    _scale_up: str = None
     _region: str = None
 
     def __init__(
@@ -35,6 +36,7 @@ class AbstractChargingManager(ABC):
         duration: str,
         max_power: str,
         region: str,
+        scale_up: str = None,
         cost: str = None,
     ) -> None:
         """Initialize the ChargingManager."""
@@ -43,6 +45,7 @@ class AbstractChargingManager(ABC):
         self.duration = duration
         self.max_power = max_power
         self.region = region
+        self.scale_up = scale_up
         self.cost = cost
 
     @abstractmethod
@@ -87,6 +90,15 @@ class AbstractChargingManager(ABC):
         self._region = value
 
     @property
+    def scale_up(self):
+        return self._scale_up
+
+    @scale_up.setter
+    def scale_up(self, value):
+        self.dw._rename_idx_col(value, self._scale_up)
+        self._scale_up = value
+
+    @property
     def cost(self):
         return self._cost
 
@@ -123,6 +135,8 @@ class IndependentDwellChargingManager(AbstractChargingManager):
                 f"The following columns are already using the {type(self).__name__} suffixes: {', '.join(checks)}. If this is unexpected, then please change their names."
             )
         self = self.set_dwell_events()
+        for col in [f"{seqn}_{self.suffixes['power']}" for seqn in self.seq_names]:
+            self.dw.data[col] = self.dw.data[col] * self.dw.data[self.scale_up]
         # self.dw.data = self.dw.data.dropna(subset=self.dw.seq_names)
         self.dw.seq_names = self.seq_names
         events = self.dw.to_events(id_cols=[self.region])
