@@ -8,7 +8,7 @@ summarize_vehicles:
   dead_energy_col: dwell_init_kwh
 
 assign_scale_up_factor:
-  apply_scaling: True
+  apply_scaling: False
   veh_cols:
     - weight
 
