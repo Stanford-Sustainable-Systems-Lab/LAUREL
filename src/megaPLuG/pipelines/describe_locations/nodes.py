@@ -81,10 +81,17 @@ def build_analysis_areas(
 
 
 def get_hexes_by_area(areas: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
-    """Get hexagon geometries for each study area."""
+    """Get hexagon geometries for each study area.
+
+    This implicitly assumes that the hexagons are small relative to the regions, so that
+    there is a one-to-many relationship between regions and hexagons.
+    """
+    areas = areas.rename(
+        columns={v: k for k, v in params["group_cols_renamer"].items()}
+    )
     hexes = region_polygons_to_cells(
         geos=areas,
-        grp_cols=params["group_cols"],
+        grp_cols=list(params["group_cols_renamer"].keys()),
         hex_col=params["hex_col"],
     )
     hexes = hexes.reset_index()

@@ -30,10 +30,10 @@ analysis_areas:
   crs: EPSG:32611
 
 get_hexes_by_area:
-  group_cols:
-    - STUSPS
-    - substationid
-    - land_use
+  group_cols_renamer:
+    state: STUSPS
+    substation_id: substationid
+    land_use: land_use
   hex_col: hex_id
 
 get_timezones:
