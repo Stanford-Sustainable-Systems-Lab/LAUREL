@@ -17,11 +17,23 @@ state_boundaries:
   load_args:
     layer: cb_2023_us_state_500k
 
-substations:
+substation_boundaries:
   type: megaPLuG.datasets.geodatabase.GeoDataBaseDataset
-  filepath: data/01_raw/ICA_Maps/PGE/ICADisplay.gdb
+  filepath: data/01_raw/ICA_Maps/PGE/GRIP_FGDB/GNA.gdb
   load_args:
-    layer: Substations
+    layer: DFSubstationArea___PeakFacilityLoadingPercent
+
+substation_profiles:
+  type: megaPLuG.datasets.geodatabase.GeoDataBaseDataset
+  filepath: data/01_raw/ICA_Maps/PGE/GRIP_FGDB/ICA.gdb
+  load_args:
+    layer: SubstationLoadProfile
+    columns:
+      - SubID
+      - SubName
+      - MonthHour
+      - Low
+      - High
 
 # Preprocessed datasets
 dwells:
