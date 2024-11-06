@@ -13,6 +13,7 @@ from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.group_times import HourOfWeekdayGrouper
 from megaPLuG.models.manage_charging import _MANAGER_MAP
 from megaPLuG.models.summarize import EventExpander, NonzeroGroupedSummarizer
+from megaPLuG.utils.data import ColumnIntegerizer
 from megaPLuG.utils.h3 import cells_to_region_polygons
 from megaPLuG.utils.time import calc_local_time_attrs, total_hours
 
@@ -121,6 +122,8 @@ def report_by_region_quantiles(
     nonzero = nonzero.drop(index=drop_idx)
 
     logger.info("Expand events to cover all groups across their duration")
+    region_inter = ColumnIntegerizer(pcols["region"])
+    nonzero = region_inter.integerize(nonzero)
     # Then apply expansion
     expander = EventExpander(
         time_col=pcols["time"],
@@ -130,6 +133,7 @@ def report_by_region_quantiles(
         freq=params["freq"],
     )
     nonzero_exp = expander.expand_events(nonzero)
+    nonzero_exp = region_inter.deintegerize(nonzero_exp)
 
     logger.info("Group events")
     grouper = [pcols["region"], pd.Grouper(key=pcols["time"], freq=params["freq"])]
@@ -155,11 +159,14 @@ def report_by_region_quantiles(
         group_cols=summ_cols,
         quantiles=np.array(params["quantiles"]),
     )
+    region_inter = ColumnIntegerizer(pcols["region"])
+    grped_nonzero = region_inter.integerize(grped_nonzero)
     quantiles = summer.summarize(
         events=grped_nonzero,
         value_col=pcols["power"],
         possible_count_col="possible_count",
     )
+    quantiles = region_inter.deintegerize(quantiles)
     return quantiles
 
 

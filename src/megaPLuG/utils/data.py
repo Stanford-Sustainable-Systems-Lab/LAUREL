@@ -1,3 +1,5 @@
+from typing import Self
+
 import dask.dataframe as dd
 import geopandas as gpd
 import numpy as np
@@ -102,3 +104,73 @@ def get_basic_dtype_ser(ser: pd.Series) -> pd.Series:
         return ser.astype(np.float64)
     else:
         raise RuntimeError("No available non-nullable dtype!")
+
+
+class ColumnIntegerizer:
+    """Integerize an arbitrary column of a Pandas DataFrame and recover back to original.
+
+    This will usually accompany processing by `numba`.
+    """
+
+    _orig_col: str
+    _corresp: pd.DataFrame
+
+    def __init__(self: Self, orig_col: str) -> None:
+        self.orig_col = orig_col
+
+    def integerize(self: Self, df: pd.DataFrame) -> pd.DataFrame:
+        """Convert the original column to an integer form of itself while retaining the name."""
+        if self.orig_col not in df.columns.tolist():
+            raise RuntimeError(
+                f"{self.orig_col} not found in the columns of the dataframe."
+            )
+
+        col_order = df.columns.tolist()
+        orig_idx = df.index.names
+        if orig_idx != [None]:
+            df = df.reset_index()
+        cat_ser = df[self.orig_col].astype("category")
+        self.corresp = pd.DataFrame(
+            {
+                self.orig_col: cat_ser.cat.categories,
+                "code": np.arange(len(cat_ser.cat.categories)),
+            }
+        )
+
+        df = df.merge(self.corresp, how="left", on=self.orig_col)
+        df = df.drop(columns=[self.orig_col])
+        df = df.rename(columns={"code": self.orig_col})
+        if orig_idx != [None]:
+            df = df.set_index(orig_idx)
+        df = df.loc[:, col_order]
+        return df
+
+    def deintegerize(self: Self, df: pd.DataFrame) -> pd.DataFrame:
+        """Convert the integerized column back to the original form."""
+        col_order = df.columns.tolist()
+        orig_idx = df.index.names
+        if orig_idx != [None]:
+            df = df.reset_index()
+        df = df.rename(columns={self.orig_col: "code"})
+        df = df.merge(self.corresp, how="left", on="code")
+        df = df.drop(columns=["code"])
+        if orig_idx != [None]:
+            df = df.set_index(orig_idx)
+        df = df.loc[:, col_order]
+        return df
+
+    @property
+    def orig_col(self: Self) -> str:
+        return self._orig_col
+
+    @orig_col.setter
+    def orig_col(self: Self, value: str) -> None:
+        self._orig_col = value
+
+    @property
+    def corresp(self: Self) -> pd.DataFrame:
+        return self._corresp
+
+    @corresp.setter
+    def corresp(self: Self, value: pd.DataFrame) -> None:
+        self._corresp = value
