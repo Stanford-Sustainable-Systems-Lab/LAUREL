@@ -10,20 +10,14 @@ govt_areas:
       value_isin:
         - CA
 
-utility_territories:
-  buffer_dist_meters: 15000
+analysis_areas:
+  crs: EPSG:32611
 
 get_hexes_by_area:
   group_cols:
     - STUSPS
-    - utility
+    - substationid
   hex_col: hex_id
-
-nearest_infra_corresp:
-  hex_col: hex_id
-  substation_col_renamer:
-    substation_name: SUBNAME
-    substation_id: SUBSTATIONID
 
 get_timezones:
   hex_col: hex_id
