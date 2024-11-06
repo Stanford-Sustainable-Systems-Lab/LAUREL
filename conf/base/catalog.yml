@@ -35,6 +35,16 @@ substation_profiles:
       - Low
       - High
 
+urban_areas:
+  type: megaPLuG.datasets.shapefile.ShapefileDataset
+  filepath: data/01_raw/Census_Geographies/tl_2020_us_uac20_corrected/tl_2020_us_uac20_corrected.shp
+
+highways:
+  type: megaPLuG.datasets.geodatabase.GeoDataBaseDataset
+  filepath: data/01_raw/Census_Geographies/north_american_roads_2024.gdb
+  load_args:
+    layer: North_American_Roads
+
 # Preprocessed datasets
 dwells:
   type: pandas.FeatherDataset

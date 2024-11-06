@@ -10,6 +10,22 @@ govt_areas:
       value_isin:
         - CA
 
+highways:
+  filters:
+    JURISNAME:
+      value_isin:
+        - California
+
+urban_areas:
+  area_name_col: NAME20
+  state_codes:
+    - CA
+
+land_use:
+  crs: EPSG:32611
+  highway_buffer_miles: 5
+  land_use_col: land_use
+
 analysis_areas:
   crs: EPSG:32611
 
@@ -17,6 +33,7 @@ get_hexes_by_area:
   group_cols:
     - STUSPS
     - substationid
+    - land_use
   hex_col: hex_id
 
 get_timezones:

@@ -10,6 +10,8 @@ from megaPLuG.utils.time import get_timezones
 
 from .nodes import (
     build_analysis_areas_node,
+    build_land_use_areas,
+    filter_urban_areas,
     get_hexes_by_area,
 )
 
@@ -21,11 +23,39 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=filter_by_vals_in_cols,
                 inputs=["state_boundaries", "params:govt_areas"],
                 outputs="govt_areas",
-                name="filter_by_vals_in_cols",
+                name="filter_by_vals_in_cols_govt",
+            ),
+            node(
+                func=filter_by_vals_in_cols,
+                inputs=["highways", "params:highways"],
+                outputs="highways_select",
+                name="filter_by_vals_in_cols_highway",
+            ),
+            node(
+                func=filter_urban_areas,
+                inputs=["urban_areas", "params:urban_areas"],
+                outputs="urban_areas_select",
+                name="filter_urban_areas",
+            ),
+            node(
+                func=build_land_use_areas,
+                inputs=[
+                    "govt_areas",
+                    "highways_select",
+                    "urban_areas_select",
+                    "params:land_use",
+                ],
+                outputs="land_use",
+                name="build_land_use_areas",
             ),
             node(
                 func=build_analysis_areas_node,
-                inputs=["govt_areas", "substation_boundaries", "params:analysis_areas"],
+                inputs=[
+                    "govt_areas",
+                    "substation_boundaries",
+                    "land_use",
+                    "params:analysis_areas",
+                ],
                 outputs="analysis_areas",
                 name="build_analysis_areas",
             ),
