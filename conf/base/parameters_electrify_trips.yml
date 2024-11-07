@@ -98,3 +98,17 @@ simulate_charging_choice:
     rng_alpha: initial_soc_alpha
     rng_beta: initial_soc_beta
     charge_soc: charge_soc_thresh
+
+assign_scale_up_factor:
+  apply_scaling: False
+  veh_cols:
+    - weight
+
+manage_charging:
+  charging_manager: ImmediateChargingManager
+  input_cols: # keys should match the keyword arguments of the charging manager
+    energy: charge_kwh
+    duration: dwell_time_hrs
+    max_power: max_power_kw
+    region: substation_id
+    scale_up: weight

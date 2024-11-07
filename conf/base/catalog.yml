@@ -98,6 +98,13 @@ dwells_with_charging_partition:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
+events_partition:
+  type: partitions.PartitionedDataset
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/events"
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
+
 vehicles_with_params_partition:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/vehicles_with_params"

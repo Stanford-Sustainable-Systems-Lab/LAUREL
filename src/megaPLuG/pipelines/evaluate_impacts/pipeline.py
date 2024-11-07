@@ -13,8 +13,6 @@ from megaPLuG.scenarios.io import (
 
 from .nodes import (
     add_region_geoms,
-    assign_regions,
-    assign_scale_up_factor,
     get_load_profiles,
     report_by_region_peaks,
     report_by_region_quantiles,
@@ -44,6 +42,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="collate_partitions_vehicles_with_params",
             ),
             node(
+                func=read_scenario_partition,
+                inputs=["events_partition", "params:results_partition"],
+                outputs="events_eval",
+                name="collate_partitions_events",
+            ),
+            node(
                 func=summarize_vehicles,
                 inputs=[
                     "dwell_obj_eval",
@@ -54,26 +58,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="summarize_vehicles",
             ),
             node(
-                func=assign_regions,
-                inputs=["dwell_obj_eval", "hex_region_corresp"],
-                outputs="dwell_obj_w_regions",
-                name="assign_regions",
-                tags="frame-charging_management",
-            ),
-            node(
-                func=assign_scale_up_factor,
-                inputs=[
-                    "dwell_obj_w_regions",
-                    "vehicles_labelled",
-                    "params:assign_scale_up_factor",
-                ],
-                outputs="dwell_obj_w_scaling",
-                name="assign_scale_up_factor",
-                tags="frame-charging_management",
-            ),
-            node(
                 func=get_load_profiles,
-                inputs=["dwell_obj_w_scaling", "params:profiles_from_dwells"],
+                inputs=["events_eval", "params:profiles_from_events"],
                 outputs="profiles",
                 name="get_load_profiles",
                 tags="frame-charging_management",

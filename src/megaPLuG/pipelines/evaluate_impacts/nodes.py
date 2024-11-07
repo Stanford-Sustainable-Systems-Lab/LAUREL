@@ -11,7 +11,6 @@ import pandas as pd
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.group_times import HourOfWeekdayGrouper
-from megaPLuG.models.manage_charging import _MANAGER_MAP
 from megaPLuG.models.summarize import EventExpander, NonzeroGroupedSummarizer
 from megaPLuG.utils.data import ColumnIntegerizer
 from megaPLuG.utils.h3 import cells_to_region_polygons
@@ -32,47 +31,9 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     return vehs
 
 
-def assign_regions(dw: DwellSet, hex_regions: pd.DataFrame) -> DwellSet:
-    """Assign larger regions to the DwellSet based on hexagin ids."""
-    orig_idx = dw.data.index.names
-    dw.data = dw.data.reset_index()
-    dw.data = dw.data.merge(hex_regions, how="left", on=dw.hex)
-    dw.data = dw.data.set_index(orig_idx)
-    return dw
-
-
-def assign_scale_up_factor(
-    dw: DwellSet, vehs: pd.DataFrame, params: dict
-) -> pd.DataFrame:
-    """Assign the factor by which each dwell's power will be scaled up."""
-    if params["apply_scaling"]:
-        mrg = vehs.loc[:, params["veh_cols"]]
-        dw.data = dw.data.merge(mrg, how="left", on=dw.veh)
-    else:
-        dw.data.loc[:, params["veh_cols"]] = 1.0
-    return dw
-
-
-def get_load_profiles(dw: DwellSet, params: dict) -> pd.DataFrame:
-    """Convert vehicle dwells to hexagon load profiles.
-
-    Depending on the charging management algorithm, the transformation to events from
-    dwells may occur before or after the power levels. For systems which treat each
-    dwell independently, then sending to events after calculating power makes sense. In
-    contrast, for systems which consider dwells together, then sending to events before
-    calculating power makes sense.
-    """
-    # Drop dwells with NaN charging energy, which probably resulted from vehicle deaths
-    icols = params["input_cols"]
-    drop_cols = [icols["energy"], icols["region"]]
-    dw.data = dw.data.dropna(subset=drop_cols)
-
-    # Manage charging energy into power
-    manager_cls = _MANAGER_MAP[params["charging_manager"]]
-    manager = manager_cls(dw=dw, **icols)
-    events = manager.get_events()
-
-    event_grp = events.groupby(icols["region"], sort=False)
+def get_load_profiles(events: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Convert vehicle charging events to load profiles by group."""
+    event_grp = events.groupby(params["group_cols"], sort=False)
     # Note: The vehicle and hexagon ids are rendered uninterpretable by the cumsum
     events[params["profile_col"]] = event_grp[params["power_col"]].cumsum()
     events[params["duration_col"]] = event_grp[params["time_col"]].transform(

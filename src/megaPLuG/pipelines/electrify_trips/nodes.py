@@ -10,6 +10,7 @@ import pandas as pd
 
 from megaPLuG.models.charging_algorithms import SoCThreshChargingChoiceStrategy
 from megaPLuG.models.dwell_sets import DwellSet
+from megaPLuG.models.manage_charging import _MANAGER_MAP
 from megaPLuG.utils.params import build_df_from_dict, flatten_dict
 from megaPLuG.utils.time import total_hours
 
@@ -167,3 +168,38 @@ def simulate_charging_choice(
     strat = SoCThreshChargingChoiceStrategy(**params["input_cols"])
     dw.data = strat.run(dwells=dw, vehs=vehs)
     return dw
+
+
+def assign_regions(dw: DwellSet, hex_regions: pd.DataFrame) -> DwellSet:
+    """Assign larger regions to the DwellSet based on hexagon ids."""
+    orig_idx = dw.data.index.names
+    dw.data = dw.data.reset_index()
+    dw.data = dw.data.merge(hex_regions, how="left", on=dw.hex)
+    dw.data = dw.data.set_index(orig_idx)
+    return dw
+
+
+def assign_scale_up_factor(
+    dw: DwellSet, vehs: pd.DataFrame, params: dict
+) -> pd.DataFrame:
+    """Assign the factor by which each dwell's power will be scaled up."""
+    if params["apply_scaling"]:
+        mrg = vehs.loc[:, params["veh_cols"]]
+        dw.data = dw.data.merge(mrg, how="left", on=dw.veh)
+    else:
+        dw.data.loc[:, params["veh_cols"]] = 1.0
+    return dw
+
+
+def manage_charging(dw: DwellSet, params: dict) -> pd.DataFrame:
+    """Manage the charging of vehicles within each dwell to create charging events."""
+    # Drop dwells with NaN charging energy, which probably resulted from vehicle deaths
+    icols = params["input_cols"]
+    drop_cols = [icols["energy"], icols["region"]]
+    dw.data = dw.data.dropna(subset=drop_cols)
+
+    # Manage charging energy into power
+    manager_cls = _MANAGER_MAP[params["charging_manager"]]
+    manager = manager_cls(dw=dw, **icols)
+    events = manager.get_events()
+    return events

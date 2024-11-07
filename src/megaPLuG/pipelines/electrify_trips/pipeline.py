@@ -9,9 +9,12 @@ from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
 from megaPLuG.scenarios.io import write_scenario_partition
 
 from .nodes import (
+    assign_regions,
+    assign_scale_up_factor,
     calc_energy_use,
     filter_dwells,
     filter_vehicles,
+    manage_charging,
     mark_critical_days,
     mark_substantial_dwells,
     set_charging_availability,
@@ -100,6 +103,34 @@ def create_pipeline(**kwargs) -> Pipeline:
                 tags="frame-charging_choice",
             ),
             node(
+                func=assign_regions,
+                inputs=["dwell_obj_w_charging", "hex_region_corresp"],
+                outputs="dwell_obj_w_regions",
+                name="assign_regions_electrify",
+                tags="frame-charging_management",
+            ),
+            node(
+                func=assign_scale_up_factor,
+                inputs=[
+                    "dwell_obj_w_regions",
+                    "vehicles_labelled",
+                    "params:assign_scale_up_factor",
+                ],
+                outputs="dwell_obj_w_scaling",
+                name="assign_scale_up_factor",
+                tags="frame-charging_management",
+            ),
+            node(
+                func=manage_charging,
+                inputs=[
+                    "dwell_obj_w_scaling",
+                    "params:manage_charging",
+                ],
+                outputs="events",
+                name="manage_charging",
+                tags="frame-charging_management",
+            ),
+            node(
                 func=save_dwell_set,
                 inputs="dwell_obj_w_charging",
                 outputs="dwells_with_charging",
@@ -110,6 +141,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["dwells_with_charging", "params:results_partition"],
                 outputs="dwells_with_charging_partition",
                 name="write_scenario_partition_dwells",
+            ),
+            node(
+                func=write_scenario_partition,
+                inputs=["events", "params:results_partition"],
+                outputs="events_partition",
+                name="write_scenario_partition_events",
             ),
             node(
                 func=write_scenario_partition,
