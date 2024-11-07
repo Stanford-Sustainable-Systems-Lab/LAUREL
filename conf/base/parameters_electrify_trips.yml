@@ -106,9 +106,10 @@ assign_scale_up_factor:
 
 manage_charging:
   charging_manager: ImmediateChargingManager
+  drop_na_cols:
+    - charge_kwh
   input_cols: # keys should match the keyword arguments of the charging manager
     energy: charge_kwh
     duration: dwell_time_hrs
     max_power: max_power_kw
-    region: substation_id
     scale_up: weight

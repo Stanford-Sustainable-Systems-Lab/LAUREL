@@ -194,12 +194,10 @@ def assign_scale_up_factor(
 def manage_charging(dw: DwellSet, params: dict) -> pd.DataFrame:
     """Manage the charging of vehicles within each dwell to create charging events."""
     # Drop dwells with NaN charging energy, which probably resulted from vehicle deaths
-    icols = params["input_cols"]
-    drop_cols = [icols["energy"], icols["region"]]
-    dw.data = dw.data.dropna(subset=drop_cols)
+    dw.data = dw.data.dropna(subset=params["drop_na_cols"])
 
     # Manage charging energy into power
     manager_cls = _MANAGER_MAP[params["charging_manager"]]
-    manager = manager_cls(dw=dw, **icols)
+    manager = manager_cls(dw=dw, **params["input_cols"])
     events = manager.get_events()
     return events

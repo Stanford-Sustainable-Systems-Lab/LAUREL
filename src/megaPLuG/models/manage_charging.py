@@ -35,7 +35,7 @@ class AbstractChargingManager(ABC):
         energy: str,
         duration: str,
         max_power: str,
-        region: str,
+        region: str = None,
         scale_up: str = None,
         cost: str = None,
     ) -> None:
@@ -135,12 +135,13 @@ class IndependentDwellChargingManager(AbstractChargingManager):
                 f"The following columns are already using the {type(self).__name__} suffixes: {', '.join(checks)}. If this is unexpected, then please change their names."
             )
         self = self.set_dwell_events()
-        for col in [f"{seqn}_{self.suffixes['power']}" for seqn in self.seq_names]:
-            self.dw.data[col] = self.dw.data[col] * self.dw.data[self.scale_up]
+        if self.scale_up is not None:
+            for col in [f"{seqn}_{self.suffixes['power']}" for seqn in self.seq_names]:
+                self.dw.data[col] = self.dw.data[col] * self.dw.data[self.scale_up]
         # self.dw.data = self.dw.data.dropna(subset=self.dw.seq_names)
         self.dw.seq_names = self.seq_names
-        events = self.dw.to_events(id_cols=[self.region])
-        events = events.set_index([self.region] + [self.suffixes["time"]])
+        events = self.dw.to_events(id_cols=[self.dw.hex])
+        events = events.set_index([self.dw.hex] + [self.suffixes["time"]])
         events = events.sort_index()
         events = events.reset_index(self.suffixes["time"], drop=False)
         return events
@@ -199,6 +200,10 @@ class OptimizerDwellChargingManager(AbstractChargingManager):
     # session and then split up the sessions into discrete time intervals, in order to
     # build a fully parallelized optimization for each hexagon, permitting arbitrary
     # ToU rates, vehicle SoC evolutions (within session), etc.
+
+    # TODO: Even if optimization is occurring on regions larger than a single hexagon,
+    # you should still report events by hexagon in order to allow the maximum
+    # flexibility of summaries later.
     pass
 
 
