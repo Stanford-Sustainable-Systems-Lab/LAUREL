@@ -10,6 +10,13 @@ substantial_dwells:
     - trip_hrs
     - trip_avg_speed_mph
 
+operating_segment:
+  radius_bin_low_bounds_miles:
+    local: 0
+    regional: 100
+    long-haul: 300
+  segment_col: op_segment
+
 cluster_veh_loc_pairs:
   min_cluster_size_denom: 200 # [n_obs]/[this number] gives the minimum cluster size 
   sample:

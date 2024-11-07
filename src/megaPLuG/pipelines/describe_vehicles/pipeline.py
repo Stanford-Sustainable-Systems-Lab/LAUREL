@@ -13,6 +13,7 @@ from .nodes import (
     classify_vehicles,
     describe_veh_loc_pairs,
     filter_substantial_dwells,
+    get_operating_segment,
     label_veh_loc_pairs,
     mark_location_regions,
     mark_locations,
@@ -73,6 +74,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="classify_vehicles",
             ),
             node(
+                func=get_operating_segment,
+                inputs=[
+                    "vehicles_with_class",
+                    "dwell_obj_desc_vehs",
+                    "params:operating_segment",
+                ],
+                outputs="vehicles_with_segment",
+                name="get_operating_segment",
+            ),
+            node(
                 func=mark_locations,
                 inputs=[
                     "dwell_obj_desc_vehs",
@@ -85,7 +96,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=mark_weight_class_group,
                 inputs=[
-                    "vehicles_with_class",
+                    "vehicles_with_segment",
                     "params:weight_class_group",
                 ],
                 outputs="vehs_with_weight_class_group",

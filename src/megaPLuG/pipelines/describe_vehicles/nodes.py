@@ -15,6 +15,7 @@ from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.utils.data import merge_on_int_cols
+from megaPLuG.utils.geo import calc_operating_radius
 from megaPLuG.utils.h3 import add_geometries
 from megaPLuG.utils.params import build_df_from_dict
 from megaPLuG.utils.time import total_hours
@@ -31,6 +32,31 @@ def filter_substantial_dwells(dw: DwellSet, params: dict) -> DwellSet:
         columns=params["drop_cols"]
     )  # Since these aren't accumulated by accum_masked
     return dw
+
+
+def get_operating_segment(
+    vehs: pd.DataFrame, dw: DwellSet, params: dict
+) -> pd.DataFrame:
+    """Calculate the operating segment of each vehicle based on operating radius."""
+    if not isinstance(dw.data, gpd.GeoDataFrame):
+        logger.info("Converting DwellSet data to GeoDataFrame.")
+        dw.to_geodataframe()
+
+    logger.info("Calculating operating radii")
+    tqdm.pandas()
+    rads = dw.data.groupby(dw.veh).geometry.progress_aggregate(calc_operating_radius)
+    rads.name = "operating_radius_miles"
+    max_rad = rads.max()
+    rads = rads.to_frame()
+    bins = params["radius_bin_low_bounds_miles"]
+    rads[params["segment_col"]] = pd.cut(
+        rads["operating_radius_miles"],
+        bins=list(bins.values()) + [max_rad],
+        labels=list(bins.keys()),
+        include_lowest=True,
+    )
+    vehs = vehs.merge(rads.loc[:, [params["segment_col"]]], how="left", on=dw.veh)
+    return vehs
 
 
 def calc_inter_visit_stats(dw: DwellSet) -> DwellSet:
