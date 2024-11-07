@@ -70,10 +70,15 @@ def get_load_profiles(dw: DwellSet, params: dict) -> pd.DataFrame:
     # Manage charging energy into power
     manager_cls = _MANAGER_MAP[params["charging_manager"]]
     manager = manager_cls(dw=dw, **icols)
-    profs = manager.get_load_profiles(
-        prof_col=params["profile_col"],
-        dur_col=params["duration_col"],
+    events = manager.get_events()
+
+    event_grp = events.groupby(icols["region"], sort=False)
+    # Note: The vehicle and hexagon ids are rendered uninterpretable by the cumsum
+    events[params["profile_col"]] = event_grp[params["power_col"]].cumsum()
+    events[params["duration_col"]] = event_grp[params["time_col"]].transform(
+        lambda ser: ser.shift(-1) - ser
     )
+    profs = events.drop(columns=[params["power_col"]])
     return profs
 
 
@@ -159,14 +164,11 @@ def report_by_region_quantiles(
         group_cols=summ_cols,
         quantiles=np.array(params["quantiles"]),
     )
-    region_inter = ColumnIntegerizer(pcols["region"])
-    grped_nonzero = region_inter.integerize(grped_nonzero)
     quantiles = summer.summarize(
         events=grped_nonzero,
         value_col=pcols["power"],
         possible_count_col="possible_count",
     )
-    quantiles = region_inter.deintegerize(quantiles)
     return quantiles
 
 

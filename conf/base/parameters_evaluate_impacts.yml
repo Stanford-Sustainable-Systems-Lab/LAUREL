@@ -22,6 +22,8 @@ profiles_from_dwells:
     scale_up: weight
   profile_col: power_kw
   duration_col: duration
+  power_col: hex_kw_diff
+  time_col: time
 
 report_by_region_peaks:
   id_cols:

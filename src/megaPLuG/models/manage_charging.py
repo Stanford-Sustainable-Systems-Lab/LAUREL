@@ -49,7 +49,7 @@ class AbstractChargingManager(ABC):
         self.cost = cost
 
     @abstractmethod
-    def get_load_profiles(self) -> pd.DataFrame:
+    def get_events(self) -> pd.DataFrame:
         """Get the load profiles which result from the given charging management."""
         pass
 
@@ -127,7 +127,7 @@ class IndependentDwellChargingManager(AbstractChargingManager):
         """Set the charging management power change events within the dwell."""
         pass
 
-    def get_load_profiles(self, prof_col: str, dur_col: str) -> pd.DataFrame:
+    def get_events(self: Self) -> pd.DataFrame:
         """Take dwells and convert to events."""
         checks = self.check_for_suffixes()
         if len(checks) > 0:
@@ -140,20 +140,9 @@ class IndependentDwellChargingManager(AbstractChargingManager):
         # self.dw.data = self.dw.data.dropna(subset=self.dw.seq_names)
         self.dw.seq_names = self.seq_names
         events = self.dw.to_events(id_cols=[self.region])
-        # Sort by region and time
-        events = DwellSet._sort_by_grp_time(
-            df=events,
-            grp_col=self.region,
-            time_col=self.suffixes["time"],
-            drop_cur_idx=True,
-        )
-        event_grp = events.groupby(self.region, sort=False)
-        # Note: The vehicle and hexagon ids are rendered uninterpretable by the cumsum
-        events[prof_col] = event_grp[self.suffixes["power"]].cumsum()
-        events[dur_col] = event_grp[self.suffixes["time"]].transform(
-            lambda ser: ser.shift(-1) - ser
-        )
-        events = events.drop(columns=[self.suffixes["power"]])
+        events = events.set_index([self.region] + [self.suffixes["time"]])
+        events = events.sort_index()
+        events = events.reset_index(self.suffixes["time"], drop=False)
         return events
 
     def check_for_suffixes(self) -> list[str]:
