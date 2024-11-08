@@ -67,7 +67,16 @@ def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
 
 def set_charging_availability(dw: DwellSet, locs: dict) -> DwellSet:
     """Set the charging availability for each session."""
-    dw.data["max_power_kw"] = locs["charging_rate_kw"]
+    d = locs["max_power_kw"]
+    max_powers = build_df_from_dict(
+        d=d["values"], id_cols=d["id_columns"], value_col="max_power_kw"
+    )
+    orig_idx = dw.data.index.names
+    dw.data = dw.data.reset_index()
+    dw.data = dw.data.merge(max_powers, how="left", on=d["id_columns"])
+    if dw.data["max_power_kw"].isna().any():
+        raise RuntimeError("Some locations are missing max power values.")
+    dw.data = dw.data.set_index(orig_idx)
     return dw
 
 

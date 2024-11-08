@@ -81,7 +81,12 @@ vehicles:
   master_seed: 42 # Each vehicle gets their own seed based on this one and their ID
 
 locations:
-  charging_rate_kw: 350
+  max_power_kw:
+    id_columns:
+      - location
+    values:
+      home_base: 350
+      other: 1000
 
 calc_energy_use:
   consump_col: consump_rate_kwh_per_mi
