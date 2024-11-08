@@ -283,4 +283,9 @@ def mark_locations(dw: DwellSet, veh_locs: pd.DataFrame, params: dict) -> DwellS
         dw.data = dw.data.merge(right, how="left", on=merge_cols)
     else:
         dw.data = merge_on_int_cols(left=dw.data, right=right, on=[dw.veh, dw.hex])
+
+    for col in params["veh_loc_cols"]:
+        if dw.data[col].dtype.name == "category":
+            dw.data[col] = dw.data[col].cat.add_categories(params["na_fill"])
+        dw.data[col] = dw.data[col].fillna(params["na_fill"])
     return dw

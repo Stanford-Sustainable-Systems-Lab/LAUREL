@@ -54,6 +54,7 @@ classify_vehicles:
 mark_locations:
   veh_loc_cols:
     - location
+  na_fill: other
 
 weight_class_group:
   id_columns:
