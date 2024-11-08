@@ -10,18 +10,19 @@ import pandas as pd
 from megaPLuG.models.charging_algorithms import SoCThreshChargingChoiceStrategy
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.manage_charging import _MANAGER_MAP
+from megaPLuG.utils.data import filter_by_vals_in_cols
 from megaPLuG.utils.time import total_hours
 
 logger = logging.getLogger(__name__)
 
 
-def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
+def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
     """Filter out vehicles that we're not considering."""
     logger.info("Filter by vehicles by direct dropping")
     old_len = len(dw.data)
 
-    keep_idx = vehs.loc[vehs["has_home_base"], :].index.values
-    dw.data = dw.data.loc[keep_idx, :]
+    vehs_filt = filter_by_vals_in_cols(vehs, params)
+    dw.data = dw.data.loc[vehs_filt.index.values, :]
 
     new_len = len(dw.data)
     abs_diff = old_len - new_len

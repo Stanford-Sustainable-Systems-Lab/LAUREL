@@ -14,6 +14,15 @@ load_dwell_set:
   reset: reset_state_before
   verify_sorting: False
 
+filter_vehicles:
+  filters:
+    has_home_base:
+      value_isin:
+        - True
+    vin_gvw:
+      value_isin:
+        - 8
+
 mark_substantial_dwells:
   veh_param_cols:
     plug_in: minimum_times_plug_in_mins

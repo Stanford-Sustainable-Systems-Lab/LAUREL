@@ -39,7 +39,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             node(
                 func=filter_vehicles,
-                inputs=["dwell_obj", "vehicles_with_params"],
+                inputs=["dwell_obj", "vehicles_with_params", "params:filter_vehicles"],
                 outputs="dwell_obj_filtered_vehs",
                 name="filter_vehicles",
             ),
