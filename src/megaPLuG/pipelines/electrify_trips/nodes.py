@@ -5,49 +5,14 @@ generated using Kedro 0.19.1
 
 import logging
 
-import numpy as np
 import pandas as pd
 
 from megaPLuG.models.charging_algorithms import SoCThreshChargingChoiceStrategy
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.manage_charging import _MANAGER_MAP
-from megaPLuG.utils.params import build_df_from_dict, flatten_dict
 from megaPLuG.utils.time import total_hours
 
 logger = logging.getLogger(__name__)
-
-
-def set_vehicle_params(vehs: pd.DataFrame, params: dict) -> DwellSet:
-    """Set vehicle parameters in advance of simulation."""
-    # Seed is based on master seed and vehicle's id to ensure that vehicles are
-    # individually controllable without impacting all other vehicles.
-    orig_idx = vehs.index.names
-    vehs = vehs.reset_index()
-
-    for k, v in params.items():
-        if isinstance(v, dict) and set(v.keys()) == {"id_columns", "values"}:
-            # If this is a merge-type param, sensitive to already-defined parameters
-            par_df = build_df_from_dict(
-                d=v["values"], id_cols=v["id_columns"], value_col=k
-            )
-            vehs = vehs.merge(par_df, how="left", on=v["id_columns"], indicator="_mrg")
-            if np.any(vehs["_mrg"] == "left_only"):
-                raise RuntimeError(
-                    f"Parameter values for {k} do not cover all vehicles."
-                )
-            else:
-                vehs = vehs.drop(columns=["_mrg"])
-        elif k == "master_seed":
-            # Each vehicle gets its own independent seed controlled by the master
-            vehs["random_seed"] = vehs["veh_id"] + v
-        else:
-            # If this is a parameter with the same value across vehicles
-            flat = flatten_dict({k: v})
-            for col, val in flat.items():
-                vehs[col] = val
-
-    vehs = vehs.set_index(orig_idx)
-    return vehs
 
 
 def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
@@ -62,21 +27,6 @@ def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
     abs_diff = old_len - new_len
     pct_diff = round(new_len / old_len * 100, 1)
     logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
-    return dw
-
-
-def set_charging_availability(dw: DwellSet, locs: dict) -> DwellSet:
-    """Set the charging availability for each session."""
-    d = locs["max_power_kw"]
-    max_powers = build_df_from_dict(
-        d=d["values"], id_cols=d["id_columns"], value_col="max_power_kw"
-    )
-    orig_idx = dw.data.index.names
-    dw.data = dw.data.reset_index()
-    dw.data = dw.data.merge(max_powers, how="left", on=d["id_columns"])
-    if dw.data["max_power_kw"].isna().any():
-        raise RuntimeError("Some locations are missing max power values.")
-    dw.data = dw.data.set_index(orig_idx)
     return dw
 
 

@@ -7,6 +7,7 @@ from kedro.pipeline import Pipeline, node, pipeline
 
 from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
 from megaPLuG.scenarios.io import write_scenario_partition
+from megaPLuG.utils.params import set_entity_params
 
 from .nodes import (
     assign_regions,
@@ -17,8 +18,6 @@ from .nodes import (
     manage_charging,
     mark_critical_days,
     mark_substantial_dwells,
-    set_charging_availability,
-    set_vehicle_params,
     simulate_charging_choice,
 )
 
@@ -27,10 +26,10 @@ def create_pipeline(**kwargs) -> Pipeline:
     pipe = pipeline(
         [
             node(
-                func=set_vehicle_params,
+                func=set_entity_params,
                 inputs=["vehicles_labelled", "params:vehicles"],
                 outputs="vehicles_with_params",
-                name="set_vehicle_params",
+                name="set_entity_params_vehicles",
             ),
             node(
                 func=load_dwell_set,
@@ -45,10 +44,10 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="filter_vehicles",
             ),
             node(
-                func=set_charging_availability,
+                func=set_entity_params,
                 inputs=["dwell_obj_filtered_vehs", "params:locations"],
                 outputs="dwell_obj_w_avail",
-                name="set_charging_availability",
+                name="set_entity_params_locations",
                 tags="frame-spatiotemporal",
             ),
             node(
