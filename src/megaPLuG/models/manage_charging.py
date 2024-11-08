@@ -140,8 +140,8 @@ class IndependentDwellChargingManager(AbstractChargingManager):
                 self.dw.data[col] = self.dw.data[col] * self.dw.data[self.scale_up]
         # self.dw.data = self.dw.data.dropna(subset=self.dw.seq_names)
         self.dw.seq_names = self.seq_names
-        events = self.dw.to_events(id_cols=[self.dw.hex])
-        events = events.set_index([self.dw.hex] + [self.suffixes["time"]])
+        events = self.dw.to_events(id_cols=[self.dw.hex, self.dw.veh])
+        events = events.set_index([self.dw.hex, self.suffixes["time"]])
         events = events.sort_index()
         events = events.reset_index(self.suffixes["time"], drop=False)
         return events

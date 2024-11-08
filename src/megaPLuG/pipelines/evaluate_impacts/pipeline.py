@@ -14,6 +14,7 @@ from megaPLuG.scenarios.io import (
 from .nodes import (
     add_region_geoms,
     assign_regions,
+    assign_vehicle_metadata,
     get_load_profiles,
     report_by_region_peaks,
     report_by_region_quantiles,
@@ -66,9 +67,20 @@ def create_pipeline(**kwargs) -> Pipeline:
                 tags="frame-charging_management",
             ),
             node(
-                func=get_load_profiles,
+                func=assign_vehicle_metadata,
                 inputs=[
                     "events_w_regions",
+                    "vehicles_evaluated",
+                    "params:eval_columns",
+                ],
+                outputs="events_w_metadata",
+                name="assign_vehicle_metadata",
+                tags="frame-charging_management",
+            ),
+            node(
+                func=get_load_profiles,
+                inputs=[
+                    "events_w_metadata",
                     "params:profiles_from_events",
                     "params:eval_columns",
                 ],

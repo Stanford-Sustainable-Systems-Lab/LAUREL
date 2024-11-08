@@ -36,18 +36,39 @@ def assign_regions(
     """Assign larger regions to the DwellSet based on hexagon ids."""
     orig_idx = events.index.names
     events = events.reset_index()
-    reg_cols = [pcols["hex_col"]] + pcols["group_cols"] + [pcols["timezone_col"]]
+    grp_cols = list(set(pcols["group_cols"]).intersection(hex_regions.columns))
+    reg_cols = [pcols["hex_col"]] + grp_cols + [pcols["timezone_col"]]
     mrg = hex_regions.reset_index().loc[:, reg_cols]
     events = events.merge(mrg, how="left", on=pcols["hex_col"])
     events = events.set_index(orig_idx)
     return events
 
 
+def assign_vehicle_metadata(
+    events: pd.DataFrame, vehs: pd.DataFrame, pcols: dict
+) -> pd.DataFrame:
+    """Assign larger regions to the DwellSet based on hexagon ids."""
+    orig_idx = events.index.names
+    events = events.reset_index()
+    grp_cols = list(set(pcols["group_cols"]).intersection(vehs.columns))
+    if len(grp_cols) > 0:
+        veh_cols = [pcols["veh_col"]] + grp_cols
+        mrg = vehs.reset_index().loc[:, veh_cols]
+        events = events.merge(mrg, how="left", on=pcols["veh_col"])
+    events = events.set_index(orig_idx)
+    return events
+
+
 def get_load_profiles(events: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFrame:
     """Convert vehicle charging events to load profiles by group."""
+    logger.info("Sorting events by group and time")
     events = events.reset_index()
+    if params["drop_null_groups"]:
+        events = events.dropna(subset=pcols["group_cols"])
     events = events.sort_values(pcols["group_cols"] + [pcols["time_col"]])
-    event_grp = events.groupby(pcols["group_cols"], sort=False)
+
+    logger.info("Calculating load profiles by accumulating events.")
+    event_grp = events.groupby(pcols["group_cols"], sort=False, observed=True)
     # Note: The vehicle and hexagon ids are rendered uninterpretable by the cumsum
     events[pcols["profile_col"]] = event_grp[params["power_col"]].cumsum()
     events[pcols["duration_col"]] = event_grp[pcols["time_col"]].transform(
@@ -66,7 +87,7 @@ def report_by_region_peaks(
     profs = profs.reset_index()
 
     logger.info("Finding peaks")
-    max_idx = profs.groupby(pcols["group_cols"], sort=False)[
+    max_idx = profs.groupby(pcols["group_cols"], sort=False, observed=True)[
         pcols["profile_col"]
     ].idxmax()
     peaks = profs.loc[max_idx]
