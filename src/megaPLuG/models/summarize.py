@@ -2,7 +2,7 @@ from typing import Self
 
 import numpy as np
 import pandas as pd
-from megaPLuG.utils.data import get_basic_dtype_ser
+from megaPLuG.utils.data import IndexIntegerizer, get_basic_dtype_ser
 from numba import jit
 from tqdm import tqdm
 
@@ -15,7 +15,7 @@ class EventExpander:
     time_col: str
     dur_col: str
     value_col: str
-    group_col: str
+    group_cols: list[str]
     freq: str
 
     def __init__(
@@ -23,13 +23,13 @@ class EventExpander:
         time_col: str,
         dur_col: str,
         value_col: str,
-        group_col: str,
+        group_cols: list[str],
         freq: str,
     ) -> None:
         self.time_col = time_col
         self.dur_col = dur_col
         self.value_col = value_col
-        self.group_col = group_col
+        self.group_cols = group_cols
         self.freq = freq
 
     def expand_events(self: Self, events: pd.DataFrame) -> pd.DataFrame:
@@ -41,9 +41,20 @@ class EventExpander:
         events["overflow"] = end_of_time_group < end_of_event
         need_expansion = events.loc[events["overflow"]]
 
+        if need_expansion.index.names != [None]:
+            need_expansion = need_expansion.reset_index()
+        need_expansion = need_expansion.set_index(self.group_cols)
+        group_inter = IndexIntegerizer(int_col="codes")
+        need_expansion = group_inter.integerize(need_expansion)
+        need_expansion = need_expansion.reset_index()
+
         expanded = self._expand_events_wrapper(need_expansion)
 
-        keep_cols = [self.group_col, self.time_col, self.value_col]
+        expanded = expanded.set_index("codes")
+        expanded = group_inter.deintegerize(expanded)
+        expanded = expanded.reset_index()
+
+        keep_cols = self.group_cols + [self.time_col, self.value_col]
         not_expanded = events.loc[~events["overflow"], keep_cols]
         all_nonzero = pd.concat([expanded, not_expanded], axis=0, ignore_index=True)
         return all_nonzero
@@ -58,7 +69,7 @@ class EventExpander:
             starts=starts.values.astype(np.int64),
             ends=ends.values.astype(np.int64),
             vals=get_basic_dtype_ser(df[self.value_col]).values,
-            grps=get_basic_dtype_ser(df[self.group_col]).values,
+            grps=get_basic_dtype_ser(df["codes"]).values,
             tstep_ns=pd.Timedelta(self.freq).value,
         )
 
@@ -66,7 +77,7 @@ class EventExpander:
         out_times = out_times.astype(orig_time_type)
         out = pd.DataFrame(
             {
-                self.group_col: out_grps,
+                "codes": out_grps,
                 self.time_col: out_times,
                 self.value_col: out_vals,
             }

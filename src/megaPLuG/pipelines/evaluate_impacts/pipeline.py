@@ -13,6 +13,7 @@ from megaPLuG.scenarios.io import (
 
 from .nodes import (
     add_region_geoms,
+    assign_regions,
     get_load_profiles,
     report_by_region_peaks,
     report_by_region_quantiles,
@@ -58,8 +59,19 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="summarize_vehicles",
             ),
             node(
+                func=assign_regions,
+                inputs=["events_eval", "hex_region_corresp", "params:eval_columns"],
+                outputs="events_w_regions",
+                name="assign_regions_eval",
+                tags="frame-charging_management",
+            ),
+            node(
                 func=get_load_profiles,
-                inputs=["events_eval", "params:profiles_from_events"],
+                inputs=[
+                    "events_w_regions",
+                    "params:profiles_from_events",
+                    "params:eval_columns",
+                ],
                 outputs="profiles",
                 name="get_load_profiles",
                 tags="frame-charging_management",
@@ -68,8 +80,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=report_by_region_peaks,
                 inputs=[
                     "profiles",
-                    "hex_region_corresp",
                     "params:report_by_region_peaks",
+                    "params:eval_columns",
                 ],
                 outputs="report_by_region_peaks",
                 name="report_by_region_peaks",
@@ -79,8 +91,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=report_by_region_quantiles,
                 inputs=[
                     "profiles",
-                    "hex_region_corresp",
                     "params:report_by_region_quantiles",
+                    "params:eval_columns",
                 ],
                 outputs="report_by_region_quantiles",
                 name="report_by_region_quantiles",

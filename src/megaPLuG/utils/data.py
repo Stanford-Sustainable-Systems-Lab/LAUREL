@@ -106,71 +106,56 @@ def get_basic_dtype_ser(ser: pd.Series) -> pd.Series:
         raise RuntimeError("No available non-nullable dtype!")
 
 
-class ColumnIntegerizer:
-    """Integerize an arbitrary column of a Pandas DataFrame and recover back to original.
+class IndexIntegerizer:
+    """Integerize a (multi)index of a Pandas DataFrame and recover back to original.
 
     This will usually accompany processing by `numba`.
     """
 
-    _orig_col: str
-    _corresp: pd.DataFrame
+    _uniques: np.ndarray = None
+    _idx_names: list = None
+    _int_col: str = None
 
-    def __init__(self: Self, orig_col: str) -> None:
-        self.orig_col = orig_col
+    def __init__(self: Self, int_col: str) -> None:
+        self.int_col = int_col
 
     def integerize(self: Self, df: pd.DataFrame) -> pd.DataFrame:
-        """Convert the original column to an integer form of itself while retaining the name."""
-        if self.orig_col not in df.columns.tolist():
-            raise RuntimeError(
-                f"{self.orig_col} not found in the columns of the dataframe."
-            )
-
-        col_order = df.columns.tolist()
-        orig_idx = df.index.names
-        if orig_idx != [None]:
-            df = df.reset_index()
-        cat_ser = df[self.orig_col].astype("category")
-        self.corresp = pd.DataFrame(
-            {
-                self.orig_col: cat_ser.cat.categories,
-                "code": np.arange(len(cat_ser.cat.categories)),
-            }
-        )
-
-        df = df.merge(self.corresp, how="left", on=self.orig_col)
-        df = df.drop(columns=[self.orig_col])
-        df = df.rename(columns={"code": self.orig_col})
-        if orig_idx != [None]:
-            df = df.set_index(orig_idx)
-        df = df.loc[:, col_order]
+        """Convert the original (multi)index to an integer form of itself."""
+        self.idx_names = df.index.names
+        codes, self.uniques = df.index.factorize()
+        df = df.set_index(codes)
+        df.index.name = self.int_col
         return df
 
     def deintegerize(self: Self, df: pd.DataFrame) -> pd.DataFrame:
         """Convert the integerized column back to the original form."""
-        col_order = df.columns.tolist()
-        orig_idx = df.index.names
-        if orig_idx != [None]:
-            df = df.reset_index()
-        df = df.rename(columns={self.orig_col: "code"})
-        df = df.merge(self.corresp, how="left", on="code")
-        df = df.drop(columns=["code"])
-        if orig_idx != [None]:
-            df = df.set_index(orig_idx)
-        df = df.loc[:, col_order]
+        if len(df.index.names) > 1:
+            raise RuntimeError("Only a single index level can be deintegerized.")
+        idx_vals = df.index.get_level_values(self.int_col)
+        df = df.set_index(self.uniques[idx_vals])
+        df.index.names = self.idx_names
         return df
 
     @property
-    def orig_col(self: Self) -> str:
-        return self._orig_col
+    def idx_names(self: Self) -> str:
+        return self._idx_names
 
-    @orig_col.setter
-    def orig_col(self: Self, value: str) -> None:
-        self._orig_col = value
+    @idx_names.setter
+    def idx_names(self: Self, value: str) -> None:
+        self._idx_names = value
 
     @property
-    def corresp(self: Self) -> pd.DataFrame:
-        return self._corresp
+    def int_col(self: Self) -> str:
+        return self._int_col
 
-    @corresp.setter
-    def corresp(self: Self, value: pd.DataFrame) -> None:
-        self._corresp = value
+    @int_col.setter
+    def int_col(self: Self, value: str) -> None:
+        self._int_col = value
+
+    @property
+    def uniques(self: Self) -> pd.DataFrame:
+        return self._uniques
+
+    @uniques.setter
+    def uniques(self: Self, value: pd.DataFrame) -> None:
+        self._uniques = value
