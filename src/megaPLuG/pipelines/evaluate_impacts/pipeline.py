@@ -23,7 +23,7 @@ from .nodes import (
 
 
 def create_pipeline(**kwargs) -> Pipeline:
-    pipe = pipeline(
+    read_pipe = pipeline(
         [
             node(
                 func=read_scenario_partition,
@@ -49,6 +49,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="events_eval",
                 name="collate_partitions_events",
             ),
+        ],
+        tags="scenario_run",
+    )
+
+    report_vehicles_pipe = pipeline(
+        [
             node(
                 func=summarize_vehicles,
                 inputs=[
@@ -60,11 +66,22 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="summarize_vehicles",
             ),
             node(
+                func=write_scenario_partition,
+                inputs=["vehicles_evaluated", "params:results_partition"],
+                outputs="vehicles_evaluated_partition",
+                name="write_scenario_partition_vehicles",
+            ),
+        ],
+        tags="report_vehicles",
+    )
+
+    report_profiles_pipe = pipeline(
+        [
+            node(
                 func=assign_regions,
                 inputs=["events_eval", "hex_region_corresp", "params:eval_columns"],
                 outputs="events_w_regions",
                 name="assign_regions_eval",
-                tags="frame-charging_management",
             ),
             node(
                 func=assign_vehicle_metadata,
@@ -75,7 +92,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="events_w_metadata",
                 name="assign_vehicle_metadata",
-                tags="frame-charging_management",
             ),
             node(
                 func=get_load_profiles,
@@ -86,7 +102,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="profiles",
                 name="get_load_profiles",
-                tags="frame-charging_management",
             ),
             node(
                 func=report_by_region_peaks,
@@ -97,7 +112,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="report_by_region_peaks",
                 name="report_by_region_peaks",
-                tags="frame-charging_management",
             ),
             node(
                 func=report_by_region_quantiles,
@@ -108,14 +122,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="report_by_region_quantiles",
                 name="report_by_region_quantiles",
-                tags="frame-charging_management",
-            ),
-            # From here down is saving out results
-            node(
-                func=write_scenario_partition,
-                inputs=["vehicles_evaluated", "params:results_partition"],
-                outputs="vehicles_evaluated_partition",
-                name="write_scenario_partition_vehicles",
             ),
             node(
                 func=write_scenario_partition,
@@ -130,7 +136,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="write_scenario_partition_hexes_quants",
             ),
         ],
-        tags="scenario_run",
+        tags="report_profiles",
     )
 
     geo_pipe = pipeline(
@@ -148,4 +154,4 @@ def create_pipeline(**kwargs) -> Pipeline:
         ],
     )
 
-    return pipe + geo_pipe
+    return read_pipe + report_vehicles_pipe + report_profiles_pipe + geo_pipe
