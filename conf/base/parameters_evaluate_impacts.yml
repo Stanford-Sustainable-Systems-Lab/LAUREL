@@ -18,6 +18,16 @@ eval_columns:
   profile_col: power_kw
   duration_col: duration
 
+substation.eval_columns:
+  hex_col: hex_id
+  veh_col: veh_id
+  timezone_col: tz
+  time_col: time
+  group_cols:
+    - substation_id
+  profile_col: power_kw
+  duration_col: duration
+
 profiles_from_events:
   power_col: hex_kw_diff
   drop_null_groups: True

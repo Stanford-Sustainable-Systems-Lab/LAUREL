@@ -12,7 +12,6 @@ from megaPLuG.scenarios.io import (
 )
 
 from .nodes import (
-    add_region_geoms,
     assign_regions,
     assign_vehicle_metadata,
     get_load_profiles,
@@ -139,19 +138,23 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="report_profiles",
     )
 
-    geo_pipe = pipeline(
-        [
-            node(
-                func=add_region_geoms,
-                inputs=[
-                    "report_by_region_peaks",
-                    "hex_region_corresp",
-                    "params:add_region_geoms",
-                ],
-                outputs="report_by_region_peaks_with_geoms",
-                name="add_region_geoms",
-            )
-        ],
+    profile_group_fixed_params = {
+        "params:profiles_from_events",
+        "params:results_partition",
+        "params:report_by_region_peaks",
+        "params:report_by_region_quantiles",
+    }
+    profile_group_fixed_inputs = {
+        "events_eval",
+        "hex_region_corresp",
+        "vehicles_evaluated",
+    }
+
+    report_substation_profiles_pipe = pipeline(
+        report_profiles_pipe,
+        namespace="substation",
+        parameters=profile_group_fixed_params,
+        inputs=profile_group_fixed_inputs,
     )
 
-    return read_pipe + report_vehicles_pipe + report_profiles_pipe + geo_pipe
+    return read_pipe + report_vehicles_pipe + report_substation_profiles_pipe
