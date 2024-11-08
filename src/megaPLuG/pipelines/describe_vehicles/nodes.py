@@ -59,6 +59,21 @@ def get_operating_segment(
     return vehs
 
 
+def get_vehicle_observation_frames(
+    vehs: pd.DataFrame, dw: DwellSet, params: dict
+) -> pd.DataFrame:
+    """Get the total time and mileage over which each vehicle is observed."""
+    veh_obs = dw.data.groupby(dw.veh).agg(
+        obs_time_first=pd.NamedAgg(dw.start, "min"),
+        obs_time_last=pd.NamedAgg(dw.end, "max"),
+        dist_traveled_col=pd.NamedAgg(dw.trip_dist, "sum"),
+    )
+    veh_obs["obs_time_col"] = veh_obs["obs_time_last"] - veh_obs["obs_time_first"]
+    veh_obs = veh_obs.rename(columns=params["column_namer"])
+    vehs = vehs.merge(veh_obs, how="left", on=dw.veh)
+    return vehs
+
+
 def calc_inter_visit_stats(dw: DwellSet) -> DwellSet:
     """Describe vehicle-location pairs by inter-visit summary statistics."""
     tqdm.pandas()

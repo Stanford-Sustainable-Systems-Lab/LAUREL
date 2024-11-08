@@ -14,6 +14,7 @@ from .nodes import (
     describe_veh_loc_pairs,
     filter_substantial_dwells,
     get_operating_segment,
+    get_vehicle_observation_frames,
     label_veh_loc_pairs,
     mark_location_regions,
     mark_locations,
@@ -84,6 +85,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="get_operating_segment",
             ),
             node(
+                func=get_vehicle_observation_frames,
+                inputs=[
+                    "vehicles_with_segment",
+                    "dwell_obj_desc_vehs",
+                    "params:observation_frames",
+                ],
+                outputs="vehicles_with_obs",
+                name="get_vehicle_observation_frames",
+            ),
+            node(
                 func=mark_locations,
                 inputs=[
                     "dwell_obj_desc_vehs",
@@ -96,7 +107,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=mark_weight_class_group,
                 inputs=[
-                    "vehicles_with_segment",
+                    "vehicles_with_obs",
                     "params:weight_class_group",
                 ],
                 outputs="vehs_with_weight_class_group",

@@ -17,6 +17,11 @@ operating_segment:
     long-haul: 300
   segment_col: op_segment
 
+observation_frames:
+  column_namer:
+    dist_traveled_col: total_obs_miles
+    obs_time_col: obs_duration
+
 cluster_veh_loc_pairs:
   min_cluster_size_denom: 200 # [n_obs]/[this number] gives the minimum cluster size 
   sample:
