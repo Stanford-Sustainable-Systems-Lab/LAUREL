@@ -74,9 +74,9 @@ class CalifClass8ScenarioReader(ScenarioReader):
 
     def extract_metadata(self: Self, path: Path) -> tuple:
         meta = self.get_metadata_values(path=path)
-        range_mi = int(re.search(r"range_(\d+)", meta["range_mi"]).group())
-        depot_kw = int(re.search(r"depot_(\d+)", meta["depot_kw"]).group())
-        enroute_kw = int(re.search(r"enroute_(\d+)", meta["enroute_kw"]).group())
+        range_mi = int(re.search(r"(?<=range_)(\d+)", meta["range_mi"]).group())
+        depot_kw = int(re.search(r"(?<=depot_)(\d+)", meta["depot_kw"]).group())
+        enroute_kw = int(re.search(r"(?<=enroute_)(\d+)", meta["enroute_kw"]).group())
         manage = re.search(
             r"(.+)(?=ChargingManager)", meta["charge_management"]
         ).group()
@@ -84,9 +84,11 @@ class CalifClass8ScenarioReader(ScenarioReader):
 
     def name_scenario(self: Self, path: Path) -> str:
         meta = self.get_metadata_values(path=path)
-        range_mi = re.search(r"range_(\d+)", meta["range_mi"]).group() + "mi"
-        depot_kw = re.search(r"depot_(\d+)", meta["depot_kw"]).group() + "kw Home"
-        enroute_kw = re.search(r"enroute_(\d+)", meta["enroute_kw"]).group() + "kw Away"
+        range_mi = re.search(r"(?<=range_)(\d+)", meta["range_mi"]).group() + "mi"
+        depot_kw = re.search(r"(?<=depot_)(\d+)", meta["depot_kw"]).group() + "kw Home"
+        enroute_kw = (
+            re.search(r"(?<=enroute_)(\d+)", meta["enroute_kw"]).group() + "kw Away"
+        )
         manage = re.search(
             r"(.+)(?=ChargingManager)", meta["charge_management"]
         ).group()
