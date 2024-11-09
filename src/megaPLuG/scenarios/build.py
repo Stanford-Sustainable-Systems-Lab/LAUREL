@@ -57,7 +57,7 @@ class ScenarioBuilder(ABC):
         # Add the partition path to this scenario's config
         result_partition = {
             "dir": str(part_pth),
-            "level_names": self.partition_level_names,
+            "level_names": list(self.partition_level_names),
         }
         params.update({self.scen_param_key: result_partition})
 
