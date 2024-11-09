@@ -9,12 +9,14 @@ govt_areas:
     STUSPS:
       value_isin:
         - CA
+  keep_only_filter_cols: True
 
 highways:
   filters:
     JURISNAME:
       value_isin:
         - California
+  keep_only_filter_cols: True
 
 urban_areas:
   area_name_col: NAME20

@@ -22,6 +22,7 @@ filter_vehicles:
     vin_gvw:
       value_isin:
         - 8
+  keep_only_filter_cols: False
 
 mark_substantial_dwells:
   veh_param_cols:

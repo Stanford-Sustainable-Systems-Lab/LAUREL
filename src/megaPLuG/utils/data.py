@@ -93,7 +93,10 @@ def filter_by_vals_in_cols(
         keep_cols.append(col)
     if isinstance(df, gpd.GeoDataFrame):
         keep_cols += [df.geometry.name]
-    filtered = df.loc[filt_ser, keep_cols]
+    if params["keep_only_filter_cols"]:
+        filtered = df.loc[filt_ser, keep_cols]
+    else:
+        filtered = df.loc[filt_ser]
     return filtered
 
 
