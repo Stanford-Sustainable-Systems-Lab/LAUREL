@@ -71,7 +71,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="write_scenario_partition_vehicles",
             ),
         ],
-        tags="report_vehicles",
+        tags=["report_vehicles", "scenario_run"],
     )
 
     report_profiles_pipe = pipeline(
