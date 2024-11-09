@@ -18,7 +18,7 @@
             "request": "launch",
             "console": "integratedTerminal",
             "module": "kedro",
-            "args": ["run", "--pipeline=build_runners", "--env=scenario_runners/batt_man"]
+            "args": ["run", "--pipeline=build_runners", "--env=scenario_runners/ca_eight"]
             // Any other arguments should be passed as a comma-seperated-list
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
