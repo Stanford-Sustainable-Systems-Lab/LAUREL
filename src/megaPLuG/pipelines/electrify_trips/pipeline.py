@@ -7,6 +7,7 @@ from kedro.pipeline import Pipeline, node, pipeline
 
 from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
 from megaPLuG.scenarios.io import write_scenario_partition
+from megaPLuG.utils.data import filter_by_vals_in_cols
 from megaPLuG.utils.params import set_entity_params
 
 from .nodes import (
@@ -26,8 +27,14 @@ def create_pipeline(**kwargs) -> Pipeline:
     pipe = pipeline(
         [
             node(
+                func=filter_by_vals_in_cols,
+                inputs=["vehicles_labelled", "params:filter_vehicles"],
+                outputs="vehicles_filtered",
+                name="filter_by_vals_in_cols_vehs",
+            ),
+            node(
                 func=set_entity_params,
-                inputs=["vehicles_labelled", "params:vehicles"],
+                inputs=["vehicles_filtered", "params:vehicles"],
                 outputs="vehicles_with_params",
                 name="set_entity_params_vehicles",
             ),
@@ -39,7 +46,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             node(
                 func=filter_vehicles,
-                inputs=["dwell_obj", "vehicles_with_params", "params:filter_vehicles"],
+                inputs=["dwell_obj", "vehicles_with_params"],
                 outputs="dwell_obj_filtered_vehs",
                 name="filter_vehicles",
             ),
