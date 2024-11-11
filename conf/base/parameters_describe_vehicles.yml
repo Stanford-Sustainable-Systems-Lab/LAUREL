@@ -8,7 +8,6 @@ substantial_dwells:
   thresh_hrs: 4
   drop_cols:
     - trip_hrs
-    - trip_avg_speed_mph
 
 operating_segment:
   radius_bin_low_bounds_miles:
