@@ -4,7 +4,7 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.5/configuration/parameters.html
 
-slurm_command: local # Valid values are "sbatch" and "salloc"
+slurm_command: sbatch # Valid values are "sbatch" and "salloc"
 
 slurm_reporting:
   output: slurm_logs/%x.%j.out # Note use of * wildcard to be replaced with job-name, which comes in from 
@@ -18,14 +18,14 @@ slurm_resources:
   cpus-per-task: 1 # Using multiple CPUs takes a lot of effort (e.g. Dask cluster)
   mem-per-cpu: 32GB # Increasing memory, since I've had some memory errors
   gpus: 0
-  time: 0-04:00 # Reducing time requirement, since with more processors we're going faster.
-  array: 1-60%2 # 2 at a time is enforced by Gurobi license
+  time: 0-00:30 # Reducing time requirement, since with more processors we're going faster.
+  array: 0-23 # 2 at a time is enforced by Gurobi license
 
 cmd_line_calls:
   prefix: rye run
   kedro:
     tags: scenario_run
-    # params: Use this for command line parameters
+    params: partition_data_dir=$GROUP_SCRATCH/passow/megaPLuG
 
 scenario_params:
   builder: CalifClass8ScenarioBuilder
