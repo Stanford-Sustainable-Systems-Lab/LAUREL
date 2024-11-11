@@ -29,8 +29,6 @@ anyio==3.7.1
     # via watchgod
 appdirs==1.4.4
     # via fs
-appnope==0.1.4
-    # via ipykernel
 argon2-cffi==23.1.0
     # via jupyter-server
     # via nbclassic
