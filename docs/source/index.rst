@@ -8,7 +8,7 @@ Welcome to project megaPLuG's API docs!
 .. toctree::
    :maxdepth: 4
 
-   modules
+   api
 
 
 Indices and tables

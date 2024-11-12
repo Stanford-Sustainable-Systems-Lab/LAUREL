@@ -238,6 +238,13 @@ navistar_by_state:
     index: True
     layer: navistar_by_state
 
+peak_load_addition_by_substation:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/08_reporting/peak_load_addition_by_substation.gpkg
+  save_args:
+    index: True
+    layer: peak_load_addition_by_substation
+
 ### Scenario configurations
 scenario_configs:
   type: partitions.PartitionedDataset

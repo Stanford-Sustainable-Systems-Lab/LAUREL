@@ -1,0 +1,6 @@
+﻿megaPLuG
+========
+
+.. automodule:: megaPLuG
+
+   
