@@ -46,6 +46,7 @@ op_segment.eval_columns:
   time_col: time
   group_cols:
     - op_segment
+    - state
   profile_col: power_kw
   duration_col: duration
 
