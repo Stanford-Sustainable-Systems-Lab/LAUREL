@@ -91,6 +91,7 @@ class AbstractChargingManager(ABC):
 
     @property
     def scale_up(self):
+        """Name of the column giving the factor by which to scale up the power to represent a population of vehicles"""
         return self._scale_up
 
     @scale_up.setter
