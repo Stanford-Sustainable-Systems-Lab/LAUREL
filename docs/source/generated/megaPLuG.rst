@@ -1,6 +1,0 @@
-﻿megaPLuG
-========
-
-.. automodule:: megaPLuG
-
-   
