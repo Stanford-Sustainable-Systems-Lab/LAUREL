@@ -2,9 +2,10 @@ from typing import Self
 
 import numpy as np
 import pandas as pd
-from megaPLuG.utils.data import IndexIntegerizer, get_basic_dtype_ser
 from numba import jit
 from tqdm import tqdm
+
+from megaPLuG.utils.data import IndexIntegerizer, get_basic_dtype_ser
 
 
 class EventExpander:

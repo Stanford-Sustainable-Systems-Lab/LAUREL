@@ -8,9 +8,10 @@ import dask.dataframe as dd
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-from megaPLuG.utils.h3 import add_geometries
 from numba import njit
 from tqdm import tqdm
+
+from megaPLuG.utils.h3 import add_geometries
 
 logger = logging.getLogger(__name__)
 

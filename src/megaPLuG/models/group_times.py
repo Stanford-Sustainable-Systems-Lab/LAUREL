@@ -1,6 +1,7 @@
 from typing import Self
 
 import pandas as pd
+
 from megaPLuG.utils.time import calc_local_time_attrs, get_local_time_attr_col_name
 
 WEEKEND_FIRST_DAY = 5

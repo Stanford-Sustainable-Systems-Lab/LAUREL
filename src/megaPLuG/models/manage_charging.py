@@ -4,6 +4,7 @@ from itertools import product
 from typing import Self
 
 import pandas as pd
+
 from megaPLuG.models.dwell_sets import DwellSet
 
 logger = logging.getLogger(__name__)

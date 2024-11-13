@@ -3,9 +3,10 @@ from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
-from megaPLuG.models.dwell_sets import DwellSet
 from numba import jit
 from tqdm import tqdm
+
+from megaPLuG.models.dwell_sets import DwellSet
 
 
 class AbstractChargingChoiceStrategy(ABC):
