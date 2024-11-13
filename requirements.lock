@@ -61,8 +61,6 @@ bleach==6.1.0
     # via nbconvert
 bokeh==3.4.0
     # via dask
-branca==0.8.0
-    # via folium
 build==1.2.1
     # via kedro
 cachetools==5.3.3
@@ -134,10 +132,7 @@ distributed==2024.5.2
 dm-tree==0.1.8
     # via tensorflow-probability
 docutils==0.21.2
-    # via myst-parser
-    # via nbsphinx
     # via sphinx
-    # via sphinx-rtd-theme
 dynaconf==3.2.5
     # via kedro
 ecos==2.0.14
@@ -155,8 +150,6 @@ fastjsonschema==2.19.1
     # via nbformat
 filelock==3.13.4
     # via virtualenv
-folium==0.18.0
-    # via megaplug
 fonttools==4.51.0
     # via matplotlib
 fqdn==1.5.1
@@ -236,18 +229,14 @@ jedi==0.19.1
     # via ipython
 jinja2==3.1.3
     # via bokeh
-    # via branca
     # via cookiecutter
     # via dask
     # via distributed
-    # via folium
     # via jupyter-server
     # via jupyterlab
     # via jupyterlab-server
-    # via myst-parser
     # via nbclassic
     # via nbconvert
-    # via nbsphinx
     # via notebook
     # via sphinx
 jmespath==1.0.1
@@ -339,11 +328,7 @@ lsprotocol==2023.0.1
     # via pygls
 lz4==4.3.3
     # via dask
-mapclassify==2.8.1
-    # via megaplug
 markdown-it-py==3.0.0
-    # via mdit-py-plugins
-    # via myst-parser
     # via rich
 markupsafe==2.1.5
     # via jinja2
@@ -355,8 +340,6 @@ matplotlib==3.8.4
 matplotlib-inline==0.1.6
     # via ipykernel
     # via ipython
-mdit-py-plugins==0.4.2
-    # via myst-parser
 mdurl==0.1.2
     # via markdown-it-py
 mistune==3.0.2
@@ -370,8 +353,6 @@ msgpack==1.0.8
     # via distributed
 multipledispatch==1.0.0
     # via numpyro
-myst-parser==4.0.0
-    # via megaplug
 nbclassic==1.0.0
     # via jupyterlab
     # via notebook
@@ -381,17 +362,13 @@ nbconvert==7.16.3
     # via jupyter
     # via jupyter-server
     # via nbclassic
-    # via nbsphinx
     # via notebook
 nbformat==5.10.4
     # via jupyter-server
     # via nbclassic
     # via nbclient
     # via nbconvert
-    # via nbsphinx
     # via notebook
-nbsphinx==0.9.5
-    # via megaplug
 nest-asyncio==1.6.0
     # via ipykernel
     # via jupyter-client
@@ -399,7 +376,6 @@ nest-asyncio==1.6.0
     # via notebook
 networkx==3.3
     # via kedro-viz
-    # via mapclassify
 nodeenv==1.8.0
     # via pre-commit
 notebook==6.5.6
@@ -417,12 +393,10 @@ numpy==2.0.2
     # via cvxpy
     # via dask
     # via ecos
-    # via folium
     # via geopandas
     # via h5py
     # via jax
     # via jaxlib
-    # via mapclassify
     # via matplotlib
     # via megaplug
     # via ml-dtypes
@@ -488,7 +462,6 @@ pandas==2.2.2
     # via geopandas
     # via kedro-datasets
     # via kedro-viz
-    # via mapclassify
     # via megaplug
     # via seaborn
     # via triad
@@ -591,7 +564,6 @@ pyyaml==6.0.1
     # via distributed
     # via jupyter-events
     # via kedro
-    # via myst-parser
     # via omegaconf
     # via pre-commit
     # via uvicorn
@@ -615,7 +587,6 @@ referencing==0.34.0
     # via jupyter-events
 requests==2.31.0
     # via cookiecutter
-    # via folium
     # via jupyterlab-server
     # via kedro-telemetry
     # via sphinx
@@ -638,7 +609,6 @@ ruamel-yaml==0.18.6
 ruamel-yaml-clib==0.2.8
     # via ruamel-yaml
 scikit-learn==1.4.2
-    # via mapclassify
     # via megaplug
 scipy==1.13.0
     # via arviz
@@ -647,7 +617,6 @@ scipy==1.13.0
     # via ecos
     # via jax
     # via jaxlib
-    # via mapclassify
     # via osqp
     # via qdldl
     # via scikit-learn
@@ -691,26 +660,12 @@ soupsieve==2.5
     # via beautifulsoup4
 sphinx==8.1.3
     # via esbonio
-    # via myst-parser
-    # via nbsphinx
-    # via sphinx-autodoc-typehints
-    # via sphinx-copybutton
-    # via sphinx-rtd-theme
-    # via sphinxcontrib-jquery
-sphinx-autodoc-typehints==2.5.0
-    # via megaplug
-sphinx-copybutton==0.5.2
-    # via megaplug
-sphinx-rtd-theme==3.0.1
-    # via megaplug
 sphinxcontrib-applehelp==1.0.8
     # via sphinx
 sphinxcontrib-devhelp==1.0.6
     # via sphinx
 sphinxcontrib-htmlhelp==2.1.0
     # via sphinx
-sphinxcontrib-jquery==4.1
-    # via sphinx-rtd-theme
 sphinxcontrib-jsmath==1.0.1
     # via sphinx
 sphinxcontrib-qthelp==1.0.7
@@ -777,7 +732,6 @@ traitlets==5.14.2
     # via nbclient
     # via nbconvert
     # via nbformat
-    # via nbsphinx
     # via notebook
     # via qtconsole
 triad==0.9.6
@@ -832,7 +786,6 @@ xarray-einstats==0.7.0
     # via arviz
 xyzservices==2024.4.0
     # via bokeh
-    # via folium
 y-py==0.6.2
     # via jupyter-ydoc
     # via ypy-websocket

@@ -36,13 +36,6 @@ dependencies = [
     "ecos>=2.0.14",
     "scs>=3.2.7",
     "tzfpy[pytz]>=0.15.6",
-    "folium>=0.18.0",
-    "mapclassify>=2.8.1",
-    "sphinx-autodoc-typehints>=2.5.0",
-    "nbsphinx>=0.9.5",
-    "sphinx-copybutton>=0.5.2",
-    "myst-parser>=4.0.0",
-    "sphinx-rtd-theme>=3.0.1",
 ]
 readme = "README.md"
 requires-python = ">= 3.10"
@@ -56,7 +49,15 @@ build-backend = "hatchling.build"
 
 [tool.rye]
 managed = true
-dev-dependencies = []
+dev-dependencies = [
+    "sphinx-autodoc-typehints>=2.5.0",
+    "nbsphinx>=0.9.5",
+    "sphinx-copybutton>=0.5.2",
+    "myst-parser>=4.0.0",
+    "sphinx-rtd-theme>=3.0.1",
+    "folium>=0.18.0",
+    "mapclassify>=2.8.1",
+]
 
 [tool.hatch.metadata]
 allow-direct-references = true
