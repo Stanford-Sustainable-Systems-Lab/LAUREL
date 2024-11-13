@@ -15,11 +15,6 @@ class AbstractChargingManager(ABC):
 
     Attributes:
         dw: DwellSet that this ChargingManager will compute over
-        energy: name of the column within dw containing the required energy for each dwell
-        duration: name of the column within dw containing the duration of the dwell
-        max_power: name of the column within dw containing the maximum charging power for this dwell
-        region: name of the column containing the grouping variable for regions
-        cost: name of the column giving the cost which was promised during the charging choice model
     """
 
     _dw: DwellSet = None
@@ -56,6 +51,7 @@ class AbstractChargingManager(ABC):
 
     @property
     def energy(self):
+        """Name of the column within dw containing the required energy for each dwell"""
         return self._energy
 
     @energy.setter
@@ -65,6 +61,7 @@ class AbstractChargingManager(ABC):
 
     @property
     def duration(self):
+        """Name of the column within dw containing the duration of the dwell"""
         return self._duration
 
     @duration.setter
@@ -74,6 +71,7 @@ class AbstractChargingManager(ABC):
 
     @property
     def max_power(self):
+        """Name of the column within dw containing the maximum charging power for this dwell"""
         return self._max_power
 
     @max_power.setter
@@ -83,6 +81,7 @@ class AbstractChargingManager(ABC):
 
     @property
     def region(self):
+        """Name of the column containing the grouping variable for regions"""
         return self._region
 
     @region.setter
@@ -101,6 +100,7 @@ class AbstractChargingManager(ABC):
 
     @property
     def cost(self):
+        """Name of the column giving the cost which was promised during the charging choice model"""
         return self._cost
 
     @cost.setter
