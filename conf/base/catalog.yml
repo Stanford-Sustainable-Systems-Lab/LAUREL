@@ -90,6 +90,63 @@ vius_scaling:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vius_scaling.feather
 
+# Ephemeral memory datasets (used to set copy_mode)
+dwell_obj:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_filtered_vehs:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_w_avail:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_filtered_dwells:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_crit_days:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_w_energy:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_w_charging:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_regions:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_w_scaling:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_eval:
+  type: MemoryDataSet
+  copy_mode: assign
+
+dwell_obj_desc_vehs:
+  type: MemoryDataSet
+  copy_mode: assign
+
+dwell_obj_filtered_desc_vehs:
+  type: MemoryDataSet
+  copy_mode: assign
+
+dwell_obj_inter_visit_desc_vehs:
+  type: MemoryDataSet
+  copy_mode: assign
+
+dwell_obj_with_locations_desc_vehs:
+  type: MemoryDataSet
+  copy_mode: assign
+
 # Electrification simulation datasets
 dwells_with_charging_partition:
   type: partitions.PartitionedDataset
