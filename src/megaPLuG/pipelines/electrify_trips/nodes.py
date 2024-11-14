@@ -5,6 +5,7 @@ generated using Kedro 0.19.1
 
 import logging
 
+import numpy as np
 import pandas as pd
 
 from megaPLuG.models.charging_algorithms import SoCThreshChargingChoiceStrategy
@@ -20,7 +21,13 @@ def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
     logger.info("Filter by vehicles by direct dropping")
     old_len = len(dw.data)
 
-    dw.data = dw.data.loc[vehs.index.values, :]
+    keep_idx = np.intersect1d(dw.data.index.values, vehs.index.values)
+    num_no_dwell_vehs = np.setdiff1d(vehs.index.values, keep_idx).size
+    if num_no_dwell_vehs > 0:
+        logger.warning(
+            f"{num_no_dwell_vehs} vehicles were not found in the dwell data."
+        )
+    dw.data = dw.data.loc[keep_idx]
 
     new_len = len(dw.data)
     abs_diff = old_len - new_len
