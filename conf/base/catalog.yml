@@ -128,23 +128,23 @@ dwell_obj_w_scaling:
   copy_mode: assign
 
 dwell_obj_eval:
-  type: MemoryDataSet
+  type: MemoryDataset
   copy_mode: assign
 
 dwell_obj_desc_vehs:
-  type: MemoryDataSet
+  type: MemoryDataset
   copy_mode: assign
 
 dwell_obj_filtered_desc_vehs:
-  type: MemoryDataSet
+  type: MemoryDataset
   copy_mode: assign
 
 dwell_obj_inter_visit_desc_vehs:
-  type: MemoryDataSet
+  type: MemoryDataset
   copy_mode: assign
 
 dwell_obj_with_locations_desc_vehs:
-  type: MemoryDataSet
+  type: MemoryDataset
   copy_mode: assign
 
 # Electrification simulation datasets
