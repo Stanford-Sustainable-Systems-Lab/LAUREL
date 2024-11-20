@@ -16,9 +16,6 @@ load_dwell_set:
 
 filter_vehicles:
   filters:
-    has_home_base:
-      value_isin:
-        - True
     vin_gvw:
       value_isin:
         - 8
