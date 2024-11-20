@@ -9,12 +9,14 @@ from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
 
 from .nodes import (
     calc_inter_visit_stats,
+    calc_rolling_dwell_ratios,
     calc_vehicle_scaling_weights,
     classify_vehicles,
     describe_veh_loc_pairs,
     filter_substantial_dwells,
     get_operating_segment,
     get_vehicle_observation_frames,
+    group_veh_loc_pairs,
     label_veh_loc_pairs,
     mark_location_regions,
     mark_locations,
@@ -44,8 +46,17 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="calc_inter_visit_stats",
             ),
             node(
+                func=calc_rolling_dwell_ratios,
+                inputs=[
+                    "dwell_obj_inter_visit_desc_vehs",
+                    "params:rolling_dwell_ratios",
+                ],
+                outputs="dwell_obj_roll_desc_vehs",
+                name="calc_rolling_dwell_ratios",
+            ),
+            node(
                 func=describe_veh_loc_pairs,
-                inputs="dwell_obj_inter_visit_desc_vehs",
+                inputs="dwell_obj_roll_desc_vehs",
                 outputs="vehicle_location_pairs",
                 name="describe_veh_loc_pairs",
             ),
@@ -55,6 +66,12 @@ def create_pipeline(**kwargs) -> Pipeline:
             #     outputs="vehicle_location_pairs_clustered",
             #     name="cluster_veh_loc_pairs",
             # ),
+            node(
+                func=group_veh_loc_pairs,
+                inputs=["vehicle_location_pairs", "params:group_veh_loc_pairs"],
+                outputs="vehicle_location_pairs_clustered",
+                name="group_veh_loc_pairs",
+            ),
             node(
                 func=label_veh_loc_pairs,
                 inputs=[
@@ -95,16 +112,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="get_vehicle_observation_frames",
             ),
             node(
-                func=mark_locations,
-                inputs=[
-                    "dwell_obj_desc_vehs",
-                    "vehicle_location_pairs_labelled",
-                    "params:mark_locations",
-                ],
-                outputs="dwell_obj_with_locations_desc_vehs",
-                name="mark_locations",
-            ),
-            node(
                 func=mark_weight_class_group,
                 inputs=[
                     "vehicles_with_obs",
@@ -135,6 +142,27 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="vehicles_labelled",
                 name="calc_vehicle_scaling_weights",
             ),
+        ]
+    )
+
+    mark_locs_pipe = pipeline(
+        [
+            node(
+                func=load_dwell_set,
+                inputs=["dwells", "params:load_dwell_set"],
+                outputs="dwell_obj_locs_desc_vehs",
+                name="load_dwell_set_locs_desc_vehs",
+            ),
+            node(
+                func=mark_locations,
+                inputs=[
+                    "dwell_obj_locs_desc_vehs",
+                    "vehicle_location_pairs_labelled",
+                    "params:mark_locations",
+                ],
+                outputs="dwell_obj_with_locations_desc_vehs",
+                name="mark_locations",
+            ),
             node(
                 func=save_dwell_set,
                 inputs="dwell_obj_with_locations_desc_vehs",
@@ -143,4 +171,5 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
         ]
     )
-    return pipe
+
+    return pipe + mark_locs_pipe

@@ -21,6 +21,14 @@ observation_frames:
     dist_traveled_col: total_obs_miles
     obs_time_col: obs_duration
 
+rolling_dwell_ratios:
+  window: 28d
+  center: True
+  closed: both
+  dwell_hrs_col: dwell_hrs
+  output_ratio_col: dwell_hrs_roll_ratio
+  numba_threads: 4
+
 cluster_veh_loc_pairs:
   min_cluster_size_denom: 200 # [n_obs]/[this number] gives the minimum cluster size 
   sample:
@@ -39,12 +47,17 @@ cluster_veh_loc_pairs:
     - visits_ratio
   cluster_col: cluster
 
+group_veh_loc_pairs:
+  cluster_col: cluster
+  ratio_thresh: 0.2
+  ratio_col: max_dwell_hrs_roll_ratio
+
 label_veh_loc_pairs:
   location:
     id_cols:
       cluster: cluster
     vals:
-      2: home_base
+      1: home_base
 
 classify_vehicles:
   veh_col: veh_id

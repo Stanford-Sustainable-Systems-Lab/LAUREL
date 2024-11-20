@@ -143,6 +143,14 @@ dwell_obj_inter_visit_desc_vehs:
   type: MemoryDataset
   copy_mode: assign
 
+dwell_obj_roll_desc_vehs:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_locs_desc_vehs:
+  type: MemoryDataset
+  copy_mode: assign
+
 dwell_obj_with_locations_desc_vehs:
   type: MemoryDataset
   copy_mode: assign

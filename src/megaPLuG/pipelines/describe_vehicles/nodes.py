@@ -27,10 +27,11 @@ def filter_substantial_dwells(dw: DwellSet, params: dict) -> DwellSet:
     """Filter to retain only substantial dwells to be described."""
     dw.data["dwell_hrs"] = total_hours(dw.data[dw.end] - dw.data[dw.start])
     dw.data["long_enough"] = dw.data["dwell_hrs"] > params["thresh_hrs"]
-    dw.accum_masked("long_enough", inplace=True)
-    dw.data = dw.data.drop(
-        columns=params["drop_cols"]
-    )  # Since these aren't accumulated by accum_masked
+    accum_cols = [dw.trip_dist, dw.trip_dur, dw.reset]
+    dw.accum_masked("long_enough", accum_cols=accum_cols, inplace=True)
+    dw.data = dw.data.drop(columns=accum_cols)
+    dw.data = dw.data.rename(columns={f"{col}_long_enough": col for col in accum_cols})
+    dw.drop_masked(keep_mask_col="long_enough", inplace=True)
     return dw
 
 
@@ -101,6 +102,35 @@ def calc_inter_visit_times(
     return grp
 
 
+def calc_rolling_dwell_ratios(dw: DwellSet, params: dict) -> DwellSet:
+    """Calculate the rolling dwell ratios for each vehicle."""
+    roll_kwargs = {
+        "window": params["window"],
+        "on": dw.start,
+        "center": params["center"],
+        "closed": params["closed"],
+    }
+    hrs_col = params["dwell_hrs_col"]
+
+    logger.info("Calculating numerators")
+    numer = (
+        dw.data.groupby([dw.veh, dw.hex], sort=False)
+        .rolling(**roll_kwargs)[hrs_col]
+        .sum()
+    )
+    numer.name = f"{hrs_col}_sum_numer"
+    logger.info("Calculating denominators")
+    denom = dw.data.groupby(dw.veh, sort=False).rolling(**roll_kwargs)[hrs_col].sum()
+    denom.name = f"{hrs_col}_sum_denom"
+
+    logger.info("Merging results")
+    dw.data = dw.data.merge(numer, how="left", on=[dw.veh, dw.hex, dw.start])
+    dw.data = dw.data.merge(denom, how="left", on=[dw.veh, dw.start])
+    out_col = params["output_ratio_col"]
+    dw.data[out_col] = dw.data[f"{hrs_col}_sum_numer"] / dw.data[f"{hrs_col}_sum_denom"]
+    return dw
+
+
 def describe_veh_loc_pairs(dw: DwellSet) -> pd.DataFrame:
     """Describe each vehicle location pair with summary statistics."""
     veh_locs = dw.data.groupby([dw.veh, dw.hex], sort=False).agg(
@@ -113,6 +143,7 @@ def describe_veh_loc_pairs(dw: DwellSet) -> pd.DataFrame:
         max_inter_times=pd.NamedAgg("inter_visit_hrs", "max"),
         med_dwell_hrs=pd.NamedAgg("dwell_hrs", "median"),
         tot_dwell_hrs=pd.NamedAgg("dwell_hrs", "sum"),
+        max_dwell_hrs_roll_ratio=pd.NamedAgg("dwell_hrs_roll_ratio", "max"),
     )
     veh_locs["dwell_hrs_ratio"] = veh_locs.groupby(dw.veh, sort=False)[
         "tot_dwell_hrs"
@@ -166,6 +197,14 @@ def cluster_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
     )
     clusters[params["cluster_col"]] = pd.Categorical(clusters[params["cluster_col"]])
     veh_locs = veh_locs.merge(clusters, left_index=True, right_index=True)
+    return veh_locs
+
+
+def group_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Assign groups to the vehicle-location pairs based on thresholds."""
+    clst_col = params["cluster_col"]
+    veh_locs[clst_col] = veh_locs[params["ratio_col"]] > params["ratio_thresh"]
+    veh_locs[clst_col] = veh_locs[clst_col].astype(int)
     return veh_locs
 
 
