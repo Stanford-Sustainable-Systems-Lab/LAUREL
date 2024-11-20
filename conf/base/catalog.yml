@@ -240,6 +240,20 @@ op_segment.report_by_region_quantiles_partition:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
+jurisdiction.report_by_region_peaks_partition:
+  type: partitions.PartitionedDataset
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_peaks/jurisdiction"
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
+
+jurisdiction.report_by_region_quantiles_partition:
+  type: partitions.PartitionedDataset
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_quantiles/jurisdiction"
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
+
 report_by_region_peaks_with_geoms:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
   filepath: data/07_model_output/report_by_region_single_run.gpkg

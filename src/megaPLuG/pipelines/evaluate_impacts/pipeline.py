@@ -172,6 +172,13 @@ def create_pipeline(**kwargs) -> Pipeline:
             inputs=profile_group_fixed_inputs,
             tags="scenario_run",
         ),
+        pipeline(
+            report_profiles_pipe,
+            namespace="jurisdiction",
+            parameters=profile_group_fixed_params,
+            inputs=profile_group_fixed_inputs,
+            tags="scenario_run",
+        ),
     ]
 
     return read_pipe + report_vehicles_pipe + sum(report_profiles_pipes)
