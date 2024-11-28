@@ -336,6 +336,12 @@ profiles_by_location_and_segment_no_map:
   save_args:
     bbox_inches: tight
 
+profile_examples_with_capacity:
+  type: matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/profile_examples_with_capacity.png
+  save_args:
+    bbox_inches: tight
+
 profiles_by_sensitivity:
   type: matplotlib.MatplotlibWriter
   filepath: data/08_reporting/profiles_by_sensitivity.png
