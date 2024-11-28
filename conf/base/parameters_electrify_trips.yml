@@ -90,12 +90,22 @@ vehicles:
     seed_id_col: veh_id
 
 locations:
-  max_power_kw:
+  charge_modes_avail:
     id_columns:
       - location
     values:
-      home_base: 350
-      other: 1000
+      home_base:
+        - depot
+      other:
+        - enroute
+
+charging_modes:
+  max_power_kw:
+    id_columns:
+      - charge_mode
+    values:
+      depot: 350
+      enroute: 1000
 
 calc_energy_use:
   consump_col: consump_rate_kwh_per_mi
