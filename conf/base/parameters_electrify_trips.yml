@@ -95,17 +95,21 @@ locations:
       - location
     values:
       home_base:
+        - none
         - depot
       other:
+        - none
         - enroute
 
 charging_modes:
-  max_power_kw:
-    id_columns:
-      - charge_mode
-    values:
-      depot: 350
-      enroute: 1000
+  none:
+    max_power_kw: 0
+  depot:
+    max_power_kw: 350
+  enroute:
+    max_power_kw: 1000
+  id_column: charge_mode
+
 
 calc_energy_use:
   consump_col: consump_rate_kwh_per_mi
@@ -115,6 +119,7 @@ simulate_charging_choice:
   input_cols:
     consumed_kwh: energy_use_kwh
     dwell_hrs: dwell_time_hrs
+    modes_avail: charge_modes_avail
     avail_kw: max_power_kw
     reset: reset_state_before
     batt_cap: battery_capacity_kwh

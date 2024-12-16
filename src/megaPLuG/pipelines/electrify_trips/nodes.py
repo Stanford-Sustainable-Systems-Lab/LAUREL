@@ -126,15 +126,19 @@ def calc_energy_use(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
 
 
 def simulate_charging_choice(
-    dw: DwellSet, vehs: pd.DataFrame, params: dict
+    dw: DwellSet, vehs: pd.DataFrame, modes: dict, params: dict
 ) -> DwellSet:
     """Simulate the charging choices of each vehicle."""
     dw.sort_by_veh_time()
 
     dwell_time_col = params["input_cols"]["dwell_hrs"]
     dw.data[dwell_time_col] = total_hours(dw.data[dw.end] - dw.data[dw.start])
+
+    id_col = modes.pop("id_column")
+    modes = pd.DataFrame.from_dict(data=modes, orient="index")
+    modes.index.name = id_col
     strat = SoCThreshChargingChoiceStrategy(**params["input_cols"])
-    dw.data = strat.run(dwells=dw, vehs=vehs)
+    dw.data = strat.run(dwells=dw, vehs=vehs, modes=modes)
     return dw
 
 
