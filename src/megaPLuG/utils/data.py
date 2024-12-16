@@ -167,9 +167,9 @@ class IndexIntegerizer:
         self._uniques = value
 
 
-def to_arrays(
+def to_arrays(  # noqa: PLR0912
     df: pd.DataFrame, index: bool = True, column_dtypes=None, index_dtypes=None
-) -> np.rec.recarray:  # noqa
+) -> np.rec.recarray:
     """
     Convert DataFrame to a NumPy record array.
 
@@ -313,7 +313,7 @@ def to_arrays(
         # string naming a type.
         if dtype_mapping is None:
             formats.append(v.dtype)
-        elif isinstance(dtype_mapping, (type, np.dtype, str)):
+        elif isinstance(dtype_mapping, (type, np.dtype, str)):  # noqa: UP038
             # error: Argument 1 to "append" of "list" has incompatible
             # type "Union[type, dtype[Any], str]"; expected "dtype[Any]"
             formats.append(dtype_mapping)  # type: ignore[arg-type]
