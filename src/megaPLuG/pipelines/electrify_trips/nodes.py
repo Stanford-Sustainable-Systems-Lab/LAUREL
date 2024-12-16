@@ -130,6 +130,9 @@ def simulate_charging_choice(
 ) -> DwellSet:
     """Simulate the charging choices of each vehicle."""
     dw.sort_by_veh_time()
+
+    dwell_time_col = params["input_cols"]["dwell_hrs"]
+    dw.data[dwell_time_col] = total_hours(dw.data[dw.end] - dw.data[dw.start])
     strat = SoCThreshChargingChoiceStrategy(**params["input_cols"])
     dw.data = strat.run(dwells=dw, vehs=vehs)
     return dw

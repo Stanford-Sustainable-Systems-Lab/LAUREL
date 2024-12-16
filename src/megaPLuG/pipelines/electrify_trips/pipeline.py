@@ -14,11 +14,11 @@ from .nodes import (
     assign_regions,
     assign_scale_up_factor,
     calc_energy_use,
-    filter_dwells,
+    # filter_dwells,
     filter_vehicles,
     manage_charging,
-    mark_critical_days,
-    mark_substantial_dwells,
+    # mark_critical_days,
+    # mark_substantial_dwells,
     simulate_charging_choice,
 )
 
@@ -57,39 +57,39 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="set_entity_params_locations",
                 tags="frame-spatiotemporal",
             ),
-            node(
-                func=mark_substantial_dwells,
-                inputs=[
-                    "dwell_obj_w_avail",
-                    "vehicles_with_params",
-                    "params:mark_substantial_dwells",
-                ],
-                outputs="dwell_obj_filtered_dwells",
-                name="mark_substantial_dwells",
-                tags="frame-spatiotemporal",
-            ),
-            node(
-                func=mark_critical_days,
-                inputs=[
-                    "dwell_obj_filtered_dwells",
-                    "vehicles_with_params",
-                    "params:mark_critical_days",
-                ],
-                outputs="dwell_obj_crit_days",
-                name="mark_critical_days",
-                tags="frame-spatiotemporal",
-            ),
-            node(
-                func=filter_dwells,
-                inputs=["dwell_obj_crit_days", "params:filter_dwells"],
-                outputs="dwell_obj_crit_dwells",
-                name="filter_dwells",
-                tags="frame-spatiotemporal",
-            ),
+            # node(
+            #     func=mark_substantial_dwells,
+            #     inputs=[
+            #         "dwell_obj_w_avail",
+            #         "vehicles_with_params",
+            #         "params:mark_substantial_dwells",
+            #     ],
+            #     outputs="dwell_obj_filtered_dwells",
+            #     name="mark_substantial_dwells",
+            #     tags="frame-spatiotemporal",
+            # ),
+            # node(
+            #     func=mark_critical_days,
+            #     inputs=[
+            #         "dwell_obj_filtered_dwells",
+            #         "vehicles_with_params",
+            #         "params:mark_critical_days",
+            #     ],
+            #     outputs="dwell_obj_crit_days",
+            #     name="mark_critical_days",
+            #     tags="frame-spatiotemporal",
+            # ),
+            # node(
+            #     func=filter_dwells,
+            #     inputs=["dwell_obj_crit_days", "params:filter_dwells"],
+            #     outputs="dwell_obj_crit_dwells",
+            #     name="filter_dwells",
+            #     tags="frame-spatiotemporal",
+            # ),
             node(
                 func=calc_energy_use,
                 inputs=[
-                    "dwell_obj_crit_dwells",
+                    "dwell_obj_w_avail",
                     "vehicles_with_params",
                     "params:calc_energy_use",
                 ],
@@ -102,6 +102,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=[
                     "dwell_obj_w_energy",
                     "vehicles_with_params",
+                    "params:charging_modes",
                     "params:simulate_charging_choice",
                 ],
                 outputs="dwell_obj_w_charging",
