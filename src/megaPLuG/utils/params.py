@@ -62,8 +62,8 @@ def build_df_from_dict(d: dict, id_cols: list[str], value_col: str) -> pd.DataFr
         else:
             if isinstance(vals[0], list):
                 d = {
-                    k: [v] for k, v in d.items()
-                }  # Wrapping in lists to create list column
+                    k: [np.array(v)] for k, v in d.items()
+                }  # Wrapping in lists to create an array column
             df = pd.DataFrame.from_dict(d, orient="index")
         return df
 
