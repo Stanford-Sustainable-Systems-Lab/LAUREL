@@ -3,10 +3,10 @@ from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
-from numba import jit
 from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
+from megaPLuG.utils.data import IndexIntegerizer, to_arrays
 
 
 class AbstractChargingChoiceStrategy(ABC):
@@ -19,7 +19,7 @@ class AbstractChargingChoiceStrategy(ABC):
 
     consumed_kwh: str
     dwell_hrs: str
-    avail_kw: str
+    modes_avail: str
     reset: str
     batt_cap: str
     random_seed: str
@@ -38,6 +38,7 @@ class AbstractChargingChoiceStrategy(ABC):
         self,
         consumed_kwh: str,
         dwell_hrs: str,
+        modes_avail: str,
         avail_kw: str,
         reset: str,
         batt_cap: str,
@@ -54,7 +55,8 @@ class AbstractChargingChoiceStrategy(ABC):
         At a minimum, we need the columns in the dwells:
             - consumed_kwh
             - dwell_hrs
-            - avail_kw (which may end up being a recarray itself to accomodate multiple modes)
+            - modes_avail
+            - avail_kw
             - reset
 
         And we need the vehicle parameters:
@@ -64,6 +66,7 @@ class AbstractChargingChoiceStrategy(ABC):
         """
         self.consumed_kwh = consumed_kwh
         self.dwell_hrs = dwell_hrs
+        self.modes_avail = modes_avail
         self.avail_kw = avail_kw
         self.reset = reset
         self.batt_cap = batt_cap
@@ -83,7 +86,11 @@ class AbstractChargingChoiceStrategy(ABC):
         df_sel = df.loc[:, use_cols]
         df_sel = df_sel.rename(columns=self._renamer)
         col_dtypes = self._get_recarray_dtypes(df_sel)
-        recs = df_sel.to_records(column_dtypes=col_dtypes)
+        arrs, names, formats = to_arrays(df=df_sel, column_dtypes=col_dtypes)
+        for i, fmt in enumerate(formats):
+            if fmt.shape != ():  # If the dtype has some shape, not just scalar
+                arrs[i] = np.vstack(arrs[i])
+        recs = np.rec.fromarrays(arrs, dtype={"names": names, "formats": formats})
         return recs
 
     def _get_recarray_dtypes(self, df: pd.DataFrame) -> dict[str, str]:
@@ -94,19 +101,47 @@ class AbstractChargingChoiceStrategy(ABC):
         """
         col_dtypes = {}
         for col, dtype in zip(df.columns, df.dtypes):
-            if dtype.name == np.bool.__name__:
-                col_dtypes.update({col: self._replace_dtypes[dtype.name]})
+            # First, determine if there is internal structure within the column
+            if isinstance(dtype, np.dtypes.ObjectDType):
+                example = df[col].iloc[0]
+                if isinstance(example, np.ndarray):
+                    check_dtype = example.dtype
+                    shp = example.shape
+            else:
+                check_dtype = dtype
+                shp = None
+
+            # Then, override dtypes incompatible with Numba
+            out_fmt = check_dtype.name
+            if out_fmt in self._replace_dtypes:
+                out_fmt = self._replace_dtypes[out_fmt]
+
+            if shp is not None:
+                out_dtype = (out_fmt, shp)
+            else:
+                out_dtype = out_fmt
+            col_dtypes.update({col: np.dtype(out_dtype)})
+
         return col_dtypes
 
     def run(
         self,
         dwells: DwellSet,
         vehs: pd.DataFrame,
-        locs: pd.DataFrame = None,
+        modes: pd.DataFrame,
     ) -> pd.DataFrame:
         """Run the simulation for a single vehicle by calling the sub-class-specific JIT-ed simulator."""
+        # TODO: Extremely slow, must use some sort of merging to speed this up
+        poss = modes.index.get_level_values(0)
+        dwells.data[self.modes_avail] = dwells.data[self.modes_avail].transform(
+            lambda av: np.isin(poss, av)
+        )
+        inter = IndexIntegerizer(int_col="mode_id")
+        modes = inter.integerize(modes)
+
         dwl_recs = self.convert_to_records(dwells.data)
         veh_recs = self.convert_to_records(vehs)
+        mode_recs = self.convert_to_records(modes)
         rngs = vehs[self.random_seed].transform(lambda s: np.random.default_rng(seed=s))
 
         if np.any(vehs.index.duplicated()):
@@ -122,6 +157,7 @@ class AbstractChargingChoiceStrategy(ABC):
                 choice_func=self._choose_charging,
                 dwls=dwl_recs[idxs],
                 veh=veh_recs[veh_idxr.loc[grp]],
+                modes=mode_recs,
                 outs=outs[idxs],
                 rng=rngs[grp],
             )
@@ -130,11 +166,12 @@ class AbstractChargingChoiceStrategy(ABC):
         return dwells_w_charging
 
     @staticmethod
-    @jit
+    # @jit
     def _simulate(
         choice_func: Callable,
         dwls: np.recarray,
         veh: np.recarray,
+        modes: np.recarray,
         outs: np.recarray,
         rng: np.random.Generator,
     ) -> np.ndarray:
@@ -152,7 +189,8 @@ class AbstractChargingChoiceStrategy(ABC):
                 cur_energy = veh["batt_cap"] * soc
             cur_energy -= dwls["consumed_kwh"][i]
             outs["dwell_init_kwh"][i] = cur_energy
-            avail_kwh = dwls["dwell_hrs"][i] * dwls["avail_kw"][i]
+            max_power = np.max(dwls["modes_avail"] * modes["avail_kw"])
+            avail_kwh = dwls["dwell_hrs"][i] * max_power
             if np.isnan(cur_energy) or cur_energy < 0:  # Currently dead
                 if (
                     avail_kwh >= veh["batt_cap"]
@@ -162,7 +200,7 @@ class AbstractChargingChoiceStrategy(ABC):
                 else:  # If not, then become/stay dead
                     chg = np.nan
             else:
-                chg = choice_func(cur_energy, dwls[i], veh)
+                chg = choice_func(cur_energy, dwls[i], veh, modes)
             outs["charge_kwh"][i] = chg
             outs["charge_mode"][i] = "None"  # TODO: Implement mode selection
             cur_energy += chg
@@ -174,6 +212,8 @@ class AbstractChargingChoiceStrategy(ABC):
     def _choose_charging(
         cur_energy: float,
         dwl: np.recarray,
+        veh: np.recarray,
+        modes: np.recarray,
     ) -> np.ndarray:
         """Choose charging energy and mode.
 
@@ -194,19 +234,22 @@ class SoCThreshChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         super().__init__(**kwargs)
 
     @staticmethod
-    @jit
+    # @jit
     def _choose_charging(
         cur_energy: float,
         dwl: np.recarray,
         veh: np.recarray,
+        modes: np.recarray,
     ) -> np.ndarray:
         """Choose charging energy and mode.
 
         Note: Will be passed to JIT-ed _simulate().
         """
+        # TODO: Convert this to a discrete choice framework
+        # TODO: Return the selected mode
         if cur_energy / veh["batt_cap"] <= veh["charge_soc"]:
             chg = np.minimum(
-                veh["batt_cap"] - cur_energy, dwl["dwell_hrs"] * dwl["avail_kw"]
+                veh["batt_cap"] - cur_energy, dwl["dwell_hrs"] * modes["avail_kw"][-1]
             )
         else:
             chg = 0
