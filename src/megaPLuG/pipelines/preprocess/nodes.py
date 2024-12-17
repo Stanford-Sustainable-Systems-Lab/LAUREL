@@ -172,6 +172,9 @@ def format_substation_profiles(profs: pd.DataFrame, params: dict) -> pd.DataFram
         max_base_by_hour_kw=pd.NamedAgg(pcols["baseload"], "max"),
     )
     profs["max_base_by_hour_mw"] = profs["max_base_by_hour_kw"] / 1000
+    profs["max_base_mw"] = profs.groupby(pcols["substation_id"])[
+        "max_base_by_hour_mw"
+    ].transform(lambda s: s.max())
     profs = profs.drop(columns=["max_base_by_hour_kw"])
     profs = profs.reset_index(pcols["hour"])
     return profs
