@@ -90,6 +90,10 @@ vius_scaling:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vius_scaling.feather
 
+substation.usage:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/usage/substation.feather
+
 # Ephemeral memory datasets (used to set copy_mode)
 dwell_obj:
   type: MemoryDataset

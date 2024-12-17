@@ -154,3 +154,46 @@ def build_vius_scaling_totals(
 
     scaler[params["weight_col"]] = scaler[f"{tot_col}_region"] * scaler[new_name]
     return scaler
+
+
+def format_substation_profiles(profs: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Collapse profiles from hour-month combinations to a single characteristic day."""
+    pcols = params["columns"]
+    profs = profs.rename(columns={v: k for k, v in params["col_renamer"].items()})
+
+    split = profs[pcols["month_hour"]].str.split("_")
+    profs[pcols["month"]] = split.transform(lambda x: int(x[0]))
+    profs[pcols["hour"]] = split.transform(lambda x: int(x[1]))
+    profs = profs.drop(columns=[pcols["month_hour"]])
+
+    # Aggregate to a characteristic day
+    profs = profs.groupby([pcols["substation_id"], pcols["hour"]]).agg(
+        max_base_by_hour_kw=pd.NamedAgg(pcols["baseload"], "max"),
+    )
+    profs["max_base_by_hour_mw"] = profs["max_base_by_hour_kw"] / 1000
+    profs = profs.drop(columns=["max_base_by_hour_kw"])
+    profs = profs.reset_index(pcols["hour"])
+    return profs
+
+
+def format_substation_ratings(infra: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Add up substation capacities from the capacities of transformer banks."""
+    infra = infra.rename(columns={v: k for k, v in params["col_renamer"].items()})
+    infra[params["substation_id"]] = infra[params["substation_id"]].astype(int)
+    caps = infra.groupby(params["substation_id"]).agg(
+        rating_mw=pd.NamedAgg(params["capacity"], "sum"),
+    )
+    return caps
+
+
+def describe_substation_usage(
+    profs: pd.DataFrame, caps: pd.DataFrame, params: dict
+) -> pd.DataFrame:
+    """Combine baseload profiles and capacities to describe substation usage."""
+    pcols = params["columns"]
+    subs = profs.merge(caps, how="inner", on=pcols["substation_id"])
+    subs = subs.reset_index()
+    subs = subs.sort_values([pcols["substation_id"], pcols["hour"]])
+    subs = subs.set_index(pcols["substation_id"])
+    subs[pcols["cap_avail_mw"]] = subs[pcols["rating_mw"]] - subs[pcols["baseload_mw"]]
+    return subs
