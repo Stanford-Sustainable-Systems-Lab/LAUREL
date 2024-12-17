@@ -143,8 +143,7 @@ def report_by_region_quantiles(
         possible_tzs=profs[pcols["timezone_col"]].unique(),
     )
     grped_nonzero = grouper.add_group_classes(grped_nonzero)
-    group_counts_tz = grouper.get_possible_obs_counts(grped_nonzero)
-    group_counts_tz = group_counts_tz.reset_index()
+    group_counts_tz = grouper.get_possible_obs_counts().reset_index()
     grp_merge_cols = [pcols["timezone_col"]] + grouper.time_group_cols
     grped_nonzero = grped_nonzero.merge(group_counts_tz, how="left", on=grp_merge_cols)
 
