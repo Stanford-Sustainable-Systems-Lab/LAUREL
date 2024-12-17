@@ -15,6 +15,7 @@ from .nodes import (
     assign_regions,
     assign_vehicle_metadata,
     get_load_profiles,
+    report_by_region_capacity_consumed,
     report_by_region_peaks,
     report_by_region_quantiles,
     summarize_vehicles,
@@ -138,6 +139,58 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="report_profiles",
     )
 
+    capacity_consumed_pipe = pipeline(
+        [
+            node(
+                func=assign_regions,
+                inputs=["events_eval", "hex_region_corresp", "params:eval_columns"],
+                outputs="events_w_regions",
+                name="assign_regions_eval",
+            ),
+            node(
+                func=assign_vehicle_metadata,
+                inputs=[
+                    "events_w_regions",
+                    "vehicles_evaluated",
+                    "params:eval_columns",
+                ],
+                outputs="events_w_metadata",
+                name="assign_vehicle_metadata",
+            ),
+            node(
+                func=get_load_profiles,
+                inputs=[
+                    "events_w_metadata",
+                    "params:profiles_from_events",
+                    "params:eval_columns",
+                ],
+                outputs="profiles",
+                name="get_load_profiles",
+            ),
+            node(
+                func=report_by_region_capacity_consumed,
+                inputs=[
+                    "profiles",
+                    "usage",
+                    "params:report_by_region_capacity_consumed",
+                    "params:eval_columns",
+                ],
+                outputs="report_by_region_capacity_consumed",
+                name="report_by_region_capacity_consumed",
+            ),
+            node(
+                func=write_scenario_partition,
+                inputs=[
+                    "report_by_region_capacity_consumed",
+                    "params:results_partition",
+                ],
+                outputs="report_by_region_capacity_consumed_partition",
+                name="write_scenario_partition_hexes_capacity",
+            ),
+        ],
+        tags="capacity_consumed",
+    )
+
     profile_group_fixed_params = {
         "params:profiles_from_events",
         "params:results_partition",
@@ -181,4 +234,16 @@ def create_pipeline(**kwargs) -> Pipeline:
         ),
     ]
 
-    return read_pipe + report_vehicles_pipe + sum(report_profiles_pipes)
+    diff_fixed_pars = {
+        "params:report_by_region_peaks",
+        "params:report_by_region_quantiles",
+    }
+    cap_pipe = pipeline(
+        capacity_consumed_pipe,
+        namespace="substation",
+        parameters=profile_group_fixed_params.difference(diff_fixed_pars),
+        inputs=profile_group_fixed_inputs,
+        tags="scenario_run",
+    )
+
+    return read_pipe + report_vehicles_pipe + sum(report_profiles_pipes) + cap_pipe

@@ -83,3 +83,5 @@ report_by_region_quantiles:
 add_region_geoms:
   hex_col: hex_id
   region_col: substation_id
+
+substation.report_by_region_capacity_consumed:

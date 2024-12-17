@@ -154,6 +154,46 @@ def report_by_region_quantiles(
     return quantiles
 
 
+def report_by_region_capacity_consumed(
+    profs: pd.DataFrame, baseload: pd.DataFrame, params: dict, pcols: dict
+) -> pd.DataFrame:
+    """Report quantile summaries by region and time grouping."""
+    logger.info("Remove all observations with unknown duration or zero power.")
+    # First drop the observations with no duration or zero power
+    nonzero = profs.dropna(subset=[pcols["duration_col"]])
+    nonzero = nonzero.reset_index()
+    drop_idx = nonzero.loc[nonzero[pcols["profile_col"]] == 0].index
+    nonzero = nonzero.drop(index=drop_idx)
+
+    logger.info("Expand events to cover all groups across their duration")
+    grp_tz_cols = pcols["group_cols"] + [pcols["timezone_col"]]
+    expander = EventExpander(
+        time_col=pcols["time_col"],
+        dur_col=pcols["duration_col"],
+        value_col=pcols["profile_col"],
+        group_cols=grp_tz_cols,
+        freq=params["freq"],
+    )
+    nonzero_exp = expander.expand_events(nonzero)
+
+    logger.info("Group events")
+    grouper = grp_tz_cols + [pd.Grouper(key=pcols["time_col"], freq=params["freq"])]
+    grped_nonzero = nonzero_exp.groupby(grouper)[pcols["profile_col"]].max()
+    grped_nonzero = grped_nonzero.reset_index()
+
+    grouper = HourOfWeekdayGrouper(
+        time_col=pcols["time_col"],
+        tz_col=pcols["timezone_col"],
+    )
+    grped_nonzero = grouper.add_group_classes(grped_nonzero)
+    group_counts_tz = grouper.get_possible_obs_counts(grped_nonzero)
+    group_counts_tz = group_counts_tz.reset_index()
+    grp_merge_cols = [pcols["timezone_col"]] + grouper.time_group_cols
+    grped_nonzero = grped_nonzero.merge(group_counts_tz, how="left", on=grp_merge_cols)
+
+    raise NotImplementedError()
+
+
 def add_region_geoms(
     results: pd.DataFrame,
     hex_regions: pd.DataFrame,
