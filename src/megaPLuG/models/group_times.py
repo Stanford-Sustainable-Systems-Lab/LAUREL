@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from typing import Self
 
 import pandas as pd
@@ -7,14 +8,16 @@ from megaPLuG.utils.time import calc_local_time_attrs, get_local_time_attr_col_n
 WEEKEND_FIRST_DAY = 5
 
 
-class HourOfWeekdayGrouper:
-    """Note: This class has only been tested with the frequency of '1h'."""
+class AbstractTimeGrouper(ABC):
+    """Abstract class for creating time groupings and evaluating their size."""
 
     freq: str = "1h"
     time_col: str
     tz_col: str
     count_col: str = "possible_count"
-    _time_group_cols: list[str] = ["is_weekend", "time_local_hour"]
+    _time_attrs: list[str] = []
+    _time_group_cols: list[str] = []
+    _default_tz: str = "America/Los_Angeles"
 
     def __init__(
         self: Self,
@@ -25,23 +28,27 @@ class HourOfWeekdayGrouper:
         self.tz_col = tz_col
 
     @property
+    @abstractmethod
     def time_group_cols(self: Self) -> list[str]:
         return self._time_group_cols
 
+    @property
+    @abstractmethod
+    def time_attrs(self: Self) -> list[str]:
+        return self._time_attrs
+
+    @abstractmethod
     def add_group_classes(self: Self, df: pd.DataFrame) -> pd.DataFrame:
         """Add the group classes columns to a dataframe."""
         df = calc_local_time_attrs(
             df=df,
             time_cols=self.time_col,
-            attrs=["day_of_week", "hour"],
+            attrs=self.time_attrs,
             tz_col=self.tz_col,
         )
-        dow_col = get_local_time_attr_col_name(self.time_col, "day_of_week")
-        df["is_weekend"] = df[dow_col] >= WEEKEND_FIRST_DAY
-        df = df.drop(columns=[dow_col])
         return df
 
-    def get_all_classes(self: Self, tz: str = "America/Los_Angeles") -> pd.DataFrame:
+    def get_all_classes(self: Self, tz: str | None = None) -> pd.DataFrame:
         """Get all the possible classes created by this grouper over the course of a year."""
         frame_start = pd.Timestamp(0)
         frame_end = frame_start + pd.DateOffset(years=1)
@@ -51,6 +58,8 @@ class HourOfWeekdayGrouper:
         poss_times = (
             poss_times.to_series(name=self.time_col).reset_index(drop=True).to_frame()
         )
+        if tz is None:
+            tz = self._default_tz
         poss_times[self.tz_col] = tz
         poss_classes = self.add_group_classes(poss_times)
         poss_classes = poss_classes[self.time_group_cols].drop_duplicates()
@@ -78,3 +87,27 @@ class HourOfWeekdayGrouper:
         ].count()
         group_counts.name = self.count_col
         return group_counts
+
+
+class HourOfWeekdayGrouper(AbstractTimeGrouper):
+    """Note: This class has only been tested with the frequency of '1h'."""
+
+    freq: str = "1h"
+    _time_attrs: list[str] = ["day_of_week", "hour"]
+    _time_group_cols: list[str] = ["is_weekend", "time_local_hour"]
+
+    @property
+    def time_group_cols(self: Self) -> list[str]:
+        return self._time_group_cols
+
+    @property
+    def time_attrs(self: Self) -> list[str]:
+        return self._time_attrs
+
+    def add_group_classes(self: Self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add the group classes columns to a dataframe."""
+        df = super().add_group_classes(df)
+        dow_col = get_local_time_attr_col_name(self.time_col, "day_of_week")
+        df["is_weekend"] = df[dow_col] >= WEEKEND_FIRST_DAY
+        df = df.drop(columns=[dow_col])
+        return df
