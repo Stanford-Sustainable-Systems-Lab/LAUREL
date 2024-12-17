@@ -12,8 +12,8 @@ from .nodes import (
     clean_vius_by_weight_class,
     create_dwells,
     describe_substation_usage,
+    format_substation_boundaries,
     format_substation_profiles,
-    format_substation_ratings,
     format_trips_columns,
     get_vius_from_url,
     strip_vehicle_attrs,
@@ -104,10 +104,10 @@ def create_pipeline(**kwargs) -> Pipeline:
     capacity_pipe = pipeline(
         [
             node(
-                func=format_substation_ratings,
+                func=format_substation_boundaries,
                 inputs=["substation_boundaries", "params:format_substation_capacities"],
-                outputs="substation_ratings",
-                name="format_substation_ratings",
+                outputs="substation_boundaries_formatted",
+                name="format_substation_boundaries",
             ),
             node(
                 func=format_substation_profiles,
@@ -119,7 +119,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=describe_substation_usage,
                 inputs=[
                     "substation_profiles_formatted",
-                    "substation_ratings",
+                    "substation_boundaries_formatted",
                     "params:describe_substation_usage",
                 ],
                 outputs="substation.usage",

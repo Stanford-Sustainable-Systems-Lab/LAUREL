@@ -9,6 +9,7 @@ from io import StringIO
 from itertools import product
 
 import dask.dataframe as dd
+import geopandas as gpd
 import pandas as pd
 import requests
 
@@ -176,22 +177,28 @@ def format_substation_profiles(profs: pd.DataFrame, params: dict) -> pd.DataFram
     return profs
 
 
-def format_substation_ratings(infra: pd.DataFrame, params: dict) -> pd.DataFrame:
+def format_substation_boundaries(infra: gpd.GeoDataFrame, params: dict) -> pd.DataFrame:
     """Add up substation capacities from the capacities of transformer banks."""
     infra = infra.rename(columns={v: k for k, v in params["col_renamer"].items()})
-    infra[params["substation_id"]] = infra[params["substation_id"]].astype(int)
-    caps = infra.groupby(params["substation_id"]).agg(
-        rating_mw=pd.NamedAgg(params["capacity"], "sum"),
+    infra["substation_id"] = infra["substation_id"].astype(int)
+
+    subs = infra.dissolve(
+        by="substation_id",
+        aggfunc={
+            "substation_name": "first",
+            "rating_mw": "sum",
+        },
     )
-    return caps
+    return subs
 
 
 def describe_substation_usage(
-    profs: pd.DataFrame, caps: pd.DataFrame, params: dict
+    profs: pd.DataFrame, subs: gpd.GeoDataFrame, params: dict
 ) -> pd.DataFrame:
     """Combine baseload profiles and capacities to describe substation usage."""
     pcols = params["columns"]
-    subs = profs.merge(caps, how="inner", on=pcols["substation_id"])
+    subs = subs.drop(columns=params["drop_substation_cols"])
+    subs = profs.merge(subs, how="inner", on=pcols["substation_id"])
     subs = subs.reset_index()
     subs = subs.sort_values([pcols["substation_id"], pcols["hour"]])
     subs = subs.set_index(pcols["substation_id"])
