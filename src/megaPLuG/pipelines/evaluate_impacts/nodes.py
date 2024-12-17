@@ -13,7 +13,11 @@ from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.group_times import HourOfWeekdayGrouper
 from megaPLuG.models.summarize import EventExpander, NonzeroGroupedSummarizer
 from megaPLuG.utils.h3 import cells_to_region_polygons
-from megaPLuG.utils.time import calc_local_time_attrs, total_hours
+from megaPLuG.utils.time import (
+    calc_local_time,
+    calc_time_attrs,
+    total_hours,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -93,10 +97,10 @@ def report_by_region_peaks(
     peaks = profs.loc[max_idx]
 
     logger.info("Calculating local time attributes")
-    peaks = calc_local_time_attrs(
+    peaks = calc_local_time(
         df=peaks,
         time_cols=pcols["time_col"],
-        attrs=params["local_time_attrs"],
+        local_cols=pcols["time_col"] + "_local",
         tz_col=pcols["timezone_col"],
     )
     peaks = peaks.set_index(orig_idx)
