@@ -57,17 +57,17 @@ def get_timezones(hexes: pd.DataFrame, params: dict) -> pd.DataFrame:
     return hexes
 
 
-def calc_local_time_attrs(
+def calc_local_time(
     df: pd.DataFrame,
     time_cols: str | list[str],
-    attrs: str | list[str],
+    local_cols: str | list[str],
     tz_col: str,
     sort_col: str = None,
     grp_cols: str | list[str] = None,
 ) -> pd.DataFrame:
-    """Modifies the passed dataframe to also include local time attribute columns.
+    """Modifies the passed dataframe to also include local time columns.
 
-    See the pandas.Timestamp documentation for possible attributes.
+    The local columns correspond in order to the time cols.
     """
     if grp_cols is None:
         grouper = [tz_col]
@@ -80,20 +80,21 @@ def calc_local_time_attrs(
 
     if isinstance(time_cols, str):
         time_cols = [time_cols]
-    for tcol in time_cols:
-        for a in attrs:
-            new_name = get_local_time_attr_col_name(time_col=tcol, attr_name=a)
-            df[new_name] = 0  # May need to be adjusted for different attribute dtypes
-    logger.info("Building time attribute columns")
+    if isinstance(local_cols, str):
+        local_cols = [local_cols]
+    for col in local_cols:
+        # May need to be adjusted for different attribute dtypes
+        df[col] = pd.Timestamp(0)
+    logger.info("Building local time columns")
     tqdm.pandas()
     df = df.groupby(
         grouper, group_keys=False, sort=False, observed=True
     ).progress_apply(
-        lambda g: _get_local_time_attr_by_tz(
+        lambda g: _get_local_time_by_tz(
             g,
             tz=g.name if isinstance(g.name, str) else g.name[-1],
             utc_cols=time_cols,
-            attrs=attrs,
+            local_cols=local_cols,
         )
     )
 
@@ -105,33 +106,40 @@ def calc_local_time_attrs(
     return df
 
 
-def _get_local_time_attr_by_tz(
+def _get_local_time_by_tz(
     grp: pd.DataFrame,
     tz: str,
     utc_cols: str | list[str],
-    attrs: str | list[str],
+    local_cols: str | list[str],
 ) -> pd.DataFrame:
-    """Get a time-based metric, like day, day_of_year, etc. from a UTC datetime column
-    and a timezone.
+    """Get a timezone-naive local time from a UTC datetime column and a timezone.
 
     This function assumes that there is a single time zone across the dataframe. If this
     is not the case, then group by time zone and then pass to this function.
     """
     if isinstance(utc_cols, str):
         utc_cols = [utc_cols]
-    if isinstance(attrs, str):
-        attrs = [attrs]
+    if isinstance(local_cols, str):
+        local_cols = [local_cols]
+    if len(utc_cols) != len(local_cols):
+        raise RuntimeError(
+            "utc_cols and local_cols arguments must have the same length."
+        )
 
-    for tcol in utc_cols:
-        local_time_ser = grp[tcol].dt.tz_convert(tz)
-        for a in attrs:
-            new_name = get_local_time_attr_col_name(time_col=tcol, attr_name=a)
-            grp.loc[:, new_name] = getattr(local_time_ser.dt, a)
+    for tcol, lcol in zip(utc_cols, local_cols):
+        grp.loc[:, lcol] = grp[tcol].dt.tz_convert(tz).dt.tz_localize(None)
     return grp
 
 
-def get_local_time_attr_col_name(time_col: str, attr_name: str) -> str:
-    return f"{time_col}_local_{attr_name}"
+def calc_time_attrs(df: pd.DataFrame, time_col: str, attrs: list[str]) -> pd.DataFrame:
+    """Augment the dataframe with time attributes."""
+    if isinstance(attrs, str):
+        attrs = [attrs]
+
+    for a in attrs:
+        new_name = f"{time_col}_{a}"
+        df.loc[:, new_name] = getattr(df[time_col].dt, a)
+    return df
 
 
 def total_hours(s: pd.Series) -> pd.Series:
