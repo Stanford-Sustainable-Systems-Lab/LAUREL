@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from megaPLuG.models.dwell_sets import DwellSet
-from megaPLuG.models.group_times import HourOfWeekdayGrouper
+from megaPLuG.models.group_times import DateGrouper, HourOfWeekdayGrouper
 from megaPLuG.models.summarize import EventExpander, NonzeroGroupedSummarizer
 from megaPLuG.utils.h3 import cells_to_region_polygons
 from megaPLuG.utils.time import (
@@ -134,9 +134,13 @@ def report_by_region_quantiles(
     grped_nonzero = nonzero_exp.groupby(grouper)[pcols["profile_col"]].max()
     grped_nonzero = grped_nonzero.reset_index()
 
+    all_times = profs.index.get_level_values(pcols["time_col"])
     grouper = HourOfWeekdayGrouper(
         time_col=pcols["time_col"],
         tz_col=pcols["timezone_col"],
+        start_time=all_times.min(),
+        end_time=all_times.max(),
+        possible_tzs=profs[pcols["timezone_col"]].unique(),
     )
     grped_nonzero = grouper.add_group_classes(grped_nonzero)
     group_counts_tz = grouper.get_possible_obs_counts(grped_nonzero)
@@ -185,17 +189,68 @@ def report_by_region_capacity_consumed(
     grped_nonzero = nonzero_exp.groupby(grouper)[pcols["profile_col"]].max()
     grped_nonzero = grped_nonzero.reset_index()
 
-    grouper = HourOfWeekdayGrouper(
-        time_col=pcols["time_col"],
+    local_col = pcols["time_col"] + "_local"
+    grped_nonzero = calc_local_time(
+        df=grped_nonzero,
+        time_cols=pcols["time_col"],
+        local_cols=local_col,
         tz_col=pcols["timezone_col"],
     )
-    grped_nonzero = grouper.add_group_classes(grped_nonzero)
-    group_counts_tz = grouper.get_possible_obs_counts(grped_nonzero)
-    group_counts_tz = group_counts_tz.reset_index()
-    grp_merge_cols = [pcols["timezone_col"]] + grouper.time_group_cols
-    grped_nonzero = grped_nonzero.merge(group_counts_tz, how="left", on=grp_merge_cols)
+    grped_nonzero = calc_time_attrs(grped_nonzero, time_col=local_col, attrs="hour")
+    # The following line eliminates all profile observations not corresponding to a baseload
+    pair_nonzero = grped_nonzero.merge(
+        baseload, how="inner", on=params["prof_merge_cols"]
+    )
 
-    raise NotImplementedError()
+    # Assumes that profile column is measured in kW
+    base_cols = params["baseload_cols"]
+    pair_nonzero["base_veh_mw"] = (
+        pair_nonzero[base_cols["hourly"]]
+        + pair_nonzero[pcols["profile_col"]] * params["vehicle_profile_conversion"]
+    )
+
+    all_times = profs.index.get_level_values(pcols["time_col"])
+    grouper = DateGrouper(
+        time_col=pcols["time_col"],
+        tz_col=pcols["timezone_col"],
+        start_time=all_times.min(),
+        end_time=all_times.max(),
+        possible_tzs=profs[pcols["timezone_col"]].unique(),
+    )
+    pair_nonzero = grouper.add_group_classes(pair_nonzero)
+
+    grp_cols = pcols["group_cols"] + grouper.time_group_cols + [pcols["timezone_col"]]
+    peak_mod = pair_nonzero.groupby(grp_cols).agg(
+        max_base_mw=pd.NamedAgg(base_cols["all_time"], "first"),
+        max_veh_mw=pd.NamedAgg(pcols["profile_col"], "max"),
+        max_mod_mw=pd.NamedAgg("base_veh_mw", "max"),
+        cap_avail_mw=pd.NamedAgg(base_cols["capacity_available"], "first"),
+    )
+    peak_mod["max_veh_mw"] = (
+        peak_mod["max_veh_mw"] * params["vehicle_profile_conversion"]
+    )
+    peak_mod["diff_mw_abs"] = peak_mod["max_mod_mw"] - peak_mod[base_cols["all_time"]]
+    peak_mod["diff_mw_abs"] = np.maximum(peak_mod["diff_mw_abs"], 0)
+    peak_mod["diff_mw_pct"] = (
+        peak_mod["diff_mw_abs"] / peak_mod[base_cols["capacity_available"]] * 100
+    )
+
+    poss_times = grouper.get_possible_obs_counts().reset_index()
+    poss_times = poss_times.drop(columns=[grouper.count_col])
+    poss_groups = (
+        peak_mod.reset_index()
+        .loc[:, pcols["group_cols"] + [pcols["timezone_col"]]]
+        .drop_duplicates()
+    )
+    date_frame = poss_groups.merge(poss_times, how="left", on=pcols["timezone_col"])
+    full_obs = date_frame.merge(peak_mod, how="left", on=grp_cols)
+
+    # We know that all times with NA vehicle additions actually had zero
+    fcols = params["fill_with_zero_cols"]
+    full_obs.loc[:, fcols] = full_obs.loc[:, fcols].fillna(0.0)
+    full_obs = full_obs.dropna(axis=1)
+    full_obs = full_obs.drop(columns=[pcols["timezone_col"]])
+    return full_obs
 
 
 def add_region_geoms(

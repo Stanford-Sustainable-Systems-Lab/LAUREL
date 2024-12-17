@@ -85,3 +85,17 @@ add_region_geoms:
   region_col: substation_id
 
 substation.report_by_region_capacity_consumed:
+  freq: 1h
+  prof_merge_cols:
+    - substation_id
+    - time_local_hour
+  baseload_cols:
+    hourly: max_base_by_hour_mw
+    all_time: max_base_mw
+    capacity_available: cap_avail_mw
+  fill_with_zero_cols:
+    - max_veh_mw
+    - diff_mw_abs
+    - diff_mw_pct
+  vehicle_profile_conversion: 0.001 # Converts vehicle profiles in kW to MW
+  

@@ -106,3 +106,32 @@ class HourOfWeekdayGrouper(AbstractTimeGrouper):
         df["is_weekend"] = df[dow_col] >= WEEKEND_FIRST_DAY
         df = df.drop(columns=[dow_col])
         return df
+
+
+class DateGrouper(AbstractTimeGrouper):
+    """Note: This class has only been tested with the frequency of '1D'."""
+
+    freq: str = "1D"
+    _time_attrs: list[str] = []
+    _time_group_cols: list[str] = ["time_local_date"]
+
+    @property
+    def time_group_cols(self: Self) -> list[str]:
+        return self._time_group_cols
+
+    @property
+    def time_attrs(self: Self) -> list[str]:
+        return self._time_attrs
+
+    def add_group_classes(self: Self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add the group classes columns to a dataframe."""
+        local_col = self.time_col + "_local"
+        df = calc_local_time(
+            df=df,
+            time_cols=self.time_col,
+            local_cols=local_col,
+            tz_col=self.tz_col,
+        )
+        df[self.time_group_cols[0]] = df[local_col].dt.floor(self.freq)
+        df = df.drop(columns=local_col)
+        return df
