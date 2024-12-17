@@ -2,7 +2,7 @@ from typing import Self
 
 import pandas as pd
 
-from megaPLuG.utils.time import calc_local_time_attrs, get_local_time_attr_col_name
+from megaPLuG.utils.time import calc_local_time, calc_time_attrs
 
 WEEKEND_FIRST_DAY = 5
 
@@ -30,15 +30,17 @@ class HourOfWeekdayGrouper:
 
     def add_group_classes(self: Self, df: pd.DataFrame) -> pd.DataFrame:
         """Add the group classes columns to a dataframe."""
-        df = calc_local_time_attrs(
+        local_col = self.time_col + "_local"
+        df = calc_local_time(
             df=df,
             time_cols=self.time_col,
-            attrs=["day_of_week", "hour"],
+            local_cols=local_col,
             tz_col=self.tz_col,
         )
-        dow_col = get_local_time_attr_col_name(self.time_col, "day_of_week")
+        df = calc_time_attrs(df=df, time_col=local_col, attrs=["day_of_week", "hour"])
+        dow_col = f"{local_col}_day_of_week"
         df["is_weekend"] = df[dow_col] >= WEEKEND_FIRST_DAY
-        df = df.drop(columns=[dow_col])
+        df = df.drop(columns=[local_col, dow_col])
         return df
 
     def get_all_classes(self: Self, tz: str = "America/Los_Angeles") -> pd.DataFrame:
