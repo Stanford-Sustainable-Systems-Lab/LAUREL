@@ -126,6 +126,8 @@ decorator==5.1.1
     # via tensorflow-probability
 defusedxml==0.7.1
     # via nbconvert
+dill==0.3.9
+    # via openturns
 distlib==0.3.8
     # via virtualenv
 distributed==2024.5.2
@@ -443,6 +445,8 @@ numpyro==0.13.2
     # via megaplug
 omegaconf==2.3.0
     # via kedro
+openturns==1.24
+    # via megaplug
 opt-einsum==3.3.0
     # via jax
 orjson==3.10.0
@@ -525,6 +529,7 @@ prompt-toolkit==3.0.43
 psutil==5.9.8
     # via distributed
     # via ipykernel
+    # via openturns
 ptyprocess==0.7.0
     # via pexpect
     # via terminado
