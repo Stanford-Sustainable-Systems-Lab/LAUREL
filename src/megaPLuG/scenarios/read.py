@@ -110,6 +110,8 @@ class ScenarioReader(ABC):
                 names=names,
                 metadata=metadata,
             )
+        elif isinstance(test_data, dict):
+            coll = {names[pth]: loader() for pth, loader in parts.items()}
         else:
             raise NotImplementedError(
                 "ScenarioReader collation for this dataset type has not been implemented."
