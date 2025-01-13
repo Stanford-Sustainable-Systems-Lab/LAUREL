@@ -90,6 +90,19 @@ vius_scaling:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vius_scaling.feather
 
+substation.usage:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/usage/substation.feather
+
+substation_boundaries_formatted:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/02_intermediate/substations.gpkg
+  save_args:
+    index: True
+    layer: substations
+  load_args:
+    layer: substations
+
 # Ephemeral memory datasets (used to set copy_mode)
 dwell_obj:
   type: MemoryDataset
