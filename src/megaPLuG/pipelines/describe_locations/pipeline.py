@@ -52,7 +52,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=build_analysis_areas_node,
                 inputs=[
                     "govt_areas",
-                    "substation_boundaries",
+                    "substation_boundaries_formatted",
                     "land_use",
                     "params:analysis_areas",
                 ],
