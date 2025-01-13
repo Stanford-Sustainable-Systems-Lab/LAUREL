@@ -123,7 +123,7 @@ class ScenarioReader(ABC):
         self: Self,
         partitions: dict[str, object],
         names: dict[str, str],
-        metadata: pd.DataFrame,
+        metadata: dict[str, tuple],
     ) -> pd.DataFrame:
         """Collate partitions with dataframe data into a single long dataframe with
         keys given by the scenario name and selected metadata.
