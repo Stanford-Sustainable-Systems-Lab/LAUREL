@@ -1,0 +1,107 @@
+# This is a boilerplate parameters config generated for pipeline 'build_runners'
+# using Kedro 0.19.5.
+#
+# Documentation for this file format can be found in "Parameters"
+# Link: https://docs.kedro.org/en/0.19.5/configuration/parameters.html
+
+slurm_command: local # Valid values are "sbatch" and "salloc"
+
+slurm_resources:
+  partition: serc
+  ntasks: 2 # I believe that this is what we need for SequentialRunner, while ParallelRunner needs n_examples + 1
+  cpus-per-task: 1 # Using multiple CPUs takes a lot of effort (e.g. Dask cluster)
+  mem-per-cpu: 32GB # Increasing memory, since I've had some memory errors
+  gpus: 0
+  time: 0-00:30 # Reducing time requirement, since with more processors we're going faster.
+  array: 0-23 # 2 at a time is enforced by Gurobi license
+
+cmd_line_calls:
+  prefix: rye run
+  kedro:
+    tags: scenario_run
+    # params: partition_data_dir=$GROUP_SCRATCH/passow/megaPLuG
+
+scenario_params:
+  builder: SenseScenarioBuilder
+  sample_size: 4 # Sobol sequences work best on powers of 2
+  variables:
+    consump_kwh_per_mile:
+      dist: Uniform
+      params:
+        - 1.97
+        - 3.12
+    batt_cap_kwh:
+      dist: Uniform
+      params:
+        - 750
+        - 1250
+    charge_thresh_soc:
+      dist: Beta
+      params:
+        - 3.4
+        - 10
+        - 0
+        - 1
+    min_soc_thresh:
+      dist: Uniform
+      params:
+        - 0
+        - 0.5
+    charge_speed_kw_depot:
+      dist: Beta
+      params:
+        - 1.3
+        - 4
+        - 50
+        - 1000
+    charge_speed_kw_enroute:
+      dist: Uniform
+      params:
+        - 350
+        - 1500
+    time_to_initiate_mins:
+      dist: Uniform
+      params:
+        - 2.5
+        - 5
+    charge_management:
+      dist: Binomial
+      params:
+        - 1
+        - 0.75
+  parameter_read_keys:
+    consump_kwh_per_mile:
+      - vehicles
+      - consump_rate_kwh_per_mi
+      - values
+      - True
+      - 8
+    batt_cap_kwh:
+      - vehicles
+      - battery_capacity_kwh
+      - values
+      - True
+      - 8
+    charge_thresh_soc:
+      - vehicles
+      - charge_soc_thresh
+    min_soc_thresh:
+      - vehicles
+      - dwell_min_soc_boost_frac
+    charge_speed_kw_depot:
+      - locations
+      - max_power_kw
+      - values
+      - home_base
+    charge_speed_kw_enroute:
+      - locations
+      - max_power_kw
+      - values
+      - other
+    time_to_initiate_mins:
+      - vehicles
+      - minimum_times
+      - plug_in_mins
+    charge_management:
+      - manage_charging
+      - charging_manager
