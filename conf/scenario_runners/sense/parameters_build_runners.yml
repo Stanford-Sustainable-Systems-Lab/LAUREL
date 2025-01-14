@@ -13,17 +13,17 @@ slurm_resources:
   mem-per-cpu: 32GB # Increasing memory, since I've had some memory errors
   gpus: 0
   time: 0-00:30 # Reducing time requirement, since with more processors we're going faster.
-  array: 0-23 # 2 at a time is enforced by Gurobi license
+  array: 0-511 # 2 at a time is enforced by Gurobi license
 
 cmd_line_calls:
   prefix: rye run
   kedro:
     tags: scenario_run
-    # params: partition_data_dir=$GROUP_SCRATCH/passow/megaPLuG
+    params: partition_data_dir=$GROUP_SCRATCH/passow/megaPLuG
 
 scenario_params:
   builder: SenseScenarioBuilder
-  sample_size: 4 # Sobol sequences work best on powers of 2
+  sample_size: 512 # Sobol sequences work best on powers of 2
   variables:
     consump_kwh_per_mile:
       dist: Uniform
