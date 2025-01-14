@@ -21,16 +21,8 @@ class SenseScenarioBuilder(ScenarioBuilder):
     def _build_param_dicts(self) -> tuple[list[Path], list[dict]]:
         paths, scens = [], []
 
-        marg_dists = []
-        for dist_info in self.scen_params["variables"].values():
-            dist_type = dist_info["dist"]
-            dist_params = dist_info["params"]
-            cur_dist = getattr(ot, dist_type)(*dist_params)
-            marg_dists.append(cur_dist)
-
-        joint_dist = ot.JointDistribution(marg_dists)
-
-        sequence = ot.SobolSequence(len(marg_dists))
+        joint_dist = self.build_input_dist(self.scen_params["variables"])
+        sequence = ot.SobolSequence(joint_dist.getDimension())
         sample_size = self.scen_params[
             "sample_size"
         ]  # Sobol' sequences work best on powers of 2
@@ -80,6 +72,20 @@ class SenseScenarioBuilder(ScenarioBuilder):
             paths.append(Path(self.display_name))
             scens.append(scn)
         return (paths, scens)
+
+    @staticmethod
+    def build_input_dist(vars: dict) -> ot.JointDistribution:
+        """Build the input distribution from the vars parameter dictionary."""
+        marg_dists = []
+        for var_name, dist_info in vars.items():
+            dist_type = dist_info["dist"]
+            dist_params = dist_info["params"]
+            cur_dist = getattr(ot, dist_type)(*dist_params)
+            cur_dist.setDescription([var_name])
+            marg_dists.append(cur_dist)
+
+        joint_dist = ot.JointDistribution(marg_dists)
+        return joint_dist
 
 
 class SenseScenarioReader(ScenarioReader):
