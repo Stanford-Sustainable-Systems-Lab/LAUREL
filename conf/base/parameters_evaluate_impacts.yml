@@ -79,6 +79,11 @@ report_by_region_quantiles:
     - 0.60
     - 0.95
     - 1.00
+  time_grouper:
+    start_time: 2023-01-01
+    end_time: 2023-12-31
+    possible_tzs:
+      - America/Los_Angeles
 
 add_region_geoms:
   hex_col: hex_id

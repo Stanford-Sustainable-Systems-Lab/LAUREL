@@ -133,12 +133,16 @@ def report_by_region_quantiles(
     grped_nonzero = nonzero_exp.groupby(grouper)[pcols["profile_col"]].max()
     grped_nonzero = grped_nonzero.reset_index()
 
+    tgpars = params["time_grouper"]
     grouper = HourOfWeekdayGrouper(
         time_col=pcols["time_col"],
         tz_col=pcols["timezone_col"],
+        start_time=pd.Timestamp(tgpars["start_time"]),
+        end_time=pd.Timestamp(tgpars["end_time"]),
+        possible_tzs=tgpars["possible_tzs"],
     )
     grped_nonzero = grouper.add_group_classes(grped_nonzero)
-    group_counts_tz = grouper.get_possible_obs_counts(grped_nonzero)
+    group_counts_tz = grouper.get_possible_obs_counts()
     group_counts_tz = group_counts_tz.reset_index()
     grp_merge_cols = [pcols["timezone_col"]] + grouper.time_group_cols
     grped_nonzero = grped_nonzero.merge(group_counts_tz, how="left", on=grp_merge_cols)
