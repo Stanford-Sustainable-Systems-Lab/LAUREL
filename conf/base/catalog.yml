@@ -367,6 +367,24 @@ feasibility_by_range_and_segment:
   save_args:
     bbox_inches: tight
 
+substation_strategic_uncertainty:
+  type: matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/substation_strategic_uncertainty.png
+  save_args:
+    bbox_inches: tight
+
+sensitivity_single_substation:
+  type: matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/sensitivity_single_substation.png
+  save_args:
+    bbox_inches: tight
+
+sensitivity_sum_of_capacity_consumed:
+  type: matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/sensitivity_sum_of_capacity_consumed.png
+  save_args:
+    bbox_inches: tight
+
 ### Scenario configurations
 scenario_configs:
   type: partitions.PartitionedDataset
