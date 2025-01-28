@@ -43,7 +43,10 @@ def assign_regions(
     reg_cols = [pcols["hex_col"]] + grp_cols + [pcols["timezone_col"]]
     mrg = hex_regions.reset_index().loc[:, reg_cols]
     events = events.merge(mrg, how="left", on=pcols["hex_col"])
-    events = events.set_index(orig_idx)
+    if orig_idx != [None]:
+        events = events.set_index(orig_idx)
+    else:
+        events = events.drop(columns=["index"])
     return events
 
 
