@@ -26,9 +26,9 @@ anyio==3.7.1
     # via jupyter-server
     # via starlette
     # via watchfiles
-    # via watchgod
 appdirs==1.4.4
     # via fs
+    # via kedro-telemetry
 appnope==0.1.4
     # via ipykernel
 argon2-cffi==23.1.0
@@ -323,9 +323,10 @@ kedro==0.19.3
     # via megaplug
 kedro-datasets==3.0.0
     # via megaplug
-kedro-telemetry==0.3.2
+kedro-telemetry==0.6.2
+    # via kedro-viz
     # via megaplug
-kedro-viz==10.0.0
+kedro-viz==10.1.0
     # via megaplug
 kiwisolver==1.4.5
     # via matplotlib
@@ -501,6 +502,8 @@ parso==0.8.4
     # via jedi
 partd==1.4.1
     # via dask
+pathspec==0.12.1
+    # via kedro-viz
 pexpect==4.9.0
     # via ipython
 pillow==10.3.0
@@ -806,10 +809,9 @@ uvloop==0.19.0
     # via uvicorn
 virtualenv==20.25.1
     # via pre-commit
-watchfiles==0.21.0
-    # via uvicorn
-watchgod==0.8.2
+watchfiles==1.0.4
     # via kedro-viz
+    # via uvicorn
 wcwidth==0.2.13
     # via prompt-toolkit
 webcolors==1.13
