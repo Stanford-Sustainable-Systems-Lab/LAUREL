@@ -94,5 +94,7 @@ vehicle_scaling_weights:
    - gvw_class
   summaries:
     veh_id: nunique
+  total_cols:
+    target: n_vehs_intersect
+    source: n_vehs_trips
   weight_col: weight
-  totals_col: n_vehs

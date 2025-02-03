@@ -301,12 +301,13 @@ def calc_vehicle_scaling_weights(
     vehs = vehs.reset_index()
     trip_summ = vehs.groupby(grp_cols, observed=True).agg(params["summaries"])
 
-    trips_name = f"{params['totals_col']}_trips"
-    region_name = f"{params['totals_col']}_region"
+    tot_cols = params["total_cols"]
     summ_col = list(params["summaries"].keys())[0]
-    trip_summ = trip_summ.rename(columns={summ_col: trips_name})
+    trip_summ = trip_summ.rename(columns={summ_col: tot_cols["source"]})
     scaler = scaler.merge(trip_summ, how="left", on=grp_cols)
-    scaler[params["weight_col"]] = scaler[region_name] / scaler[trips_name]
+    scaler[params["weight_col"]] = (
+        scaler[tot_cols["target"]] / scaler[tot_cols["source"]]
+    )
 
     mrg = scaler.loc[:, grp_cols + [params["weight_col"]]]
     vehs = vehs.merge(mrg, how="left", on=grp_cols)
