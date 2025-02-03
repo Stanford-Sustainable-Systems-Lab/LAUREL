@@ -83,7 +83,7 @@ clean_vius_by_weight_class:
 
 build_vius_scaling_totals:
   totals_col: n_vehs
-  weight_col: weight
+  weight_col: n_vehs_intersect
   id_cols:
     region: home_base_state
     weight_class: gvw_class
