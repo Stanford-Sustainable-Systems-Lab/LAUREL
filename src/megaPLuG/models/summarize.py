@@ -158,6 +158,10 @@ class NonzeroGroupedSummarizer:
         for _, idx in tqdm(grp_idxs.items()):
             cur_counts = counts[idx[0]]
             cur_vals = values[idx]
+            if cur_counts < cur_vals.size:
+                raise ValueError(
+                    "Number of observations exceeds the number of possible observations."
+                )
             results[i, :] = self._calc_sparse_quantiles_core(
                 n_obs=cur_counts,
                 nonzeros=cur_vals,
