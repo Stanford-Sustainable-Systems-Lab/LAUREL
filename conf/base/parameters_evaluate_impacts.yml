@@ -57,8 +57,64 @@ jurisdiction.eval_columns:
   time_col: time
   group_cols:
     - state
-  profile_col: power_kw
-  duration_col: duration
+
+stratify_columns: ${sample_slices.stratify_cols}
+
+build_sampling_totals:
+  adoption_frac: 0.2
+  totals_column: n_vehs_intersect
+  filter_totals:
+    filters:
+      gvw_class:
+        value_isin:
+          - Heavy Duty (Class 8)
+    keep_only_filter_cols: False
+
+
+assign_metadata_location:
+  keep_right_columns:
+    - hex_id
+    - tz
+    # Other columns will be added at runtime
+  merge_kwargs:
+    how: left
+    'on': hex_id # Using quotes here because "on" somehow gets interpreted as "True" without quotes
+
+assign_metadata_vehicle:
+  keep_right_columns:
+    - veh_id
+    # Other columns will be added at runtime
+  merge_kwargs:
+    how: left
+    'on': veh_id # Using quotes here because "on" somehow gets interpreted as "True" without quotes
+
+slice_events:
+    slice_freq: 1d
+    power_col: hex_kw_diff
+    slice_id_col: slice_time_start
+    slice_time_col: slice_time_relative
+    source_time_col: time
+    bootstrap_id_col: bootstrap_id
+
+sample_slices:
+    seed_for_seeds: 1
+    n_bootstraps: 5
+    stratify_cols:
+      - home_base_state
+    target_count_col: n_vehs_intersect
+    discrete_freq: 1h
+
+summarize_slices:
+  quantiles:
+    - 0.00
+    - 0.05
+    - 0.40
+    - 0.50
+    - 0.60
+    - 0.95
+    - 1.00
+  possible_tzs:
+    - America/Los_Angeles
 
 profiles_from_events:
   power_col: hex_kw_diff
