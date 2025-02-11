@@ -12,50 +12,22 @@ eval_columns:
   veh_col: veh_id
   timezone_col: tz
   time_col: time
-  group_cols:
-    - substation_id
-    - op_segment
+  group_cols: None # Filled in by the specific modular pipeline settings
   profile_col: power_kw
   duration_col: duration
 
-substation.eval_columns:
-  hex_col: hex_id
-  veh_col: veh_id
-  timezone_col: tz
-  time_col: time
-  group_cols:
+substation.group_columns:
     - substation_id
-  profile_col: power_kw
-  duration_col: duration
 
-land_op_segment.eval_columns:
-  hex_col: hex_id
-  veh_col: veh_id
-  timezone_col: tz
-  time_col: time
-  group_cols:
+land_op_segment.group_columns:
     - land_use
     - op_segment
-  profile_col: power_kw
-  duration_col: duration
 
-op_segment.eval_columns:
-  hex_col: hex_id
-  veh_col: veh_id
-  timezone_col: tz
-  time_col: time
-  group_cols:
+op_segment.group_columns:
     - op_segment
     - state
-  profile_col: power_kw
-  duration_col: duration
 
-jurisdiction.eval_columns:
-  hex_col: hex_id
-  veh_col: veh_id
-  timezone_col: tz
-  time_col: time
-  group_cols:
+jurisdiction.group_columns:
     - state
 
 stratify_columns: ${sample_slices.stratify_cols}
