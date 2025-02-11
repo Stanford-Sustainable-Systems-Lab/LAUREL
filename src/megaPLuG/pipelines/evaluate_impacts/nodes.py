@@ -109,32 +109,54 @@ def report_by_region_peaks(
     return peaks
 
 
-def report_by_region_quantiles(
-    profs: pd.DataFrame, params: dict, pcols: dict
+def discretize_sparse_profiles(
+    profs: pd.DataFrame,
+    time_col: str,
+    dur_col: str,
+    prof_col: str,
+    tz_col: str,
+    group_cols: list[str],
+    freq: str = "1h",
 ) -> pd.DataFrame:
-    """Report quantile summaries by region and time grouping."""
+    """Discretize profiles by region and time grouping."""
     logger.info("Remove all observations with unknown duration or zero power.")
     # First drop the observations with no duration or zero power
-    nonzero = profs.dropna(subset=[pcols["duration_col"]])
+    nonzero = profs.dropna(subset=[dur_col])
     nonzero = nonzero.reset_index()
-    drop_idx = nonzero.loc[nonzero[pcols["profile_col"]] == 0].index
+    drop_idx = nonzero.loc[nonzero[prof_col] == 0].index
     nonzero = nonzero.drop(index=drop_idx)
 
     logger.info("Expand events to cover all groups across their duration")
-    grp_tz_cols = pcols["group_cols"] + [pcols["timezone_col"]]
+    grp_tz_cols = group_cols + [tz_col]
     expander = EventExpander(
-        time_col=pcols["time_col"],
-        dur_col=pcols["duration_col"],
-        value_col=pcols["profile_col"],
+        time_col=time_col,
+        dur_col=dur_col,
+        value_col=prof_col,
         group_cols=grp_tz_cols,
-        freq=params["freq"],
+        freq=freq,
     )
     nonzero_exp = expander.expand_events(nonzero)
 
     logger.info("Group events")
-    grouper = grp_tz_cols + [pd.Grouper(key=pcols["time_col"], freq=params["freq"])]
-    grped_nonzero = nonzero_exp.groupby(grouper)[pcols["profile_col"]].max()
+    grouper = grp_tz_cols + [pd.Grouper(key=time_col, freq=freq)]
+    grped_nonzero = nonzero_exp.groupby(grouper)[prof_col].max()
     grped_nonzero = grped_nonzero.reset_index()
+    return grped_nonzero
+
+
+def report_by_region_quantiles(
+    profs: pd.DataFrame, params: dict, pcols: dict
+) -> pd.DataFrame:
+    """Report quantile summaries by region and time grouping."""
+    grped_nonzero = discretize_sparse_profiles(
+        profs=profs,
+        time_col=pcols["time_col"],
+        dur_col=pcols["duration_col"],
+        prof_col=pcols["profile_col"],
+        tz_col=pcols["timezone_col"],
+        group_cols=pcols["group_cols"],
+        freq=params["freq"],
+    )
 
     tgpars = params["time_grouper"]
     grouper = HourOfWeekdayGrouper(
