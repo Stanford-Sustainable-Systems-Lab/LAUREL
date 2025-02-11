@@ -320,7 +320,7 @@ def build_sampling_totals(scaler: pd.DataFrame, params: dict) -> pd.DataFrame:
     tots = filter_by_vals_in_cols(scaler, params["filter_totals"])
     tot_col = params["totals_column"]
     tots.loc[:, tot_col] = tots[tot_col] * params["adoption_frac"]
-    tots[tot_col] = tots[tot_col].astype(int)
+    tots.loc[:, tot_col] = tots[tot_col].astype(int)
     return tots
 
 
