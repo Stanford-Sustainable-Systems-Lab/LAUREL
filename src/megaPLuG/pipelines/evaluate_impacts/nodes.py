@@ -4,15 +4,20 @@ generated using Kedro 0.19.1
 """
 
 import logging
+from copy import deepcopy
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import pytz
+from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
-from megaPLuG.models.group_times import HourOfWeekdayGrouper
+from megaPLuG.models.group_times import HourOfWeekdayGrouper, LocalHourOfDayGrouper
 from megaPLuG.models.summarize import EventExpander, NonzeroGroupedSummarizer
+from megaPLuG.utils.data import IndexIntegerizer, filter_by_vals_in_cols
 from megaPLuG.utils.h3 import cells_to_region_polygons
+from megaPLuG.utils.logging import SuppressLogs
 from megaPLuG.utils.time import (
     calc_local_time,
     total_hours,
@@ -31,6 +36,12 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     logger.info("Deaths per vehicle:")
     logger.info(n_deaths.describe())
     return vehs
+
+
+def build_eval_columns(pcols: dict, group_cols: list) -> dict:
+    """Build a set of evaluation columns to use throughout the pipeline."""
+    pcols.update({"group_cols": group_cols})
+    return pcols
 
 
 def assign_regions(
@@ -209,3 +220,271 @@ def add_region_geoms(
     res_geos = res_geos.drop(columns=changed_cols)
 
     return res_geos
+
+
+def slice_vehicle_windows(
+    events: pd.DataFrame, params: dict, pcols: dict
+) -> pd.DataFrame:
+    """Slice up an events DataFrame into vehicle-windows.
+
+    This involves setting a frequency-based slicing, and then creating new events to
+    'initialize' each new slice if there was carry-over charging from the slice previous
+    in time.
+
+    """
+    PROF_COL = "veh_prof"
+    slice_begin_col = params["slice_id_col"]
+    slice_time_col = params["slice_time_col"]
+    src_time_col = params["source_time_col"]
+
+    orig_idx = events.index.names
+    events_mod = events.reset_index()
+
+    # Create local time, timezone-naïve column if necessary
+    source_tz = events[src_time_col].dt.tz
+    if source_tz == pytz.UTC:
+        local_time_col = f"{src_time_col}_local"
+        events_mod = calc_local_time(
+            df=events_mod,
+            time_cols=src_time_col,
+            local_cols=local_time_col,
+            tz_col=pcols["timezone_col"],
+        )
+        src_time_col = local_time_col
+    elif source_tz is not None:
+        raise RuntimeError("The source time column must be time zone naïve or UTC.")
+
+    # Descending sorting on power_col ensures that zero-time events will not create negative charging.
+    sort_cols = [pcols["veh_col"], src_time_col, params["power_col"]]
+    events_mod = events_mod.sort_values(sort_cols, ascending=[True, True, False])
+    events_mod[slice_begin_col] = events_mod[src_time_col].dt.floor(
+        params["slice_freq"]
+    )
+
+    events_grp = events_mod.groupby(pcols["veh_col"], sort=False, observed=True)
+    events_mod[PROF_COL] = events_grp[params["power_col"]].cumsum()
+
+    # Add initialization events at the beginnings of slices which have carry-over from
+    # previous slices
+    inits = events_mod.groupby([pcols["veh_col"], slice_begin_col]).last()
+    inits = inits.reset_index()
+    inits[slice_begin_col] = inits[slice_begin_col] + pd.Timedelta(
+        params["slice_freq"]
+    )  # Assign observed profile value to the next window
+    inits = inits.loc[
+        inits[PROF_COL] > 0, :
+    ]  # Remove all observations with no charging carry-over
+    # TODO: Consider what would happen if no rows are left in inits
+    inits = inits.drop(columns=[params["power_col"]])
+    inits = inits.rename(columns={PROF_COL: params["power_col"]})
+    inits["is_init"] = True
+    inits[slice_time_col] = pd.Timedelta(0)
+
+    events_concat = events_mod.drop(columns=[PROF_COL])
+    events_concat["is_init"] = False
+    # Note that `time_local` is both local and then timezone-naïve. This means that the
+    # daylight savings time extra and missing hours are introduced here
+    events_concat[slice_time_col] = (
+        events_concat[src_time_col] - events_concat[slice_begin_col]
+    )
+    events_windows = pd.concat([events_concat, inits], axis=0, ignore_index=True)
+
+    # Create column for elapsed times within the slice
+    events_windows[slice_time_col] = pd.Timestamp(0) + events_windows[slice_time_col]
+    if orig_idx != [None]:
+        events_windows = events_windows.set_index(orig_idx)
+    return events_windows
+
+
+def filter_slices(slices: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFrame:
+    """Filter the vehicle-time slices (e.g. to only include weekdays).
+
+    This process would usually occur before sampling of the vehicle-time slices, so that
+    only relevant slice types are used.
+    """
+    # Remove slices applying to untracked locations (this had been earlier for performance)
+    slices = slices.dropna(subset=pcols["group_cols"])
+
+    # Remove all weekend days based on values from DateGrouper
+    FIRST_DAY_OF_WEEKEND = 5
+    slices["is_weekend"] = (
+        slices[params["slice_id_col"]].dt.weekday >= FIRST_DAY_OF_WEEKEND
+    )
+    slices_filt = slices.loc[~slices["is_weekend"]]
+    slices_filt = slices_filt.drop(columns=["is_weekend"])
+    return slices_filt
+
+
+def build_sampling_totals(scaler: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Build sampling totals for this particular scenario run."""
+    tots = filter_by_vals_in_cols(scaler, params["filter_totals"])
+    tot_col = params["totals_column"]
+    tots.loc[:, tot_col] = tots[tot_col] * params["adoption_frac"]
+    tots[tot_col] = tots[tot_col].astype(int)
+    return tots
+
+
+def assign_sample_weights(
+    sources: pd.DataFrame,
+    targets: pd.DataFrame,
+    strat_cols: list[str],
+    target_count_col: str,
+    seed: int,
+    weight_col_name: str = "sample_weight",
+    verbose: bool = False,
+) -> pd.DataFrame:
+    """Assign sampling weights based on the indices of the sources DataFrame.
+
+    This assumes that the index of the sources DataFrame are integers.
+
+    Returns: The sources DataFrame with an additional column containing weights, the
+    number of times which that index value was selected.
+    """
+    if not pd.api.types.is_integer_dtype(sources.index):
+        raise RuntimeError(
+            "The index of the sources DataFrame must have an integer dtype."
+        )
+
+    trgts = targets.groupby(strat_cols)[target_count_col].sum()
+    trgts.name = "n_samples"
+    trgts = trgts.astype(int)
+    srcs = sources.groupby(strat_cols).apply(
+        lambda grp: grp.index.unique().to_series().values,
+        include_groups=False,
+    )
+    srcs.name = "choice_indices"
+
+    lost_strata = np.setdiff1d(trgts.index, srcs.index)
+    if lost_strata.size > 0 and verbose:
+        for s in lost_strata:
+            logger.warning(f"No source observations available from the stratum: {s}")
+
+    df = trgts.to_frame().merge(srcs, how="inner", left_index=True, right_index=True)
+
+    rng = np.random.default_rng(seed=seed)
+    sample_idx = np.zeros(df["n_samples"].sum(), dtype=int)
+    i = 0
+    for strata, row in df.iterrows():
+        cur_samp_idx = rng.choice(
+            row["choice_indices"], size=row["n_samples"], replace=True
+        )
+        sample_idx[i : i + row["n_samples"]] = cur_samp_idx
+        i += row["n_samples"]
+
+    sample_idx, sample_counts = np.unique(sample_idx, return_counts=True)
+    idx_name = sources.index.name
+    sample_weights = pd.DataFrame.from_dict(
+        {
+            idx_name: sample_idx,
+            weight_col_name: sample_counts,
+        }
+    )
+    sample_weights = sample_weights.set_index(idx_name)
+    sources = sources.merge(
+        sample_weights, how="left", left_index=True, right_index=True
+    )
+    sources[weight_col_name] = sources[weight_col_name].fillna(0.0)
+    return sources
+
+
+def sample_vehicle_windows(
+    windows: pd.DataFrame,
+    targets: pd.DataFrame,
+    params_slice: dict,
+    params_sample: dict,
+    pcols: dict,
+) -> pd.DataFrame:
+    """Sample vehicle windows in different categories up to desired numbers."""
+    slice_time_col = params_slice["slice_time_col"]
+
+    # Sorting on impulse value is essential to keep all power levels positive, in the case of zero-time events
+    winds = windows.reset_index()
+    sort_cols = pcols["group_cols"] + [slice_time_col, params_slice["power_col"]]
+    winds = winds.sort_values(sort_cols, ascending=[True, True, False])
+
+    winds = winds.set_index([pcols["veh_col"], params_slice["slice_id_col"]])
+    # TODO: Push this inside the NonZeroExpander
+    winds[slice_time_col] = winds[slice_time_col].dt.tz_localize(
+        "UTC"
+    )  # For the use of the NonZeroExpander
+    inter = IndexIntegerizer(int_col="wind_id")
+    winds = inter.integerize(winds)
+
+    # Build seeds
+    rng = np.random.default_rng(seed=params_sample["seed_for_seeds"])
+    seeds = rng.integers(0, 1_000_000, size=params_sample["n_bootstraps"])
+
+    bootstrap_profs = {}
+    i = 0
+    for seed in tqdm(seeds):
+        samps = assign_sample_weights(
+            sources=winds,
+            targets=targets,
+            strat_cols=params_sample["stratify_cols"],
+            target_count_col=params_sample["target_count_col"],
+            seed=seed,
+            weight_col_name="samp_wgt",
+        )
+        samps["weighted_power"] = samps[params_slice["power_col"]] * samps["samp_wgt"]
+        with SuppressLogs():
+            temp_pcols = deepcopy(pcols)
+            temp_pcols["time_col"] = slice_time_col
+            profs = get_load_profiles(
+                events=samps,
+                params={"power_col": "weighted_power", "drop_null_groups": True},
+                pcols=temp_pcols,
+            )
+            discs = discretize_sparse_profiles(
+                profs=profs,
+                time_col=slice_time_col,
+                dur_col=pcols["duration_col"],
+                prof_col=pcols["profile_col"],
+                tz_col=pcols["timezone_col"],
+                group_cols=pcols["group_cols"],
+                freq=params_sample["discrete_freq"],
+            )
+        bootstrap_profs[i] = discs
+        i += 1
+
+    bootstrap_df = pd.concat(
+        bootstrap_profs, names=[params_slice["bootstrap_id_col"], "index"]
+    )
+    bootstrap_df = bootstrap_df.droplevel("index")
+    bootstrap_df = bootstrap_df.reset_index()
+    bootstrap_df[slice_time_col] = bootstrap_df[slice_time_col].dt.tz_localize(None)
+    return bootstrap_df
+
+
+def summarize_vehicle_window_quantiles(
+    profs: pd.DataFrame, params_slice: dict, params_summ: dict, pcols: dict
+) -> pd.DataFrame:
+    """Summarize vehicle windows by grouping into times and then quantiling."""
+    tcol = params_slice["slice_time_col"]
+    grouper = LocalHourOfDayGrouper(
+        time_col=tcol,
+        tz_col=pcols["timezone_col"],
+        start_time=pd.Timestamp(0),
+        end_time=pd.Timestamp(0) + pd.Timedelta(params_slice["slice_freq"]),
+        possible_tzs=params_summ["possible_tzs"],
+    )
+    profs = grouper.add_group_classes(profs)
+    grp_cnts_tz = grouper.get_possible_obs_counts()
+    n_bootstraps = profs[params_slice["bootstrap_id_col"]].nunique()
+    grp_cnts_tz = grp_cnts_tz * n_bootstraps
+    grp_cnts_tz = grp_cnts_tz.reset_index()
+    grp_cnts_tz[tcol] = grp_cnts_tz[tcol].dt.tz_localize(None)
+    grp_merge_cols = [pcols["timezone_col"]] + grouper.time_group_cols
+    profs = profs.merge(grp_cnts_tz, how="left", on=grp_merge_cols)
+
+    logger.info("Calculate quantiles")
+    summ_cols = pcols["group_cols"] + grouper.time_group_cols
+    summer = NonzeroGroupedSummarizer(
+        group_cols=summ_cols,
+        quantiles=np.array(params_summ["quantiles"]),
+    )
+    quantiles = summer.summarize(
+        events=profs,
+        value_col=pcols["profile_col"],
+        possible_count_col="possible_count",
+    )
+    return quantiles
