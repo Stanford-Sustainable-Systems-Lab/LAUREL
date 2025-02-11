@@ -110,7 +110,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=merge_dataframes_node,
                 inputs=["events_eval", "hex_region_corresp", "merge_params_locations"],
                 outputs="events_w_regions",
-                name="assign_regions_bootstrap",
+                name="assign_metadata_location",
             ),
             node(
                 func=merge_dataframes_node,
@@ -120,7 +120,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "merge_params_vehicles",
                 ],
                 outputs="events_w_metadata",
-                name="assign_scaling_strata",
+                name="assign_metadata_vehicles",
             ),
             node(
                 func=slice_vehicle_windows,
