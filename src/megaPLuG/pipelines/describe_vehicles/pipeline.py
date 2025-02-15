@@ -10,7 +10,6 @@ from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
 from .nodes import (
     calc_inter_visit_stats,
     calc_rolling_dwell_ratios,
-    calc_vehicle_scaling_weights,
     classify_vehicles,
     describe_veh_loc_pairs,
     filter_substantial_dwells,
@@ -141,18 +140,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "params:mark_location_regions",
                     "params:load_dwell_set",
                 ],
-                outputs="vehs_with_regions",
-                name="mark_location_regions",
-            ),
-            node(
-                func=calc_vehicle_scaling_weights,
-                inputs=[
-                    "vehs_with_regions",
-                    "vius_scaling",
-                    "params:vehicle_scaling_weights",
-                ],
                 outputs="vehicles_labelled",
-                name="calc_vehicle_scaling_weights",
+                name="mark_location_regions",
             ),
         ],
         tags="describe_vehs",
