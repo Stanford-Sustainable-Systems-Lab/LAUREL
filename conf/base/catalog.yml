@@ -164,7 +164,7 @@ dwell_obj_locs_desc_vehs:
   type: MemoryDataset
   copy_mode: assign
 
-dwell_obj_with_locations_desc_vehs:
+dwell_obj_with_locations:
   type: MemoryDataset
   copy_mode: assign
 

@@ -25,38 +25,38 @@ from .nodes import (
 
 
 def create_pipeline(**kwargs) -> Pipeline:
-    pipe = pipeline(
+    veh_loc_pipe = pipeline(
         [
             node(
                 func=load_dwell_set,
                 inputs=["dwells", "params:load_dwell_set"],
-                outputs="dwell_obj_desc_vehs",
-                name="load_dwell_set_desc_vehs",
+                outputs="dwell_obj_desc_veh_locs",
+                name="load_dwell_set_desc_veh_locs",
             ),
             node(
                 func=filter_substantial_dwells,
-                inputs=["dwell_obj_desc_vehs", "params:substantial_dwells"],
-                outputs="dwell_obj_filtered_desc_vehs",
+                inputs=["dwell_obj_desc_veh_locs", "params:substantial_dwells"],
+                outputs="dwell_obj_filtered_desc_veh_locs",
                 name="filter_substantial_dwells",
             ),
             node(
                 func=calc_inter_visit_stats,
-                inputs="dwell_obj_filtered_desc_vehs",
-                outputs="dwell_obj_inter_visit_desc_vehs",
+                inputs="dwell_obj_filtered_desc_veh_locs",
+                outputs="dwell_obj_inter_visit_desc_veh_locs",
                 name="calc_inter_visit_stats",
             ),
             node(
                 func=calc_rolling_dwell_ratios,
                 inputs=[
-                    "dwell_obj_inter_visit_desc_vehs",
+                    "dwell_obj_inter_visit_desc_veh_locs",
                     "params:rolling_dwell_ratios",
                 ],
-                outputs="dwell_obj_roll_desc_vehs",
+                outputs="dwell_obj_roll_desc_veh_locs",
                 name="calc_rolling_dwell_ratios",
             ),
             node(
                 func=describe_veh_loc_pairs,
-                inputs="dwell_obj_roll_desc_vehs",
+                inputs="dwell_obj_roll_desc_veh_locs",
                 outputs="vehicle_location_pairs",
                 name="describe_veh_loc_pairs",
             ),
@@ -80,6 +80,18 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="vehicle_location_pairs_labelled",
                 name="label_veh_loc_pairs",
+            ),
+        ],
+        tags="describe_veh_loc",
+    )
+
+    veh_pipe = pipeline(
+        [
+            node(
+                func=load_dwell_set,
+                inputs=["dwells", "params:load_dwell_set"],
+                outputs="dwell_obj_desc_vehs",
+                name="load_dwell_set_desc_vehs",
             ),
             node(
                 func=classify_vehicles,
@@ -142,34 +154,36 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="vehicles_labelled",
                 name="calc_vehicle_scaling_weights",
             ),
-        ]
+        ],
+        tags="describe_vehs",
     )
 
-    mark_locs_pipe = pipeline(
+    dwell_pipe = pipeline(
         [
             node(
                 func=load_dwell_set,
                 inputs=["dwells", "params:load_dwell_set"],
-                outputs="dwell_obj_locs_desc_vehs",
-                name="load_dwell_set_locs_desc_vehs",
+                outputs="dwell_obj_desc_dwells",
+                name="load_dwell_set_desc_dwells",
             ),
             node(
                 func=mark_locations,
                 inputs=[
-                    "dwell_obj_locs_desc_vehs",
+                    "dwell_obj_desc_dwells",
                     "vehicle_location_pairs_labelled",
                     "params:mark_locations",
                 ],
-                outputs="dwell_obj_with_locations_desc_vehs",
+                outputs="dwell_obj_with_locations",
                 name="mark_locations",
             ),
             node(
                 func=save_dwell_set,
-                inputs="dwell_obj_with_locations_desc_vehs",
+                inputs="dwell_obj_with_locations",
                 outputs="dwells_with_locations",
                 name="save_dwell_set_desc_vehs",
             ),
-        ]
+        ],
+        tags="describe_dwells",
     )
 
-    return pipe + mark_locs_pipe
+    return veh_loc_pipe + veh_pipe + dwell_pipe
