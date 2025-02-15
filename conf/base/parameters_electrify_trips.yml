@@ -19,9 +19,6 @@ filter_vehicles:
     vin_gvw:
       value_isin:
         - 8
-    # home_base_state:
-    #   value_isin:
-    #     - California
   keep_only_filter_cols: False
 
 mark_substantial_dwells:
