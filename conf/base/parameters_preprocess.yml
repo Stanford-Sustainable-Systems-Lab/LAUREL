@@ -72,8 +72,7 @@ get_vius_by_weight_class:
 
 clean_vius_by_home_base_state:
   drop_idx_values:
-    - No Home Base
-    - Not Reported
+    - Any State (including No Home Base and Not Reported)
   replace_values:
     Massachussetts: Massachusetts # Correcting spelling
 
@@ -82,11 +81,24 @@ clean_vius_by_weight_class:
     - Any Gross Vehicle Weight Rating Class
 
 build_vius_scaling_totals:
-  totals_col: n_vehs
-  weight_col: n_vehs_intersect
+  col_renamer:
+    tab_weight: TABWEIGHT
+    gvw_class: GVWR_CLASS
+    reg_state: REGSTATE
+  totals_col: tab_weight
+  home_source_col: HBSTATE
   id_cols:
     region: home_base_state
     weight_class: gvw_class
+  home_base_corresp:
+    id_columns:
+      - ${build_vius_scaling_totals.home_source_col}
+    values:
+      "61": "Home Base in Register State"
+      "62": "Home Base not in Register State"
+      "63": "No Home Base"
+      "64": "Not Reported"
+      "X": "Not In Use"
 
 format_substation_profiles:
   col_renamer:

@@ -6,7 +6,6 @@ generated using Kedro 0.19.1
 import logging
 import re
 from io import StringIO
-from itertools import product
 
 import dask.dataframe as dd
 import geopandas as gpd
@@ -15,6 +14,7 @@ import requests
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.utils.h3 import str_to_h3
+from megaPLuG.utils.params import build_df_from_dict
 from megaPLuG.utils.time import total_hours
 
 logger = logging.getLogger(__name__)
@@ -130,31 +130,28 @@ def clean_vius_by_weight_class(weights: pd.DataFrame, params: dict) -> pd.DataFr
     return weights
 
 
-def build_vius_scaling_totals(
-    regions: pd.DataFrame, weights: pd.DataFrame, params: dict
-) -> pd.DataFrame:
-    """Build a scaling factor dependent on home base state and weight class.
-
-    Note that the VIUS top-level tables do not jointly tabulate along these two
-    dimensions, so we assume that they are independent.
-    """
-    id_cols = params["id_cols"]
-    scaler = pd.DataFrame(
-        product(regions.index, weights.index), columns=list(id_cols.values())
+def build_vius_scaling_totals(vius: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Build a scaling factor dependent on home base state and weight class."""
+    # WARNING: This algorithm leaves us with less than 100% VIUS tabulation weight
+    # coverage. We're ignoring weight held in vehicles with "Non-registration-state home
+    # bases" and "Not Reported" home bases.
+    corresp = build_df_from_dict(
+        d=params["home_base_corresp"]["values"],
+        id_cols=params["home_base_corresp"]["id_columns"],
+        value_col="home_base_code",
     )
-    tot_col = params["totals_col"]
-    new_name = f"weight_class_factor_{params['totals_col']}"
-    weights[new_name] = weights[tot_col] / weights[tot_col].sum()
-    scaler = scaler.merge(weights, how="left", on=id_cols["weight_class"])
-    scaler = scaler.merge(
-        regions,
-        how="left",
-        on=id_cols["region"],
-        suffixes=("_weight", "_region"),
-    )
-
-    scaler[params["weight_col"]] = scaler[f"{tot_col}_region"] * scaler[new_name]
-    return scaler
+    scaler = vius.rename(columns={v: k for k, v in params["col_renamer"].items()})
+    scaler = scaler.merge(corresp, how="left", on=params["home_source_col"])
+    home_in_reg = scaler["home_base_code"] == "Home Base in Register State"
+    scaler.loc[home_in_reg, params["id_cols"]["region"]] = scaler.loc[
+        home_in_reg, "reg_state"
+    ]
+    no_home_base = scaler["home_base_code"] == "No Home Base"
+    scaler.loc[no_home_base, params["id_cols"]["region"]] = "No Home Base"
+    id_cols = list(params["id_cols"].values())
+    totals = scaler.groupby(id_cols)[params["totals_col"]].sum()
+    totals = totals.reset_index()
+    return totals
 
 
 def format_substation_profiles(profs: pd.DataFrame, params: dict) -> pd.DataFrame:
