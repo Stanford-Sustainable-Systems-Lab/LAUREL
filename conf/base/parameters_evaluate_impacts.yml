@@ -34,12 +34,12 @@ stratify_columns: ${sample_slices.stratify_cols}
 
 build_sampling_totals:
   adoption_frac: 0.2
-  totals_column: n_vehs_intersect
+  totals_column: tab_weight
   filter_totals:
     filters:
       gvw_class:
         value_isin:
-          - Heavy Duty (Class 8)
+          - "8"
     keep_only_filter_cols: False
 
 
@@ -73,7 +73,7 @@ sample_slices:
     n_bootstraps: 50
     stratify_cols:
       - home_base_state
-    target_count_col: n_vehs_intersect
+    target_count_col: tab_weight
     discrete_freq: 1h
 
 summarize_slices:
