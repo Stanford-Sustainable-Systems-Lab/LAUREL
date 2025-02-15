@@ -28,7 +28,7 @@
             "request": "launch",
             "console": "integratedTerminal",
             "module": "kedro",
-            "args": ["run", "--async", "--pipeline=preprocess", "--to-outputs=dwells", "--env=scenarios/test/task_0"]
+            "args": ["run", "--async", "--pipeline=preprocess", "--env=scenarios/test/task_0"]
             // Any other arguments should be passed as a comma-seperated-list
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
@@ -38,7 +38,7 @@
             "request": "launch",
             "console": "integratedTerminal",
             "module": "kedro",
-            "args": ["run", "--async", "--pipeline=describe_vehicles", "--to-outputs=dwells_with_locations", "--env=scenarios/test/task_0"]
+            "args": ["run", "--async", "--pipeline=describe_vehicles", "--env=scenarios/test/task_0"]
             // Any other arguments should be passed as a comma-seperated-list
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
