@@ -411,20 +411,26 @@ def sample_vehicle_windows(
     winds = inter.integerize(winds)
 
     # Build seeds
-    rng = np.random.default_rng(seed=params_sample["seed_for_seeds"])
-    seeds = rng.integers(0, 1_000_000, size=params_sample["n_bootstraps"])
+    if not params_sample["skip_resampling"]:
+        n_bootstraps = params_sample["n_bootstraps"]
+        rng = np.random.default_rng(seed=params_sample["seed_for_seeds"])
+        seeds = rng.integers(0, 1_000_000, size=n_bootstraps)
+    else:
+        n_bootstraps = 1
+        samps = winds
+        samps["samp_wgt"] = 1.0
 
     bootstrap_profs = {}
-    i = 0
-    for seed in tqdm(seeds):
-        samps = assign_sample_weights(
-            sources=winds,
-            targets=targets,
-            strat_cols=params_sample["stratify_cols"],
-            target_count_col=params_sample["target_count_col"],
-            seed=seed,
-            weight_col_name="samp_wgt",
-        )
+    for i in tqdm(range(n_bootstraps)):
+        if not params_sample["skip_resampling"]:
+            samps = assign_sample_weights(
+                sources=winds,
+                targets=targets,
+                strat_cols=params_sample["stratify_cols"],
+                target_count_col=params_sample["target_count_col"],
+                seed=seeds[i],
+                weight_col_name="samp_wgt",
+            )
         samps["weighted_power"] = samps[params_slice["power_col"]] * samps["samp_wgt"]
         with SuppressLogs():
             temp_pcols = deepcopy(pcols)
@@ -444,7 +450,6 @@ def sample_vehicle_windows(
                 freq=params_sample["discrete_freq"],
             )
         bootstrap_profs[i] = discs
-        i += 1
 
     bootstrap_df = pd.concat(
         bootstrap_profs, names=[params_slice["bootstrap_id_col"], "index"]

@@ -75,6 +75,7 @@ sample_slices:
       - home_base_state
     target_count_col: tab_weight
     discrete_freq: 1h
+    skip_resampling: False
 
 summarize_slices:
   quantiles:
