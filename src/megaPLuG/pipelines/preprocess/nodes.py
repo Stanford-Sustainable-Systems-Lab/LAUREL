@@ -42,12 +42,13 @@ def strip_vehicle_attrs(
     """Get vehicle-specific attributes which stay constant."""
     trips = trips.rename(columns={v: k for k, v in params["col_renamer"].items()})
 
-    vehs = (
-        trips.loc[:, [params["veh_id_col"]] + params["veh_attr_cols"]]
-        .drop_duplicates()
-        .compute()
-    )
+    n_trips_by_veh = trips[params["veh_id_col"]].value_counts().compute()
+    drop_idx = n_trips_by_veh.loc[n_trips_by_veh < params["min_trips_per_veh"]].index
+
+    veh_cols = [params["veh_id_col"]] + params["veh_attr_cols"]
+    vehs = trips.loc[:, veh_cols].drop_duplicates().compute()
     vehs = vehs.set_index(params["veh_id_col"]).sort_index()
+    vehs = vehs.drop(index=drop_idx)
 
     trips = trips.drop(columns=params["veh_attr_cols"])
     if params["persist"]:

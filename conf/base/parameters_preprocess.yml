@@ -23,6 +23,7 @@ strip_vehicle_attrs:
   veh_attr_cols:
     - veh_type
     - vin_gvw
+  min_trips_per_veh: 2
   persist: True
 
 trip_derived_cols:
