@@ -7,6 +7,20 @@
 summarize_vehicles:
   dead_energy_col: dwell_init_kwh
 
+filter_events:
+  power_col: hex_kw_diff
+
+build_slice_frame:
+  columns_input:
+    first_hex: obs_hex_first
+    first_time: obs_time_first
+    last_hex: obs_hex_last
+    last_time: obs_time_last
+  freq: 1d
+  frame_cols:
+    vehicle: veh_id
+    time: slice_time_start
+
 eval_columns:
   hex_col: hex_id
   veh_col: veh_id
@@ -70,7 +84,7 @@ slice_events:
 
 sample_slices:
     seed_for_seeds: 1
-    n_bootstraps: 50
+    n_bootstraps: 250
     stratify_cols:
       - home_base_state
     target_count_col: tab_weight

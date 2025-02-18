@@ -20,6 +20,7 @@ from megaPLuG.utils.h3 import cells_to_region_polygons
 from megaPLuG.utils.logging import SuppressLogs
 from megaPLuG.utils.time import (
     calc_local_time,
+    calc_time_zones_from_hexes,
     total_hours,
 )
 
@@ -36,6 +37,12 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     logger.info("Deaths per vehicle:")
     logger.info(n_deaths.describe())
     return vehs
+
+
+def filter_events(events: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Filter events down to only include the ones we want to summarize."""
+    events = events.loc[events[params["power_col"]] != 0]
+    return events
 
 
 def build_eval_columns(pcols: dict, group_cols: list) -> dict:
@@ -222,6 +229,62 @@ def add_region_geoms(
     return res_geos
 
 
+def build_slice_frame(vehs: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Build the frame of all potential slices.
+
+    We assume that the only valid dates for each vehicle are those beginning from its
+    first observation date and extending to its last observation date. If the vehicle
+    was dormant during extended periods at the beginning or end of the data collection
+    period, then this would tend to overestimate the number of active days. However,
+    we believe that this bias is better than the bias of assuming that all vehicles
+    are observed for the same period of time, which would lead to a large underestimate
+    of the number of active days.
+    """
+    pcols = params["columns_input"]
+    vehs = calc_time_zones_from_hexes(
+        df=vehs,
+        hex_col=pcols["first_hex"],
+        tz_col="tz_first",
+    )
+    vehs = calc_time_zones_from_hexes(
+        df=vehs,
+        hex_col=pcols["last_hex"],
+        tz_col="tz_last",
+    )
+    vehs = calc_local_time(
+        df=vehs,
+        time_cols=pcols["first_time"],
+        local_cols="obs_time_first_local",
+        tz_col="tz_first",
+    )
+    vehs = calc_local_time(
+        df=vehs,
+        time_cols=pcols["last_time"],
+        local_cols="obs_time_last_local",
+        tz_col="tz_last",
+    )
+    vehs["range_start"] = vehs["obs_time_first_local"].dt.floor(params["freq"])
+    vehs["range_end"] = vehs["obs_time_last_local"].dt.ceil(params["freq"])
+
+    all_vehs = vehs.index.to_series().values
+    wide_range = pd.date_range(
+        start=vehs["range_start"].min(),
+        end=vehs["range_end"].max(),
+        freq=params["freq"],
+    ).to_series()
+    fcols = params["frame_cols"]
+    frame = pd.MultiIndex.from_product([all_vehs, wide_range])
+    frame.names = [fcols["vehicle"], fcols["time"]]
+    frame = frame.to_frame().reset_index(drop=True)
+    mrg = vehs.loc[:, ["range_start", "range_end"]]
+    frame = frame.merge(mrg, how="left", on=fcols["vehicle"])
+    too_early = frame[fcols["time"]] < frame["range_start"]
+    too_late = frame[fcols["time"]] >= frame["range_end"]
+    drop_idx = frame.loc[too_early | too_late].index
+    frame = frame.drop(index=drop_idx, columns=["range_start", "range_end"])
+    return frame
+
+
 def slice_vehicle_windows(
     events: pd.DataFrame, params: dict, pcols: dict
 ) -> pd.DataFrame:
@@ -296,16 +359,25 @@ def slice_vehicle_windows(
     return events_windows
 
 
-def filter_slices(slices: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFrame:
+def filter_slices_location(
+    slices: pd.DataFrame, params: dict, pcols: dict
+) -> pd.DataFrame:
     """Filter the vehicle-time slices (e.g. to only include weekdays).
 
     This process would usually occur before sampling of the vehicle-time slices, so that
     only relevant slice types are used.
     """
     # Remove slices applying to untracked locations (this had been earlier for performance)
-    slices = slices.dropna(subset=pcols["group_cols"])
+    slices_filt = slices.dropna(subset=pcols["group_cols"])
+    return slices_filt
 
-    # Remove all weekend days based on values from DateGrouper
+
+def filter_slices_time(slices: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFrame:
+    """Filter the vehicle-time slices (e.g. to only include weekdays).
+
+    This process would usually occur before sampling of the vehicle-time slices, so that
+    only relevant slice types are used.
+    """
     FIRST_DAY_OF_WEEKEND = 5
     slices["is_weekend"] = (
         slices[params["slice_id_col"]].dt.weekday >= FIRST_DAY_OF_WEEKEND
@@ -326,6 +398,7 @@ def build_sampling_totals(scaler: pd.DataFrame, params: dict) -> pd.DataFrame:
 
 def assign_sample_weights(
     sources: pd.DataFrame,
+    frame: pd.DataFrame,
     targets: pd.DataFrame,
     strat_cols: list[str],
     target_count_col: str,
@@ -348,28 +421,43 @@ def assign_sample_weights(
     trgts = targets.groupby(strat_cols)[target_count_col].sum()
     trgts.name = "n_samples"
     trgts = trgts.astype(int)
+    trgts = trgts.reset_index()
+
     srcs = sources.groupby(strat_cols).apply(
         lambda grp: grp.index.unique().to_series().values,
         include_groups=False,
     )
     srcs.name = "choice_indices"
+    srcs = srcs.reset_index()
+    srcs["n_nonempty_slices"] = srcs["choice_indices"].transform(lambda x: x.size)
 
-    lost_strata = np.setdiff1d(trgts.index, srcs.index)
-    if lost_strata.size > 0 and verbose:
+    srcs_w_zeros = frame.groupby(strat_cols).size()
+    srcs_w_zeros.name = "n_possible_slices"
+    srcs_w_zeros = srcs_w_zeros.reset_index()
+
+    avail = trgts.merge(srcs_w_zeros, how="left", on=strat_cols)
+    avail = avail.merge(srcs, how="left", on=strat_cols)
+    avail = avail.set_index(strat_cols)
+    avail["frac_nonempty"] = avail["n_nonempty_slices"] / avail["n_possible_slices"]
+
+    lost_strata = list(avail.loc[avail["n_nonempty_slices"].isna()].index.values)
+    if len(lost_strata) > 0 and verbose:
         for s in lost_strata:
             logger.warning(f"No source observations available from the stratum: {s}")
-
-    df = trgts.to_frame().merge(srcs, how="inner", left_index=True, right_index=True)
+    avail = avail.drop(index=lost_strata)
 
     rng = np.random.default_rng(seed=seed)
-    sample_idx = np.zeros(df["n_samples"].sum(), dtype=int)
+    avail["n_nonempty_samples"] = rng.binomial(
+        n=avail["n_samples"],
+        p=avail["frac_nonempty"],
+    )
+    sample_idx = np.zeros(avail["n_nonempty_samples"].sum(), dtype=int)
     i = 0
-    for strata, row in df.iterrows():
-        cur_samp_idx = rng.choice(
-            row["choice_indices"], size=row["n_samples"], replace=True
-        )
-        sample_idx[i : i + row["n_samples"]] = cur_samp_idx
-        i += row["n_samples"]
+    for strata, row in avail.iterrows():
+        n_samps = row["n_nonempty_samples"]
+        cur_samp_idx = rng.choice(row["choice_indices"], size=n_samps, replace=True)
+        sample_idx[i : i + n_samps] = cur_samp_idx
+        i += n_samps
 
     sample_idx, sample_counts = np.unique(sample_idx, return_counts=True)
     idx_name = sources.index.name
@@ -389,6 +477,7 @@ def assign_sample_weights(
 
 def sample_vehicle_windows(
     windows: pd.DataFrame,
+    frame: pd.DataFrame,
     targets: pd.DataFrame,
     params_slice: dict,
     params_sample: dict,
@@ -425,6 +514,7 @@ def sample_vehicle_windows(
         if not params_sample["skip_resampling"]:
             samps = assign_sample_weights(
                 sources=winds,
+                frame=frame,
                 targets=targets,
                 strat_cols=params_sample["stratify_cols"],
                 target_count_col=params_sample["target_count_col"],
@@ -440,6 +530,7 @@ def sample_vehicle_windows(
                 params={"power_col": "weighted_power", "drop_null_groups": True},
                 pcols=temp_pcols,
             )
+            # TODO: Add total energy calculator here: tot_kwh = (profs["power_kw"] * profs["duration"].dt.total_seconds() / 3600).groupby("substation_id").sum()
             discs = discretize_sparse_profiles(
                 profs=profs,
                 time_col=slice_time_col,

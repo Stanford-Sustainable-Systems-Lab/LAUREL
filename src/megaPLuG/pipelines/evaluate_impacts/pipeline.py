@@ -15,7 +15,10 @@ from megaPLuG.utils.data import get_merge_params, merge_dataframes_node
 from .nodes import (
     build_eval_columns,
     build_sampling_totals,
-    filter_slices,
+    build_slice_frame,
+    filter_events,
+    filter_slices_location,
+    filter_slices_time,
     sample_vehicle_windows,
     slice_vehicle_windows,
     summarize_vehicle_window_quantiles,
@@ -49,6 +52,18 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["events_partition", "params:results_partition"],
                 outputs="events_eval",
                 name="collate_partitions_events",
+            ),
+            node(
+                func=filter_events,
+                inputs=["events_eval", "params:filter_events"],
+                outputs="events_filtered",
+                name="filter_events",
+            ),
+            node(
+                func=build_slice_frame,
+                inputs=["vehicles_evaluated", "params:build_slice_frame"],
+                outputs="slice_frame",
+                name="build_slice_frame",
             ),
         ],
         tags="scenario_run",
@@ -108,7 +123,11 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             node(
                 func=merge_dataframes_node,
-                inputs=["events_eval", "hex_region_corresp", "merge_params_locations"],
+                inputs=[
+                    "events_filtered",
+                    "hex_region_corresp",
+                    "merge_params_locations",
+                ],
                 outputs="events_w_regions",
                 name="assign_metadata_location",
             ),
@@ -120,7 +139,17 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "merge_params_vehicles",
                 ],
                 outputs="events_w_metadata",
-                name="assign_metadata_vehicles",
+                name="assign_metadata_vehicles_to_events",
+            ),
+            node(
+                func=merge_dataframes_node,
+                inputs=[
+                    "slice_frame",
+                    "vehicles_evaluated",
+                    "merge_params_vehicles",
+                ],
+                outputs="slice_frame_w_metadata",
+                name="assign_metadata_vehicles_to_slice_frame",
             ),
             node(
                 func=slice_vehicle_windows,
@@ -133,10 +162,26 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="slice_vehicle_windows",
             ),
             node(
-                func=filter_slices,
+                func=filter_slices_location,
+                inputs=["slices", "params:slice_events", "eval_columns"],
+                outputs="slices_filtered_location",
+                name="filter_slices_of_events_location",
+            ),
+            node(
+                func=filter_slices_time,
                 inputs=["slices", "params:slice_events", "eval_columns"],
                 outputs="slices_filtered",
-                name="filter_slices",
+                name="filter_slices_of_events",
+            ),
+            node(
+                func=filter_slices_time,
+                inputs=[
+                    "slice_frame_w_metadata",
+                    "params:slice_events",
+                    "eval_columns",
+                ],
+                outputs="slice_frame_filtered",
+                name="filter_slices_of_slice_frame",
             ),
             node(
                 func=build_sampling_totals,
@@ -148,6 +193,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=sample_vehicle_windows,
                 inputs=[
                     "slices_filtered",
+                    "slice_frame_filtered",
                     "sampling_totals",
                     "params:slice_events",
                     "params:sample_slices",
@@ -189,7 +235,8 @@ def create_pipeline(**kwargs) -> Pipeline:
         "params:stratify_columns",
     }
     profile_group_fixed_inputs = {
-        "events_eval",
+        "events_filtered",
+        "slice_frame",
         "hex_region_corresp",
         "vehicles_evaluated",
         "vius_scaling",
