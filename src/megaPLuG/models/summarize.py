@@ -1,3 +1,4 @@
+import datetime
 from typing import Self
 
 import numpy as np
@@ -37,6 +38,14 @@ class EventExpander:
         """Expand out events to cover all intermediate time units given their start and
         end timestamps.
         """
+        source_tz = events[self.time_col].dt.tz
+        if source_tz == datetime.UTC:
+            send_to_utc = False  # If source time is UTC, then it is already compatible
+        elif source_tz is None:
+            send_to_utc = True
+        else:
+            raise RuntimeError("The source time column must be time zone naïve or UTC.")
+
         end_of_time_group = events[self.time_col].dt.ceil(self.freq)
         end_of_event = events[self.time_col] + events[self.dur_col]
         events["overflow"] = end_of_time_group < end_of_event
@@ -48,9 +57,15 @@ class EventExpander:
         group_inter = IndexIntegerizer(int_col="codes")
         need_expansion = group_inter.integerize(need_expansion)
         need_expansion = need_expansion.reset_index()
+        if send_to_utc:
+            need_expansion[self.time_col] = need_expansion[
+                self.time_col
+            ].dt.tz_localize(datetime.UTC)
 
         expanded = self._expand_events_wrapper(need_expansion)
 
+        if send_to_utc:
+            expanded[self.time_col] = expanded[self.time_col].dt.tz_localize(None)
         expanded = expanded.set_index("codes")
         expanded = group_inter.deintegerize(expanded)
         expanded = expanded.reset_index()
