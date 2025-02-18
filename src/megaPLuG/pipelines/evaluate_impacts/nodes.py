@@ -482,7 +482,7 @@ def sample_vehicle_windows(
     params_slice: dict,
     params_sample: dict,
     pcols: dict,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Sample vehicle windows in different categories up to desired numbers."""
     slice_time_col = params_slice["slice_time_col"]
 
@@ -509,7 +509,8 @@ def sample_vehicle_windows(
         samps = winds
         samps["samp_wgt"] = 1.0
 
-    bootstrap_profs = {}
+    prof_dict = {}
+    energy_dict = {}
     for i in tqdm(range(n_bootstraps)):
         if not params_sample["skip_resampling"]:
             samps = assign_sample_weights(
@@ -530,7 +531,9 @@ def sample_vehicle_windows(
                 params={"power_col": "weighted_power", "drop_null_groups": True},
                 pcols=temp_pcols,
             )
-            # TODO: Add total energy calculator here: tot_kwh = (profs["power_kw"] * profs["duration"].dt.total_seconds() / 3600).groupby("substation_id").sum()
+            profs["dur_hrs"] = total_hours(profs[pcols["duration_col"]])
+            profs["energy_kwh"] = profs[pcols["profile_col"]] * profs["dur_hrs"]
+            energies = profs.groupby(pcols["group_cols"])["energy_kwh"].sum()
             discs = discretize_sparse_profiles(
                 profs=profs,
                 time_col=slice_time_col,
@@ -540,15 +543,19 @@ def sample_vehicle_windows(
                 group_cols=pcols["group_cols"],
                 freq=params_sample["discrete_freq"],
             )
-        bootstrap_profs[i] = discs
+        prof_dict[i] = discs
+        energy_dict[i] = energies
 
-    bootstrap_df = pd.concat(
-        bootstrap_profs, names=[params_slice["bootstrap_id_col"], "index"]
-    )
-    bootstrap_df = bootstrap_df.droplevel("index")
-    bootstrap_df = bootstrap_df.reset_index()
-    bootstrap_df[slice_time_col] = bootstrap_df[slice_time_col].dt.tz_localize(None)
-    return bootstrap_df
+    boot_profs = pd.concat(prof_dict, names=[params_slice["bootstrap_id_col"], "index"])
+    boot_profs = boot_profs.droplevel("index")
+    boot_profs = boot_profs.reset_index()
+    boot_profs[slice_time_col] = boot_profs[slice_time_col].dt.tz_localize(None)
+
+    boot_energies = pd.concat(energy_dict, names=[params_slice["bootstrap_id_col"]])
+    boot_energies.name = "energy_delivered_kwh"
+    boot_energies = boot_energies.reset_index()
+
+    return (boot_profs, boot_energies)
 
 
 def summarize_vehicle_window_quantiles(

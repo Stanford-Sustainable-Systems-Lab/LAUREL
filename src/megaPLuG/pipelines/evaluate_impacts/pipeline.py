@@ -199,13 +199,13 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "params:sample_slices",
                     "eval_columns",
                 ],
-                outputs="slices_sampled",
+                outputs=["bootstrap_profiles", "report_by_region_energies"],
                 name="sample_vehicle_windows",
             ),
             node(
                 func=summarize_vehicle_window_quantiles,
                 inputs=[
-                    "slices_sampled",
+                    "bootstrap_profiles",
                     "params:slice_events",
                     "params:summarize_slices",
                     "eval_columns",
@@ -218,6 +218,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["report_by_region_quantiles", "params:results_partition"],
                 outputs="report_by_region_quantiles_partition",
                 name="write_scenario_partition_hexes_quants",
+            ),
+            node(
+                func=write_scenario_partition,
+                inputs=["report_by_region_energies", "params:results_partition"],
+                outputs="report_by_region_energies_partition",
+                name="write_scenario_partition_region_energies",
             ),
         ],
         tags="report_profiles",
