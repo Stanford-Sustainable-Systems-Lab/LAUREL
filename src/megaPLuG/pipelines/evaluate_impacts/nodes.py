@@ -3,13 +3,13 @@ This is a boilerplate pipeline 'evaluate_impacts'
 generated using Kedro 0.19.1
 """
 
+import datetime
 import logging
 from copy import deepcopy
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-import pytz
 from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
@@ -305,7 +305,7 @@ def slice_vehicle_windows(
 
     # Create local time, timezone-naïve column if necessary
     source_tz = events[src_time_col].dt.tz
-    if source_tz == pytz.UTC:
+    if source_tz == datetime.UTC:
         local_time_col = f"{src_time_col}_local"
         events_mod = calc_local_time(
             df=events_mod,
