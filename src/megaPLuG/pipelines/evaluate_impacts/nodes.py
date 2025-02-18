@@ -492,10 +492,6 @@ def sample_vehicle_windows(
     winds = winds.sort_values(sort_cols, ascending=[True, True, False])
 
     winds = winds.set_index([pcols["veh_col"], params_slice["slice_id_col"]])
-    # TODO: Push this inside the NonZeroExpander
-    winds[slice_time_col] = winds[slice_time_col].dt.tz_localize(
-        "UTC"
-    )  # For the use of the NonZeroExpander
     inter = IndexIntegerizer(int_col="wind_id")
     winds = inter.integerize(winds)
 
@@ -549,7 +545,6 @@ def sample_vehicle_windows(
     boot_profs = pd.concat(prof_dict, names=[params_slice["bootstrap_id_col"], "index"])
     boot_profs = boot_profs.droplevel("index")
     boot_profs = boot_profs.reset_index()
-    boot_profs[slice_time_col] = boot_profs[slice_time_col].dt.tz_localize(None)
 
     boot_energies = pd.concat(energy_dict, names=[params_slice["bootstrap_id_col"]])
     boot_energies.name = "energy_delivered_kwh"
