@@ -64,9 +64,12 @@ def get_vehicle_observation_frames(
     vehs: pd.DataFrame, dw: DwellSet, params: dict
 ) -> pd.DataFrame:
     """Get the total time and mileage over which each vehicle is observed."""
+    dw.sort_by_veh_time()
     veh_obs = dw.data.groupby(dw.veh).agg(
-        obs_time_first=pd.NamedAgg(dw.start, "min"),
-        obs_time_last=pd.NamedAgg(dw.end, "max"),
+        obs_time_first=pd.NamedAgg(dw.start, "first"),
+        obs_hex_first=pd.NamedAgg(dw.hex, "first"),
+        obs_time_last=pd.NamedAgg(dw.end, "last"),
+        obs_hex_last=pd.NamedAgg(dw.hex, "last"),
         dist_traveled_col=pd.NamedAgg(dw.trip_dist, "sum"),
     )
     veh_obs["obs_time_col"] = veh_obs["obs_time_last"] - veh_obs["obs_time_first"]
