@@ -54,18 +54,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="events_eval",
                 name="collate_partitions_events",
             ),
-            node(
-                func=filter_events,
-                inputs=["events_eval", "params:filter_events"],
-                outputs="events_filtered",
-                name="filter_events",
-            ),
-            node(
-                func=build_slice_frame,
-                inputs=["vehicles_evaluated", "params:build_slice_frame"],
-                outputs="slice_frame",
-                name="build_slice_frame",
-            ),
         ],
         tags="scenario_run",
     )
@@ -90,6 +78,66 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
         ],
         tags=["report_vehicles", "scenario_run"],
+    )
+
+    report_profiles_scaled_prep_pipe = pipeline(
+        [
+            node(
+                func=filter_events,
+                inputs=["events_eval", "params:filter_events"],
+                outputs="events_filtered",
+                name="filter_events",
+            ),
+            node(
+                func=localize_time_from_hexes,
+                inputs=[
+                    "events_filtered",
+                    "params:localize_time_from_hexes",
+                    "params:eval_columns",
+                ],
+                outputs="events_w_local_time",
+                name="localize_time_from_hexes",
+            ),
+            node(
+                func=slice_vehicle_windows,
+                inputs=[
+                    "events_w_local_time",
+                    "params:slice_events",
+                    "params:eval_columns",
+                ],
+                outputs="slices",
+                name="slice_vehicle_windows",
+            ),
+            node(
+                func=filter_slices_time,
+                inputs=["slices", "params:slice_events", "params:eval_columns"],
+                outputs="slices_filtered",
+                name="filter_slices_of_events",
+            ),
+            node(
+                func=build_slice_frame,
+                inputs=["vehicles_evaluated", "params:build_slice_frame"],
+                outputs="slice_frame",
+                name="build_slice_frame",
+            ),
+            node(
+                func=filter_slices_time,
+                inputs=[
+                    "slice_frame",
+                    "params:slice_events",
+                    "params:eval_columns",
+                ],
+                outputs="slice_frame_filtered",
+                name="filter_slices_of_slice_frame",
+            ),
+            node(
+                func=build_sampling_totals,
+                inputs=["vius_scaling", "params:build_sampling_totals"],
+                outputs="sampling_totals",
+                name="build_sampling_totals",
+            ),
+        ],
+        tags="scenario_run",
     )
 
     report_profiles_scaled_pipe = pipeline(
@@ -125,27 +173,27 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=merge_dataframes_node,
                 inputs=[
-                    "events_filtered",
+                    "slices_filtered",
                     "hex_region_corresp",
                     "merge_params_locations",
                 ],
-                outputs="events_w_regions",
+                outputs="slices_w_regions",
                 name="assign_metadata_location",
             ),
             node(
                 func=merge_dataframes_node,
                 inputs=[
-                    "events_w_regions",
+                    "slices_w_regions",
                     "vehicles_evaluated",
                     "merge_params_vehicles",
                 ],
-                outputs="events_w_metadata",
+                outputs="slices_w_metadata",
                 name="assign_metadata_vehicles_to_events",
             ),
             node(
                 func=merge_dataframes_node,
                 inputs=[
-                    "slice_frame",
+                    "slice_frame_filtered",
                     "vehicles_evaluated",
                     "merge_params_vehicles",
                 ],
@@ -153,58 +201,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="assign_metadata_vehicles_to_slice_frame",
             ),
             node(
-                func=localize_time_from_hexes,
-                inputs=[
-                    "events_w_metadata",
-                    "params:localize_time_from_hexes",
-                    "eval_columns",
-                ],
-                outputs="events_w_local_time",
-                name="localize_time_from_hexes",
-            ),
-            node(
-                func=slice_vehicle_windows,
-                inputs=[
-                    "events_w_local_time",
-                    "params:slice_events",
-                    "eval_columns",
-                ],
-                outputs="slices",
-                name="slice_vehicle_windows",
-            ),
-            node(
                 func=filter_slices_location,
-                inputs=["slices", "params:slice_events", "eval_columns"],
+                inputs=["slices_w_metadata", "params:slice_events", "eval_columns"],
                 outputs="slices_filtered_location",
                 name="filter_slices_of_events_location",
             ),
             node(
-                func=filter_slices_time,
-                inputs=["slices", "params:slice_events", "eval_columns"],
-                outputs="slices_filtered",
-                name="filter_slices_of_events",
-            ),
-            node(
-                func=filter_slices_time,
-                inputs=[
-                    "slice_frame_w_metadata",
-                    "params:slice_events",
-                    "eval_columns",
-                ],
-                outputs="slice_frame_filtered",
-                name="filter_slices_of_slice_frame",
-            ),
-            node(
-                func=build_sampling_totals,
-                inputs=["vius_scaling", "params:build_sampling_totals"],
-                outputs="sampling_totals",
-                name="build_sampling_totals",
-            ),
-            node(
                 func=sample_vehicle_windows,
                 inputs=[
-                    "slices_filtered",
-                    "slice_frame_filtered",
+                    "slices_filtered_location",
+                    "slice_frame_w_metadata",
                     "sampling_totals",
                     "params:slice_events",
                     "params:sample_slices",
@@ -243,21 +249,19 @@ def create_pipeline(**kwargs) -> Pipeline:
     profile_group_fixed_params = {
         "params:results_partition",
         "params:eval_columns",
-        "params:localize_time_from_hexes",
         "params:slice_events",
         "params:sample_slices",
         "params:summarize_slices",
-        "params:build_sampling_totals",
         "params:assign_metadata_vehicle",
         "params:assign_metadata_location",
         "params:stratify_columns",
     }
     profile_group_fixed_inputs = {
-        "events_filtered",
-        "slice_frame",
+        "slices_filtered",
+        "slice_frame_filtered",
         "hex_region_corresp",
         "vehicles_evaluated",
-        "vius_scaling",
+        "sampling_totals",
     }
 
     report_profiles_pipes = [
@@ -277,4 +281,9 @@ def create_pipeline(**kwargs) -> Pipeline:
         ),
     ]
 
-    return read_pipe + report_vehicles_pipe + sum(report_profiles_pipes)
+    return (
+        read_pipe
+        + report_vehicles_pipe
+        + report_profiles_scaled_prep_pipe
+        + sum(report_profiles_pipes)
+    )
