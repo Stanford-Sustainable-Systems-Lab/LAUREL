@@ -341,8 +341,11 @@ def slice_vehicle_windows(
     drop_idx = nonzero.loc[nonzero[PROF_COL] == 0].index
     nonzero = nonzero.drop(index=drop_idx)
 
-    logger.info("Expand events to cover all groups across their duration")
-    grp_cols = [pcols["veh_col"], pcols["hex_col"]] + pcols["group_cols"]
+    logger.info("Expand events to cover all slices across their duration")
+    grp_cols = [
+        pcols["veh_col"],
+        pcols["hex_col"],
+    ]  # Including hex col so that it stays integer
     expander = EventExpander(
         time_col=src_time_col,
         dur_col=DUR_COL,
