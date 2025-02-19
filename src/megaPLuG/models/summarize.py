@@ -34,7 +34,9 @@ class EventExpander:
         self.group_cols = group_cols
         self.freq = freq
 
-    def expand_events(self: Self, events: pd.DataFrame) -> pd.DataFrame:
+    def expand_events(
+        self: Self, events: pd.DataFrame, return_expansions_only: bool = False
+    ) -> pd.DataFrame:
         """Expand out events to cover all intermediate time units given their start and
         end timestamps.
         """
@@ -70,10 +72,13 @@ class EventExpander:
         expanded = group_inter.deintegerize(expanded)
         expanded = expanded.reset_index()
 
-        keep_cols = self.group_cols + [self.time_col, self.value_col]
-        not_expanded = events.loc[~events["overflow"], keep_cols]
-        all_nonzero = pd.concat([expanded, not_expanded], axis=0, ignore_index=True)
-        return all_nonzero
+        if return_expansions_only:
+            return expanded
+        else:
+            keep_cols = self.group_cols + [self.time_col, self.value_col]
+            not_expanded = events.loc[:, keep_cols]
+            all_nonzero = pd.concat([expanded, not_expanded], axis=0, ignore_index=True)
+            return all_nonzero
 
     def _expand_events_wrapper(self: Self, df: pd.DataFrame) -> pd.DataFrame:
         """Convert pandas Series to numpy arrays and set dtypes for self._expand_events_core()."""
@@ -118,9 +123,10 @@ class EventExpander:
         """
         n_periods = starts.shape[0]
         ends_plus = ends + tstep_ns
-        n_stamps = np.floor_divide(ends_plus - starts, tstep_ns)
+        starts_plus = starts + tstep_ns
+        n_stamps = np.floor_divide(ends_plus - starts_plus, tstep_ns)
         tot_stamps = np.sum(n_stamps)
-        times_exp = np.zeros(tot_stamps, dtype=starts.dtype)
+        times_exp = np.zeros(tot_stamps, dtype=starts_plus.dtype)
         vals_exp = np.zeros(tot_stamps, dtype=vals.dtype)
         grps_exp = np.zeros(tot_stamps, dtype=grps.dtype)
         cursor = 0
@@ -128,7 +134,7 @@ class EventExpander:
             next_cursor = cursor + n_stamps[i]
             idxs = np.arange(cursor, next_cursor, dtype=np.int64)
             times_exp[idxs] = np.arange(
-                starts[i], ends_plus[i], tstep_ns, dtype=times_exp.dtype
+                starts_plus[i], ends_plus[i], tstep_ns, dtype=times_exp.dtype
             )
             vals_exp[idxs] = vals[i]
             grps_exp[idxs] = grps[i]
