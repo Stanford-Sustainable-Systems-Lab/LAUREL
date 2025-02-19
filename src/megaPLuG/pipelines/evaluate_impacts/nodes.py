@@ -327,9 +327,11 @@ def slice_vehicle_windows(
         raise RuntimeError("The source time column must be time zone naïve.")
 
     # Descending sorting on power_col ensures that zero-time events will not create negative charging.
+    logger.info("Sort by vehicle and time")
     sort_cols = [pcols["veh_col"], src_time_col, params["power_col"]]
     events_mod = events_mod.sort_values(sort_cols, ascending=[True, True, False])
 
+    logger.info("Build profile and duration columns for internal use (will be dropped)")
     events_grp = events_mod.groupby(pcols["veh_col"], sort=False, observed=True)
     events_mod[PROF_COL] = events_grp[params["power_col"]].cumsum()
     events_mod[DUR_COL] = events_grp[src_time_col].transform(
@@ -357,6 +359,9 @@ def slice_vehicle_windows(
     inits = inits.rename(columns={PROF_COL: params["power_col"]})
     inits["is_init"] = True
 
+    logger.info(
+        "Concatenating and sorting original observations and initialization 'observations'."
+    )
     events_concat = events_mod.drop(columns=[PROF_COL, DUR_COL])
     events_concat["is_init"] = False
     events_windows = pd.concat([events_concat, inits], axis=0, ignore_index=True)
