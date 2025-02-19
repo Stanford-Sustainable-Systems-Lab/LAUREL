@@ -296,6 +296,7 @@ def slice_vehicle_windows(
 
     """
     PROF_COL = "veh_prof"
+    DUR_COL = "duration"
     slice_begin_col = params["slice_id_col"]
     slice_time_col = params["slice_time_col"]
     src_time_col = params["source_time_col"]
@@ -320,40 +321,47 @@ def slice_vehicle_windows(
     # Descending sorting on power_col ensures that zero-time events will not create negative charging.
     sort_cols = [pcols["veh_col"], src_time_col, params["power_col"]]
     events_mod = events_mod.sort_values(sort_cols, ascending=[True, True, False])
-    events_mod[slice_begin_col] = events_mod[src_time_col].dt.floor(
-        params["slice_freq"]
-    )
 
     events_grp = events_mod.groupby(pcols["veh_col"], sort=False, observed=True)
     events_mod[PROF_COL] = events_grp[params["power_col"]].cumsum()
+    events_mod[DUR_COL] = events_grp[src_time_col].transform(
+        lambda ser: ser.shift(-1) - ser
+    )
 
-    # Add initialization events at the beginnings of slices which have carry-over from
-    # previous slices
-    inits = events_mod.groupby([pcols["veh_col"], slice_begin_col]).last()
-    inits = inits.reset_index()
-    inits[slice_begin_col] = inits[slice_begin_col] + pd.Timedelta(
-        params["slice_freq"]
-    )  # Assign observed profile value to the next window
-    inits = inits.loc[
-        inits[PROF_COL] > 0, :
-    ]  # Remove all observations with no charging carry-over
-    # TODO: Consider what would happen if no rows are left in inits
-    inits = inits.drop(columns=[params["power_col"]])
+    nonzero = events_mod.dropna(subset=[DUR_COL])
+    nonzero = nonzero.reset_index()
+    drop_idx = nonzero.loc[nonzero[PROF_COL] == 0].index
+    nonzero = nonzero.drop(index=drop_idx)
+
+    logger.info("Expand events to cover all groups across their duration")
+    grp_cols = [pcols["veh_col"], pcols["hex_col"]] + pcols["group_cols"]
+    expander = EventExpander(
+        time_col=src_time_col,
+        dur_col=DUR_COL,
+        value_col=PROF_COL,
+        group_cols=grp_cols,
+        freq=params["slice_freq"],
+    )
+    inits = expander.expand_events(nonzero, return_expansions_only=True)
     inits = inits.rename(columns={PROF_COL: params["power_col"]})
     inits["is_init"] = True
-    inits[slice_time_col] = pd.Timedelta(0)
 
-    events_concat = events_mod.drop(columns=[PROF_COL])
+    events_concat = events_mod.drop(columns=[PROF_COL, DUR_COL])
     events_concat["is_init"] = False
+    events_windows = pd.concat([events_concat, inits], axis=0, ignore_index=True)
+    events_windows[slice_begin_col] = events_windows[src_time_col].dt.floor(
+        params["slice_freq"]
+    )
     # Note that `time_local` is both local and then timezone-naïve. This means that the
     # daylight savings time extra and missing hours are introduced here
-    events_concat[slice_time_col] = (
-        events_concat[src_time_col] - events_concat[slice_begin_col]
+    events_windows[slice_time_col] = (
+        events_windows[src_time_col] - events_windows[slice_begin_col] + pd.Timestamp(0)
     )
-    events_windows = pd.concat([events_concat, inits], axis=0, ignore_index=True)
+    events_windows = events_windows.sort_values(
+        sort_cols, ascending=[True, True, False]
+    )
+    events_windows = events_windows.ffill()
 
-    # Create column for elapsed times within the slice
-    events_windows[slice_time_col] = pd.Timestamp(0) + events_windows[slice_time_col]
     if orig_idx != [None]:
         events_windows = events_windows.set_index(orig_idx)
     return events_windows
