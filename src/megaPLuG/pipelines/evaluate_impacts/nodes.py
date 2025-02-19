@@ -9,7 +9,6 @@ from copy import deepcopy
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-import pytz
 from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
@@ -285,6 +284,26 @@ def build_slice_frame(vehs: pd.DataFrame, params: dict) -> pd.DataFrame:
     return frame
 
 
+def localize_time_from_hexes(
+    df: pd.DataFrame, params: dict, pcols: dict
+) -> pd.DataFrame:
+    """Localize a given time column using the location provided by hexagons."""
+    df = calc_time_zones_from_hexes(
+        df=df,
+        hex_col=pcols["hex_col"],
+        tz_col=pcols["timezone_col"],
+    )
+    df = calc_local_time(
+        df=df,
+        time_cols=params["time_cols_source"],
+        local_cols=params["time_cols_local"],
+        tz_col=pcols["timezone_col"],
+    )
+    if params["sort_result"]:
+        df = df.sort_values(params["sort_cols"])
+    return df
+
+
 def slice_vehicle_windows(
     events: pd.DataFrame, params: dict, pcols: dict
 ) -> pd.DataFrame:
@@ -304,19 +323,8 @@ def slice_vehicle_windows(
     orig_idx = events.index.names
     events_mod = events.reset_index()
 
-    # Create local time, timezone-naïve column if necessary
-    source_tz = events[src_time_col].dt.tz
-    if source_tz == pytz.UTC:
-        local_time_col = f"{src_time_col}_local"
-        events_mod = calc_local_time(
-            df=events_mod,
-            time_cols=src_time_col,
-            local_cols=local_time_col,
-            tz_col=pcols["timezone_col"],
-        )
-        src_time_col = local_time_col
-    elif source_tz is not None:
-        raise RuntimeError("The source time column must be time zone naïve or UTC.")
+    if events[src_time_col].dt.tz is not None:
+        raise RuntimeError("The source time column must be time zone naïve.")
 
     # Descending sorting on power_col ensures that zero-time events will not create negative charging.
     sort_cols = [pcols["veh_col"], src_time_col, params["power_col"]]

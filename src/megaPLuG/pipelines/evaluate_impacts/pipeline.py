@@ -19,6 +19,7 @@ from .nodes import (
     filter_events,
     filter_slices_location,
     filter_slices_time,
+    localize_time_from_hexes,
     sample_vehicle_windows,
     slice_vehicle_windows,
     summarize_vehicle_window_quantiles,
@@ -152,9 +153,19 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="assign_metadata_vehicles_to_slice_frame",
             ),
             node(
-                func=slice_vehicle_windows,
+                func=localize_time_from_hexes,
                 inputs=[
                     "events_w_metadata",
+                    "params:localize_time_from_hexes",
+                    "eval_columns",
+                ],
+                outputs="events_w_local_time",
+                name="localize_time_from_hexes",
+            ),
+            node(
+                func=slice_vehicle_windows,
+                inputs=[
+                    "events_w_local_time",
                     "params:slice_events",
                     "eval_columns",
                 ],
@@ -232,6 +243,7 @@ def create_pipeline(**kwargs) -> Pipeline:
     profile_group_fixed_params = {
         "params:results_partition",
         "params:eval_columns",
+        "params:localize_time_from_hexes",
         "params:slice_events",
         "params:sample_slices",
         "params:summarize_slices",

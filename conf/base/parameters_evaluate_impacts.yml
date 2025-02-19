@@ -7,6 +7,16 @@
 summarize_vehicles:
   dead_energy_col: dwell_init_kwh
 
+localize_time_from_hexes:
+  time_cols_source:
+    - time
+  time_cols_local:
+    - time_local
+  sort_result: False
+  sort_cols:
+    - veh_id
+    - time_local
+
 filter_events:
   power_col: hex_kw_diff
 
@@ -60,7 +70,6 @@ build_sampling_totals:
 assign_metadata_location:
   keep_right_columns:
     - hex_id
-    - tz
     # Other columns will be added at runtime
   merge_kwargs:
     how: left
@@ -79,7 +88,7 @@ slice_events:
     power_col: hex_kw_diff
     slice_id_col: slice_time_start
     slice_time_col: slice_time_relative
-    source_time_col: time
+    source_time_col: time_local
     bootstrap_id_col: bootstrap_id
 
 sample_slices:
