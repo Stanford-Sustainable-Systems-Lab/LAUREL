@@ -113,11 +113,6 @@ simulate_charging_choice:
     rng_beta: initial_soc_beta
     charge_soc: charge_soc_thresh
 
-assign_scale_up_factor:
-  apply_scaling: False
-  veh_cols:
-    - weight
-
 manage_charging:
   charging_manager: MinPowerChargingManager
   drop_na_cols:
@@ -126,4 +121,3 @@ manage_charging:
     energy: charge_kwh
     duration: dwell_time_hrs
     max_power: max_power_kw
-    scale_up: weight

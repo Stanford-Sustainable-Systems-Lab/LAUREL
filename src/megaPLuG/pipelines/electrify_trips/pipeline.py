@@ -11,8 +11,6 @@ from megaPLuG.utils.data import filter_by_vals_in_cols
 from megaPLuG.utils.params import set_entity_params
 
 from .nodes import (
-    assign_regions,
-    assign_scale_up_factor,
     calc_energy_use,
     filter_dwells,
     filter_vehicles,
@@ -109,27 +107,9 @@ def create_pipeline(**kwargs) -> Pipeline:
                 tags="frame-charging_choice",
             ),
             node(
-                func=assign_regions,
-                inputs=["dwell_obj_w_charging", "hex_region_corresp"],
-                outputs="dwell_obj_w_regions",
-                name="assign_regions_electrify",
-                tags="frame-charging_management",
-            ),
-            node(
-                func=assign_scale_up_factor,
-                inputs=[
-                    "dwell_obj_w_regions",
-                    "vehicles_labelled",
-                    "params:assign_scale_up_factor",
-                ],
-                outputs="dwell_obj_w_scaling",
-                name="assign_scale_up_factor",
-                tags="frame-charging_management",
-            ),
-            node(
                 func=manage_charging,
                 inputs=[
-                    "dwell_obj_w_scaling",
+                    "dwell_obj_w_charging",
                     "params:manage_charging",
                 ],
                 outputs="events",
