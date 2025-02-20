@@ -68,6 +68,7 @@ assign_metadata_location:
   merge_kwargs:
     how: left
     'on': hex_id # Using quotes here because "on" somehow gets interpreted as "True" without quotes
+    validate: many_to_one
 
 assign_metadata_vehicle:
   keep_right_columns:
@@ -76,6 +77,7 @@ assign_metadata_vehicle:
   merge_kwargs:
     how: left
     'on': veh_id # Using quotes here because "on" somehow gets interpreted as "True" without quotes
+    validate: many_to_one
 
 slice_events:
     slice_freq: 1d
