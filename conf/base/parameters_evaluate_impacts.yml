@@ -45,14 +45,6 @@ eval_columns:
 substation.group_columns:
     - substation_id
 
-land_op_segment.group_columns:
-    - land_use
-    - op_segment
-
-op_segment.group_columns:
-    - op_segment
-    - state
-
 jurisdiction.group_columns:
     - state
 
