@@ -420,83 +420,83 @@ def build_sampling_totals(scaler: pd.DataFrame, params: dict) -> pd.DataFrame:
     return tots
 
 
-def assign_sample_weights(
-    sources: pd.DataFrame,
-    frame: pd.DataFrame,
-    targets: pd.DataFrame,
-    strat_cols: list[str],
-    target_count_col: str,
-    seed: int,
-    weight_col_name: str = "sample_weight",
-    verbose: bool = False,
-) -> pd.DataFrame:
-    """Assign sampling weights based on the indices of the sources DataFrame.
+class SliceWeightSampler:
+    """Manage the sampling of time-sorted slices by applying a column of weights."""
 
-    This assumes that the index of the sources DataFrame are integers.
+    def __init__(
+        self, strat_cols: list[str], target_count_col: str, verbose: bool = False
+    ):
+        self.strat_cols = strat_cols
+        self.target_count_col = target_count_col
+        self.verbose = verbose
+        self.avail = None
+        self.source_idx_name = None
 
-    Returns: The sources DataFrame with an additional column containing weights, the
-    number of times which that index value was selected.
-    """
-    if not pd.api.types.is_integer_dtype(sources.index):
-        raise RuntimeError(
-            "The index of the sources DataFrame must have an integer dtype."
+    def prepare(
+        self, sources: pd.DataFrame, frame: pd.DataFrame, targets: pd.DataFrame
+    ) -> None:
+        """Prepare to sample by getting the target counts and available values."""
+        if not pd.api.types.is_integer_dtype(sources.index):
+            raise RuntimeError(
+                "The index of the sources DataFrame must have an integer dtype."
+            )
+        self.source_idx_name = sources.index.name
+
+        trgts = targets.groupby(self.strat_cols)[self.target_count_col].sum()
+        trgts.name = "n_samples"
+        trgts = trgts.astype(int)
+        trgts = trgts.reset_index()
+
+        srcs = sources.groupby(self.strat_cols).apply(
+            lambda grp: grp.index.unique().to_series().values,
+            include_groups=False,
         )
+        srcs.name = "choice_indices"
+        srcs = srcs.reset_index()
+        srcs["n_nonempty_slices"] = srcs["choice_indices"].transform(lambda x: x.size)
 
-    trgts = targets.groupby(strat_cols)[target_count_col].sum()
-    trgts.name = "n_samples"
-    trgts = trgts.astype(int)
-    trgts = trgts.reset_index()
+        srcs_w_zeros = frame.groupby(self.strat_cols).size()
+        srcs_w_zeros.name = "n_possible_slices"
+        srcs_w_zeros = srcs_w_zeros.reset_index()
 
-    srcs = sources.groupby(strat_cols).apply(
-        lambda grp: grp.index.unique().to_series().values,
-        include_groups=False,
-    )
-    srcs.name = "choice_indices"
-    srcs = srcs.reset_index()
-    srcs["n_nonempty_slices"] = srcs["choice_indices"].transform(lambda x: x.size)
+        avail = trgts.merge(srcs_w_zeros, how="left", on=self.strat_cols)
+        avail = avail.merge(srcs, how="left", on=self.strat_cols)
+        avail = avail.set_index(self.strat_cols)
+        avail["frac_nonempty"] = avail["n_nonempty_slices"] / avail["n_possible_slices"]
 
-    srcs_w_zeros = frame.groupby(strat_cols).size()
-    srcs_w_zeros.name = "n_possible_slices"
-    srcs_w_zeros = srcs_w_zeros.reset_index()
+        lost_strata = list(avail.loc[avail["n_nonempty_slices"].isna()].index.values)
+        if len(lost_strata) > 0 and self.verbose:
+            for s in lost_strata:
+                logger.warning(
+                    f"No source observations available from the stratum: {s}"
+                )
+        avail = avail.drop(index=lost_strata)
+        self.avail = avail
 
-    avail = trgts.merge(srcs_w_zeros, how="left", on=strat_cols)
-    avail = avail.merge(srcs, how="left", on=strat_cols)
-    avail = avail.set_index(strat_cols)
-    avail["frac_nonempty"] = avail["n_nonempty_slices"] / avail["n_possible_slices"]
+    def sample(self, seed: int, weight_col_name: str) -> pd.DataFrame:
+        """Produce a dataframe of sample weights, which can be merged onto slices."""
+        rng = np.random.default_rng(seed=seed)
+        self.avail["n_nonempty_samples"] = rng.binomial(
+            n=self.avail["n_samples"],
+            p=self.avail["frac_nonempty"],
+        )
+        sample_idx = np.zeros(self.avail["n_nonempty_samples"].sum(), dtype=int)
+        i = 0
+        for strata, row in self.avail.iterrows():
+            n_samps = row["n_nonempty_samples"]
+            cur_samp_idx = rng.choice(row["choice_indices"], size=n_samps, replace=True)
+            sample_idx[i : i + n_samps] = cur_samp_idx
+            i += n_samps
 
-    lost_strata = list(avail.loc[avail["n_nonempty_slices"].isna()].index.values)
-    if len(lost_strata) > 0 and verbose:
-        for s in lost_strata:
-            logger.warning(f"No source observations available from the stratum: {s}")
-    avail = avail.drop(index=lost_strata)
-
-    rng = np.random.default_rng(seed=seed)
-    avail["n_nonempty_samples"] = rng.binomial(
-        n=avail["n_samples"],
-        p=avail["frac_nonempty"],
-    )
-    sample_idx = np.zeros(avail["n_nonempty_samples"].sum(), dtype=int)
-    i = 0
-    for strata, row in avail.iterrows():
-        n_samps = row["n_nonempty_samples"]
-        cur_samp_idx = rng.choice(row["choice_indices"], size=n_samps, replace=True)
-        sample_idx[i : i + n_samps] = cur_samp_idx
-        i += n_samps
-
-    sample_idx, sample_counts = np.unique(sample_idx, return_counts=True)
-    idx_name = sources.index.name
-    sample_weights = pd.DataFrame.from_dict(
-        {
-            idx_name: sample_idx,
-            weight_col_name: sample_counts,
-        }
-    )
-    sample_weights = sample_weights.set_index(idx_name)
-    sources = sources.merge(
-        sample_weights, how="left", left_index=True, right_index=True
-    )
-    sources[weight_col_name] = sources[weight_col_name].fillna(0.0)
-    return sources
+        sample_idx, sample_counts = np.unique(sample_idx, return_counts=True)
+        sample_weights = pd.DataFrame.from_dict(
+            {
+                self.source_idx_name: sample_idx,
+                weight_col_name: sample_counts,
+            }
+        )
+        sample_weights = sample_weights.set_index(self.source_idx_name)
+        return sample_weights
 
 
 def sample_vehicle_windows(
@@ -526,6 +526,14 @@ def sample_vehicle_windows(
     )
     winds["dur_hrs"] = total_hours(winds[pcols["duration_col"]])
 
+    # Prepare sampler
+    smpler = SliceWeightSampler(
+        strat_cols=params_sample["stratify_cols"],
+        target_count_col=params_sample["target_count_col"],
+        verbose=True,
+    )
+    smpler.prepare(sources=winds, frame=frame, targets=targets)
+
     # Build seeds
     if not params_sample["skip_resampling"]:
         n_bootstraps = params_sample["n_bootstraps"]
@@ -540,15 +548,12 @@ def sample_vehicle_windows(
     energy_dict = {}
     for i in tqdm(range(n_bootstraps)):
         if not params_sample["skip_resampling"]:
-            samps = assign_sample_weights(
-                sources=winds,
-                frame=frame,
-                targets=targets,
-                strat_cols=params_sample["stratify_cols"],
-                target_count_col=params_sample["target_count_col"],
-                seed=seeds[i],
-                weight_col_name="samp_wgt",
+            sample_weights = smpler.sample(seed=seeds[i], weight_col_name="samp_wgt")
+            samps = winds.merge(
+                sample_weights, how="left", left_index=True, right_index=True
             )
+            samps["samp_wgt"] = samps["samp_wgt"].fillna(0.0)
+
         samps["weighted_power"] = samps[params_slice["power_col"]] * samps["samp_wgt"]
         samps_grp = samps.groupby(pcols["group_cols"], sort=False, observed=True)
         samps[pcols["profile_col"]] = samps_grp["weighted_power"].cumsum()
