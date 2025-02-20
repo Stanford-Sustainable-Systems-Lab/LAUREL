@@ -51,7 +51,7 @@ jurisdiction.group_columns:
 stratify_columns: ${sample_slices.stratify_cols}
 
 build_sampling_totals:
-  adoption_frac: 0.2
+  adoption_frac: 1.0
   totals_column: tab_weight
   filter_totals:
     filters:
