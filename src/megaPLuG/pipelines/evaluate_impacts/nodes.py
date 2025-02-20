@@ -41,6 +41,7 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
 def filter_events(events: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Filter events down to only include the ones we want to summarize."""
     events = events.loc[events[params["power_col"]] != 0]
+    events = events.dropna(subset=params["drop_na_cols"])
     return events
 
 

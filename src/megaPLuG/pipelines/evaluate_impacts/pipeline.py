@@ -17,7 +17,6 @@ from .nodes import (
     build_sampling_totals,
     build_slice_frame,
     filter_events,
-    filter_slices_location,
     filter_slices_time,
     localize_time_from_hexes,
     sample_vehicle_windows,
@@ -83,8 +82,52 @@ def create_pipeline(**kwargs) -> Pipeline:
     report_profiles_scaled_prep_pipe = pipeline(
         [
             node(
-                func=filter_events,
-                inputs=["events_eval", "params:filter_events"],
+                func=get_merge_params,
+                inputs=[
+                    "params:assign_metadata_location",
+                    "hex_region_corresp",
+                    "params:stratify_columns",
+                    "params:substation.group_columns",
+                    "params:jurisdiction.group_columns",
+                ],
+                outputs="merge_params_locations",
+                name="get_merge_params_locations",
+            ),
+            node(
+                func=merge_dataframes_node,
+                inputs=[
+                    "events_eval",
+                    "hex_region_corresp",
+                    "merge_params_locations",
+                ],
+                outputs="events_w_regions",
+                name="assign_metadata_location",
+            ),
+            node(
+                func=get_merge_params,
+                inputs=[
+                    "params:assign_metadata_vehicle",
+                    "vehicles_evaluated",
+                    "params:stratify_columns",
+                    "params:substation.group_columns",
+                    "params:jurisdiction.group_columns",
+                ],
+                outputs="merge_params_vehicles",
+                name="get_merge_params_vehicles",
+            ),
+            node(
+                func=merge_dataframes_node,
+                inputs=[
+                    "events_w_regions",
+                    "vehicles_evaluated",
+                    "merge_params_vehicles",
+                ],
+                outputs="events_w_metadata",
+                name="assign_metadata_vehicles_to_events",
+            ),
+            node(
+                func=filter_events,  # TODO: Add location filtering to this
+                inputs=["events_w_metadata", "params:filter_events"],
                 outputs="events_filtered",
                 name="filter_events",
             ),
@@ -121,9 +164,19 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="build_slice_frame",
             ),
             node(
-                func=filter_slices_time,
+                func=merge_dataframes_node,
                 inputs=[
                     "slice_frame",
+                    "vehicles_evaluated",
+                    "merge_params_vehicles",
+                ],
+                outputs="slice_frame_w_metadata",
+                name="assign_metadata_vehicles_to_slice_frame",
+            ),
+            node(
+                func=filter_slices_time,
+                inputs=[
+                    "slice_frame_w_metadata",
                     "params:slice_events",
                     "params:eval_columns",
                 ],
@@ -149,68 +202,10 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="build_eval_columns",
             ),
             node(
-                func=get_merge_params,
-                inputs=[
-                    "params:assign_metadata_vehicle",
-                    "vehicles_evaluated",
-                    "params:stratify_columns",
-                    "params:group_columns",
-                ],
-                outputs="merge_params_vehicles",
-                name="get_merge_params_vehicles",
-            ),
-            node(
-                func=get_merge_params,
-                inputs=[
-                    "params:assign_metadata_location",
-                    "hex_region_corresp",
-                    "params:stratify_columns",
-                    "params:group_columns",
-                ],
-                outputs="merge_params_locations",
-                name="get_merge_params_locations",
-            ),
-            node(
-                func=merge_dataframes_node,
-                inputs=[
-                    "slices_filtered",
-                    "hex_region_corresp",
-                    "merge_params_locations",
-                ],
-                outputs="slices_w_regions",
-                name="assign_metadata_location",
-            ),
-            node(
-                func=merge_dataframes_node,
-                inputs=[
-                    "slices_w_regions",
-                    "vehicles_evaluated",
-                    "merge_params_vehicles",
-                ],
-                outputs="slices_w_metadata",
-                name="assign_metadata_vehicles_to_events",
-            ),
-            node(
-                func=merge_dataframes_node,
-                inputs=[
-                    "slice_frame_filtered",
-                    "vehicles_evaluated",
-                    "merge_params_vehicles",
-                ],
-                outputs="slice_frame_w_metadata",
-                name="assign_metadata_vehicles_to_slice_frame",
-            ),
-            node(
-                func=filter_slices_location,
-                inputs=["slices_w_metadata", "params:slice_events", "eval_columns"],
-                outputs="slices_filtered_location",
-                name="filter_slices_of_events_location",
-            ),
-            node(
                 func=sample_vehicle_windows,
                 inputs=[
-                    "slices_filtered_location",
-                    "slice_frame_w_metadata",
+                    "slices_filtered",
+                    "slice_frame_filtered",
                     "sampling_totals",
                     "params:slice_events",
                     "params:sample_slices",
@@ -252,15 +247,10 @@ def create_pipeline(**kwargs) -> Pipeline:
         "params:slice_events",
         "params:sample_slices",
         "params:summarize_slices",
-        "params:assign_metadata_vehicle",
-        "params:assign_metadata_location",
-        "params:stratify_columns",
     }
     profile_group_fixed_inputs = {
         "slices_filtered",
         "slice_frame_filtered",
-        "hex_region_corresp",
-        "vehicles_evaluated",
         "sampling_totals",
     }
 

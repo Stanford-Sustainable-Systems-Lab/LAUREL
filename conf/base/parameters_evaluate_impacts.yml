@@ -19,6 +19,8 @@ localize_time_from_hexes:
 
 filter_events:
   power_col: hex_kw_diff
+  drop_na_cols:
+    - substation_id
 
 build_slice_frame:
   columns_input:
