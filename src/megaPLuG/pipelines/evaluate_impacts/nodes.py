@@ -4,7 +4,6 @@ generated using Kedro 0.19.1
 """
 
 import logging
-from copy import deepcopy
 
 import geopandas as gpd
 import numpy as np
@@ -520,6 +519,13 @@ def sample_vehicle_windows(
     inter = IndexIntegerizer(int_col="wind_id")
     winds = inter.integerize(winds)
 
+    # Pre-calculate duration of the profile events
+    wind_grp = winds.groupby(pcols["group_cols"], sort=False, observed=True)
+    winds[pcols["duration_col"]] = wind_grp[slice_time_col].transform(
+        lambda ser: ser.shift(-1) - ser
+    )
+    winds["dur_hrs"] = total_hours(winds[pcols["duration_col"]])
+
     # Build seeds
     if not params_sample["skip_resampling"]:
         n_bootstraps = params_sample["n_bootstraps"]
@@ -544,19 +550,13 @@ def sample_vehicle_windows(
                 weight_col_name="samp_wgt",
             )
         samps["weighted_power"] = samps[params_slice["power_col"]] * samps["samp_wgt"]
+        samps_grp = samps.groupby(pcols["group_cols"], sort=False, observed=True)
+        samps[pcols["profile_col"]] = samps_grp["weighted_power"].cumsum()
+        samps["energy_kwh"] = samps[pcols["profile_col"]] * samps["dur_hrs"]
+        energies = samps.groupby(pcols["group_cols"])["energy_kwh"].sum()
         with SuppressLogs():
-            temp_pcols = deepcopy(pcols)
-            temp_pcols["time_col"] = slice_time_col
-            profs = get_load_profiles(
-                events=samps,
-                params={"power_col": "weighted_power", "drop_null_groups": True},
-                pcols=temp_pcols,
-            )
-            profs["dur_hrs"] = total_hours(profs[pcols["duration_col"]])
-            profs["energy_kwh"] = profs[pcols["profile_col"]] * profs["dur_hrs"]
-            energies = profs.groupby(pcols["group_cols"])["energy_kwh"].sum()
             discs = discretize_sparse_profiles(
-                profs=profs,
+                profs=samps,
                 time_col=slice_time_col,
                 dur_col=pcols["duration_col"],
                 prof_col=pcols["profile_col"],
