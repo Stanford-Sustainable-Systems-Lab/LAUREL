@@ -119,7 +119,7 @@ assign_scale_up_factor:
     - weight
 
 manage_charging:
-  charging_manager: ImmediateChargingManager
+  charging_manager: MinPowerChargingManager
   drop_na_cols:
     - charge_kwh
   input_cols: # keys should match the keyword arguments of the charging manager
