@@ -103,7 +103,7 @@ class CalifClass8AdoptionScenarioReader(ScenarioReader):
     def name_scenario(self: Self, path: Path) -> str:
         meta = self.get_metadata_values(path=path)
         adopt_pct = (
-            str(int(re.search(r"(?<=adopt_)(\d+)", meta["adopt_pct"]).group()) / 100)
+            str(int(re.search(r"(?<=adopt_)(\d+)", meta["adopt_pct"]).group()))
             + "% Adopt"
         )
         range_mi = re.search(r"(?<=range_)(\d+)", meta["range_mi"]).group() + "mi"
