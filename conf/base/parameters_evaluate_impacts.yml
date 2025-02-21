@@ -40,6 +40,7 @@ eval_columns:
   time_col: time
   group_cols: None # Filled in by the specific modular pipeline settings
   profile_col: power_kw
+  occupancy_col: n_vehs_present
   duration_col: duration
 
 substation.group_columns:
@@ -95,6 +96,9 @@ sample_slices:
     target_count_col: tab_weight
     discrete_freq: 1h
     skip_resampling: False
+
+profiles.value_col: ${eval_columns.profile_col}
+occupancy.value_col: ${eval_columns.occupancy_col}
 
 summarize_slices:
   quantiles:

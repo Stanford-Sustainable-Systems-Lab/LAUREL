@@ -211,13 +211,18 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "params:sample_slices",
                     "eval_columns",
                 ],
-                outputs=["bootstrap_profiles", "report_by_region_energies"],
+                outputs=[
+                    "bootstrap_profiles",
+                    "bootstrap_occupancies",
+                    "report_by_region_energies",
+                ],
                 name="sample_vehicle_windows",
             ),
             node(
                 func=summarize_vehicle_window_quantiles,
                 inputs=[
                     "bootstrap_profiles",
+                    "params:profiles.value_col",
                     "params:slice_events",
                     "params:summarize_slices",
                     "eval_columns",
@@ -230,6 +235,24 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["report_by_region_quantiles", "params:results_partition"],
                 outputs="report_by_region_quantiles_partition",
                 name="write_scenario_partition_hexes_quants",
+            ),
+            node(
+                func=summarize_vehicle_window_quantiles,
+                inputs=[
+                    "bootstrap_occupancies",
+                    "params:occupancy.value_col",
+                    "params:slice_events",
+                    "params:summarize_slices",
+                    "eval_columns",
+                ],
+                outputs="report_by_region_occupancies",
+                name="summarize_vehicle_window_occupancies",
+            ),
+            node(
+                func=write_scenario_partition,
+                inputs=["report_by_region_occupancies", "params:results_partition"],
+                outputs="report_by_region_occupancies_partition",
+                name="write_scenario_partition_occupancies_quants",
             ),
             node(
                 func=write_scenario_partition,
@@ -247,6 +270,8 @@ def create_pipeline(**kwargs) -> Pipeline:
         "params:slice_events",
         "params:sample_slices",
         "params:summarize_slices",
+        "params:occupancy.value_col",
+        "params:profiles.value_col",
     }
     profile_group_fixed_inputs = {
         "slices_filtered",

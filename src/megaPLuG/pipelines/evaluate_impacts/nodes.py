@@ -545,6 +545,7 @@ def sample_vehicle_windows(
         samps["samp_wgt"] = 1.0
 
     prof_dict = {}
+    occ_dict = {}
     energy_dict = {}
     for i in tqdm(range(n_bootstraps)):
         if not params_sample["skip_resampling"]:
@@ -557,10 +558,11 @@ def sample_vehicle_windows(
         samps["weighted_power"] = samps[params_slice["power_col"]] * samps["samp_wgt"]
         samps_grp = samps.groupby(pcols["group_cols"], sort=False, observed=True)
         samps[pcols["profile_col"]] = samps_grp["weighted_power"].cumsum()
+        samps[pcols["occupancy_col"]] = samps_grp["samp_wgt"].cumsum()
         samps["energy_kwh"] = samps[pcols["profile_col"]] * samps["dur_hrs"]
         energies = samps.groupby(pcols["group_cols"])["energy_kwh"].sum()
         with SuppressLogs():
-            discs = discretize_sparse_profiles(
+            profs = discretize_sparse_profiles(
                 profs=samps,
                 time_col=slice_time_col,
                 dur_col=pcols["duration_col"],
@@ -569,22 +571,40 @@ def sample_vehicle_windows(
                 group_cols=pcols["group_cols"],
                 freq=params_sample["discrete_freq"],
             )
-        prof_dict[i] = discs
+            occs = discretize_sparse_profiles(
+                profs=samps,
+                time_col=slice_time_col,
+                dur_col=pcols["duration_col"],
+                prof_col=pcols["occupancy_col"],
+                tz_col=pcols["timezone_col"],
+                group_cols=pcols["group_cols"],
+                freq=params_sample["discrete_freq"],
+            )
+        prof_dict[i] = profs
+        occ_dict[i] = occs
         energy_dict[i] = energies
 
     boot_profs = pd.concat(prof_dict, names=[params_slice["bootstrap_id_col"], "index"])
     boot_profs = boot_profs.droplevel("index")
     boot_profs = boot_profs.reset_index()
 
+    boot_occs = pd.concat(occ_dict, names=[params_slice["bootstrap_id_col"], "index"])
+    boot_occs = boot_occs.droplevel("index")
+    boot_occs = boot_occs.reset_index()
+
     boot_energies = pd.concat(energy_dict, names=[params_slice["bootstrap_id_col"]])
     boot_energies.name = "energy_delivered_kwh"
     boot_energies = boot_energies.reset_index()
 
-    return (boot_profs, boot_energies)
+    return (boot_profs, boot_occs, boot_energies)
 
 
 def summarize_vehicle_window_quantiles(
-    profs: pd.DataFrame, params_slice: dict, params_summ: dict, pcols: dict
+    profs: pd.DataFrame,
+    value_col: str,
+    params_slice: dict,
+    params_summ: dict,
+    pcols: dict,
 ) -> pd.DataFrame:
     """Summarize vehicle windows by grouping into times and then quantiling."""
     tcol = params_slice["slice_time_col"]
@@ -612,7 +632,7 @@ def summarize_vehicle_window_quantiles(
     )
     quantiles = summer.summarize(
         events=profs,
-        value_col=pcols["profile_col"],
+        value_col=value_col,
         possible_count_col="possible_count",
     )
     return quantiles
