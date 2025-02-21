@@ -12,6 +12,7 @@ from megaPLuG.scenarios.build import (  # noqa: F401
 
 from .batt_man import BatteryManageScenarioBuilder  # noqa: F401
 from .ca_eight import CalifClass8ScenarioBuilder  # noqa: F401
+from .ca_eight_adopt import CalifClass8AdoptionScenarioBuilder  # noqa: F401
 from .scale_test import ScaleTestScenarioBuilder  # noqa: F401
 from .sense import SenseScenarioBuilder  # noqa: F401
 
