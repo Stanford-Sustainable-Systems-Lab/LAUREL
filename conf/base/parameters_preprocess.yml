@@ -114,10 +114,14 @@ format_substation_profiles:
 format_substation_capacities:
   col_renamer:
     substation_id: substationid
+    substation_name: substationname
+    rating_mw: facilityratingmw
   substation_id: substation_id
   capacity: facilityratingmw
 
 describe_substation_usage:
+  drop_substation_cols:
+    - geometry
   columns:
     substation_id: substation_id
     hour: time_local_hour
