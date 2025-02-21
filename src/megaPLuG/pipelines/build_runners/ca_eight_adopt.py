@@ -77,7 +77,7 @@ class CalifClass8AdoptionScenarioBuilder(ScenarioBuilder):
         return (paths, scens)
 
 
-class CalifClass8ScenarioReader(ScenarioReader):
+class CalifClass8AdoptionScenarioReader(ScenarioReader):
     """Read scenarios for the California Class 8 truck model."""
 
     builder = CalifClass8AdoptionScenarioBuilder
