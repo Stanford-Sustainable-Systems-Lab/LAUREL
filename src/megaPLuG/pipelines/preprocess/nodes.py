@@ -135,13 +135,20 @@ def clean_vius_by_weight_class(weights: pd.DataFrame, params: dict) -> pd.DataFr
 
 def build_vius_scaling_totals(vius: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Build a scaling factor dependent on home base state and weight class."""
-    corresp = build_df_from_dict(
+    corresp_hb = build_df_from_dict(
         d=params["home_base_corresp"]["values"],
         id_cols=params["home_base_corresp"]["id_columns"],
         value_col="home_base_code",
     )
+    corresp_cab = build_df_from_dict(
+        d=params["cab_type_corresp"]["values"],
+        id_cols=params["cab_type_corresp"]["id_columns"],
+        value_col="cab_type_code",
+    )
+    # TODO: Then impute Day Cab and Sleeper Cab for unreported using reported ratio
     scaler = vius.rename(columns={v: k for k, v in params["col_renamer"].items()})
-    scaler = scaler.merge(corresp, how="left", on=params["home_source_col"])
+    scaler = scaler.merge(corresp_hb, how="left", on=params["home_source_col"])
+    scaler = scaler.merge(corresp_cab, how="left", on=params["cab_source_col"])
 
     # Set up selection series
     enc = OneHotEncoder(sparse_output=False)

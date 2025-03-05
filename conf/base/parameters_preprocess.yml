@@ -86,11 +86,14 @@ build_vius_scaling_totals:
     tab_weight: TABWEIGHT
     gvw_class: GVWR_CLASS
     reg_state: REGSTATE
+    cab_day: CABDAY
   totals_col: tab_weight
   home_source_col: HBSTATE
+  cab_source_col: cab_day
   id_cols:
     region: home_base_state
     weight_class: gvw_class
+    cab_day: cab_day
   home_base_corresp:
     id_columns:
       - ${build_vius_scaling_totals.home_source_col}
@@ -100,6 +103,14 @@ build_vius_scaling_totals:
       "63": "No Home Base"
       "64": "Not Reported"
       "X": "Not In Use"
+  cab_type_corresp:
+    id_columns:
+      - ${build_vius_scaling_totals.cab_source_col}
+    values:
+      "1": "Day Cab"
+      "2": "Sleeper Cab"
+      "4": "Not Reported"
+      "X": "Not a Tractor Truck"
 
 format_substation_profiles:
   col_renamer:
