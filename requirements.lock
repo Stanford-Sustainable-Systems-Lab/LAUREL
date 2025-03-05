@@ -589,6 +589,7 @@ requests==2.31.0
     # via cookiecutter
     # via jupyterlab-server
     # via kedro-telemetry
+    # via routingpy
     # via sphinx
 rfc3339-validator==0.1.4
     # via jsonschema
@@ -601,6 +602,8 @@ rich==13.7.1
     # via kedro
 rope==1.13.0
     # via kedro
+routingpy==1.3.0
+    # via megaplug
 rpds-py==0.18.0
     # via jsonschema
     # via referencing
