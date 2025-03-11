@@ -37,6 +37,7 @@ dependencies = [
     "scs>=3.2.7",
     "tzfpy[pytz]>=0.15.6",
     "openturns>=1.24",
+    "openpyxl>=3.1.5",
 ]
 readme = "README.md"
 requires-python = ">= 3.11"
