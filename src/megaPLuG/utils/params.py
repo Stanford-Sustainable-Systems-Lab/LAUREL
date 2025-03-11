@@ -16,7 +16,8 @@ def set_entity_params(
         entities = entities.data
 
     orig_idx = entities.index.names
-    entities = entities.reset_index()
+    if orig_idx != [None]:
+        entities = entities.reset_index()
 
     for k, v in params.items():
         if isinstance(v, dict) and set(v.keys()) == {"id_columns", "values"}:
@@ -41,8 +42,8 @@ def set_entity_params(
             flat = flatten_dict({k: v})
             for col, val in flat.items():
                 entities[col] = val
-
-    entities = entities.set_index(orig_idx)
+    if orig_idx != [None]:
+        entities = entities.set_index(orig_idx)
 
     if entity_is_dwellset:
         return_val.data = entities
