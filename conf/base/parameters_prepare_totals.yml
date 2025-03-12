@@ -95,6 +95,16 @@ adoption_forecast_classifications:
       "1000-1499 Miles": "500+ Miles"
       "1500-1999 Miles": "500+ Miles"
       "2000+ Miles": "500+ Miles"
+  fuel_type:
+    id_columns:
+      - Technology
+    values:
+      ICEV: diesel
+      HEV: diesel
+      FCEV: hydrogen
+      EV-150: electricity
+      EV-300: electricity
+      EV-500: electricity
 
 aggregate_adoption_forecast_totals:
   weight_col: vehicle_stock
@@ -102,13 +112,12 @@ aggregate_adoption_forecast_totals:
     weight_class_group: Vehicle Class
     scenario: Scenario
     year: Year
-    technology: Technology
     vehicle_stock: Vehicle Stock
   group_cols:
     - scenario
     - year
     - weight_class_group
-    - technology
+    - fuel_type
     - distance_bins
   vehicle_stock_mult: 1000000
 
