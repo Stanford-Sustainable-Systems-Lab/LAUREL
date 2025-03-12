@@ -100,6 +100,10 @@ vius_scaling:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vius_scaling.feather
 
+adoption_scenarios:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/adoption_scenarios.feather
+
 substation.usage:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/usage/substation.feather
