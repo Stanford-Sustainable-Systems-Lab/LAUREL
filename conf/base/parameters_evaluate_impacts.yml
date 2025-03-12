@@ -66,6 +66,9 @@ build_sampling_totals:
       year:
         value_isin:
           - 2035
+      distance_bins: # Temporary for testing
+        value_isin:
+          - "0-99 Miles"
     keep_only_filter_cols: False
 
 
