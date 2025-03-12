@@ -51,13 +51,21 @@ jurisdiction.group_columns:
 stratify_columns: ${sample_slices.stratify_cols}
 
 build_sampling_totals:
-  adoption_frac: 1.0
-  totals_column: tab_weight
+  totals_column: n_vehs_target
   filter_totals:
     filters:
       gvw_class:
         value_isin:
           - "8"
+      scenario:
+        value_isin:
+          - Central
+      fuel_type:
+        value_isin:
+          - electricity
+      year:
+        value_isin:
+          - 2035
     keep_only_filter_cols: False
 
 
@@ -92,7 +100,7 @@ sample_slices:
     n_bootstraps: 250
     stratify_cols:
       - home_base_state
-    target_count_col: tab_weight
+    target_count_col: n_vehs_target
     discrete_freq: 1h
     skip_resampling: False
 
