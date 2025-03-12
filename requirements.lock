@@ -131,6 +131,8 @@ distributed==2024.5.2
     # via dask-geopandas
 dm-tree==0.1.8
     # via tensorflow-probability
+docker==7.1.0
+    # via megaplug
 docutils==0.21.2
     # via sphinx
 dynaconf==3.2.5
@@ -587,6 +589,7 @@ referencing==0.34.0
     # via jupyter-events
 requests==2.31.0
     # via cookiecutter
+    # via docker
     # via jupyterlab-server
     # via kedro-telemetry
     # via routingpy
@@ -758,6 +761,7 @@ uri-template==1.3.0
     # via jsonschema
 urllib3==2.2.1
     # via distributed
+    # via docker
     # via requests
 uvicorn==0.32.0
     # via kedro-viz
