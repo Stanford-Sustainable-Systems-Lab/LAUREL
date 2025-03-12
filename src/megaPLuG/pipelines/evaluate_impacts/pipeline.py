@@ -185,7 +185,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             node(
                 func=build_sampling_totals,
-                inputs=["vius_scaling", "params:build_sampling_totals"],
+                inputs=["adoption_scenarios", "params:build_sampling_totals"],
                 outputs="sampling_totals",
                 name="build_sampling_totals",
             ),
