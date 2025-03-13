@@ -128,9 +128,11 @@ create_disaggregated_adoption:
   orig_totals_col: vehicle_stock
   disagg_factor_col: cond_prob
   final_totals_col: n_vehs_target
+  keep_group_cols:
+    - scenario
+    - year
+    - home_base_state
+    - gvw_class
+    - fuel_type
+    - distance_bins
 
-
-
-  
-
-  

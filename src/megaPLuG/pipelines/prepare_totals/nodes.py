@@ -103,4 +103,6 @@ def create_disaggregated_adoption(
         .round(0)
         .astype(pd.Int64Dtype())
     )
+    totals = totals.loc[:, params["keep_group_cols"] + [params["final_totals_col"]]]
+    totals = totals.sort_values(params["keep_group_cols"])
     return totals
