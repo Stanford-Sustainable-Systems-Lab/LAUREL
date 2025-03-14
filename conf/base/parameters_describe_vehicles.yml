@@ -57,7 +57,7 @@ label_veh_loc_pairs:
     id_cols:
       cluster: cluster
     vals:
-      1: home_base
+      1: depot
 
 classify_vehicles:
   veh_col: veh_id
@@ -83,6 +83,11 @@ weight_class_group:
     8: Heavy Duty (Class 8)
 
 mark_location_regions:
+  sort_primary_locations_to_top:
+    columns:
+      - n_visits
+    ascending:
+      - False
   na_region_fill: "No Home Base"
   location_col: location
   location_region_col: home_base_state

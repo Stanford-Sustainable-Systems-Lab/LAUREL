@@ -92,7 +92,7 @@ scenario_params:
       - locations
       - max_power_kw
       - values
-      - home_base
+      - depot
     charge_speed_kw_enroute:
       - locations
       - max_power_kw

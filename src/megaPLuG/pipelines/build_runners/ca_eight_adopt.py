@@ -59,7 +59,7 @@ class CalifClass8AdoptionScenarioBuilder(ScenarioBuilder):
 
             cur_powers = deepcopy(self.params["locations"])
             cur_powers["max_power_kw"]["values"] = {
-                "home_base": dkw,
+                "depot": dkw,
                 "other": erkw,
             }
             cur_mngr = deepcopy(self.params["manage_charging"])

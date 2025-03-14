@@ -235,7 +235,7 @@ def classify_vehicles(
         params["loc_col"]
     ].value_counts()
     veh_loc_cts = veh_loc_cts.unstack(params["loc_col"])
-    veh_loc_cts["has_home_base"] = veh_loc_cts["home_base"] > 0
+    veh_loc_cts["has_home_base"] = veh_loc_cts["depot"] > 0
     vehs = vehs.merge(
         veh_loc_cts.loc[:, ["has_home_base"]], how="left", on=params["veh_col"]
     )
