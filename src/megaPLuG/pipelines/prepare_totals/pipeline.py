@@ -11,6 +11,8 @@ from megaPLuG.utils.params import set_entity_params
 from .nodes import (
     aggregate_adoption_forecast_totals,
     aggregate_vius_totals,
+    build_mandates_by_group,
+    concat_projections_with_mandates,
     create_disaggregated_adoption,
     prepare_for_merging,
 )
@@ -75,10 +77,35 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "vius_aggregated",
                     "params:create_disaggregated_adoption",
                 ],
-                outputs="adoption_scenarios",
+                outputs="adoption_scenarios_no_mandates",
                 name="create_disaggregated_adoption",
             ),
         ],
     )
 
-    return vius_pipe + adopt_pipe + joint_pipe
+    mandate_pipe = pipeline(
+        [
+            node(
+                func=build_mandates_by_group,
+                inputs=[
+                    "advanced_clean_fleets_milestones",
+                    "advanced_clean_trucks_states",
+                    "params:build_mandates_by_group",
+                ],
+                outputs="mandate_projections",
+                name="build_mandates_by_group",
+            ),
+            node(
+                func=concat_projections_with_mandates,
+                inputs=[
+                    "adoption_scenarios_no_mandates",
+                    "mandate_projections",
+                    "params:concat_projections_with_mandates",
+                ],
+                outputs="adoption_scenarios",
+                name="concat_projections_with_mandates",
+            ),
+        ],
+    )
+
+    return vius_pipe + adopt_pipe + joint_pipe + mandate_pipe

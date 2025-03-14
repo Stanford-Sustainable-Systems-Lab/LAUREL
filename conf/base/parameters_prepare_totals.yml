@@ -136,3 +136,45 @@ create_disaggregated_adoption:
     - fuel_type
     - distance_bins
 
+build_mandates_by_group:
+  acf_groups:
+    value_column: milestone_group
+    id_columns:
+      - distance_bins
+      - gvw_class
+    values:
+      "0-99 Miles":
+        8: 2
+      "100-249 Miles":
+        8: 2
+      "250-499 Miles":
+        8: 2
+      "500+ Miles":
+        8: 3
+  frame_years:
+    min: 2025
+    max: 2050
+  mandate_fraction_col: fleet_frac_zev
+  mou_state_col: state
+  weight_class_col: gvw_class
+  col_renamer:
+    home_base_state: state
+
+concat_projections_with_mandates:
+  scenario_col: scenario
+  totals_col: n_vehs_target
+  fuel_type_col: fuel_type
+  mandate_fraction_col: ${build_mandates_by_group.mandate_fraction_col}
+  mandate_active_col: is_mandate_active
+  group_cols:
+    - scenario
+    - home_base_state
+    - distance_bins
+    - gvw_class
+    - year
+  zev_fuel_types:
+    - electricity
+    - hydrogen
+  default_fuel_types:
+    - diesel
+    - electricity
