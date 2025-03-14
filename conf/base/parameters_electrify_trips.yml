@@ -36,7 +36,7 @@ mark_substantial_dwells:
 mark_critical_days:
   loc_col: location
   refresh_locations:
-    - home_base
+    - depot
   refresh_col: is_refresh
   crit_col: is_crit_day
   batt_cap_col: battery_capacity_kwh
@@ -94,7 +94,7 @@ locations:
     id_columns:
       - location
     values:
-      home_base: 350
+      depot: 350
       other: 1000
 
 calc_energy_use:
