@@ -42,6 +42,8 @@ def aggregate_vius_totals(vius: pd.DataFrame, params: dict) -> pd.DataFrame:
 
     # Set the operating distance of "No Home Base" vehicles to a default
     vius.loc[ohot["No Home Base"], params["op_dist_col"]] = params["fill_op_dist"]
+
+    # Remove from consideration remaining vehicles with unknown operating distance
     vius.loc[vius[params["op_dist_col"]] == "NA", params["op_dist_col"]] = pd.NA
     vius.loc[vius[params["op_dist_col"]].isna(), params["weight_col"]] = 0.0
 
