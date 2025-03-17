@@ -45,7 +45,7 @@ scenario_params:
     min_soc_thresh:
       dist: Uniform
       params:
-        - 0.1
+        - 0.0
         - 0.5
     charge_speed_kw_depot:
       dist: Beta
