@@ -68,7 +68,7 @@ build_sampling_totals:
           - electricity
       year:
         value_isin:
-          - 2035
+          - 2030
     keep_only_filter_cols: False
 
 
