@@ -28,12 +28,12 @@ prepare_for_merging:
     reg_state: REGSTATE
     cab_day: CABDAY
   dist_bin_col_prefix: RO_
-  primary_dist_col: primary_op_dist
+  primary_dist_col: primary_op_dist_vius
 
 vius_classifications:
-  distance_bins: # From Ledna et al. 2024 Table S2.1
+  primary_op_dist: # From Ledna et al. 2024 Table S2.1
     id_columns:
-      - primary_op_dist
+      - primary_op_dist_vius
     values:
       "RO_0_50": "0-99 Miles"
       "RO_51_100": "0-99 Miles"
@@ -65,24 +65,24 @@ aggregate_vius_totals:
   home_base_code_col: home_base_reported
   home_base_region_col: home_base_state
   region_source_col: reg_state
-  op_dist_col: distance_bins
+  op_dist_col: primary_op_dist
   fill_op_dist: "500+ Miles"
   spread_condition_cols:
     - gvw_class
-    - distance_bins
+    - primary_op_dist
   disagg_condition_cols:
     - weight_class_group
-    - distance_bins
+    - primary_op_dist
   group_cols:
     - weight_class_group
     - home_base_state
     - gvw_class
-    - distance_bins
+    - primary_op_dist
   weight_col: tab_weight
   out_prob_col: cond_prob
 
 adoption_forecast_classifications:
-  distance_bins: # From Ledna et al. 2024 Table S2.1
+  primary_op_dist: # From Ledna et al. 2024 Table S2.1
     id_columns:
       - "Market Segment"
     values:
@@ -118,13 +118,13 @@ aggregate_adoption_forecast_totals:
     - year
     - weight_class_group
     - fuel_type
-    - distance_bins
+    - primary_op_dist
   vehicle_stock_mult: 1000000
 
 create_disaggregated_adoption:
   merge_cols:
     - weight_class_group
-    - distance_bins
+    - primary_op_dist
   orig_totals_col: vehicle_stock
   disagg_factor_col: cond_prob
   final_totals_col: n_vehs_target
@@ -134,13 +134,13 @@ create_disaggregated_adoption:
     - home_base_state
     - gvw_class
     - fuel_type
-    - distance_bins
+    - primary_op_dist
 
 build_mandates_by_group:
   acf_groups:
     value_column: milestone_group
     id_columns:
-      - distance_bins
+      - primary_op_dist
       - gvw_class
     values:
       "0-99 Miles":
@@ -169,7 +169,7 @@ concat_projections_with_mandates:
   group_cols:
     - scenario
     - home_base_state
-    - distance_bins
+    - primary_op_dist
     - gvw_class
     - year
   zev_fuel_types:
