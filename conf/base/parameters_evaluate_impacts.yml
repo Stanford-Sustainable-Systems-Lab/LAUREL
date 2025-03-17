@@ -69,9 +69,6 @@ build_sampling_totals:
       year:
         value_isin:
           - 2035
-      distance_bins: # Temporary for testing
-        value_isin:
-          - "0-99 Miles"
     keep_only_filter_cols: False
 
 
@@ -106,6 +103,7 @@ sample_slices:
     n_bootstraps: 250
     stratify_cols:
       - home_base_state
+      - primary_op_dist
     target_count_col: n_vehs_target
     discrete_freq: 1h
     skip_resampling: False
