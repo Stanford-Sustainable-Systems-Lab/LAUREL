@@ -19,6 +19,7 @@ from .nodes import (
     label_veh_loc_pairs,
     mark_location_regions,
     mark_locations,
+    mark_vehicle_centers,
     mark_weight_class_group,
 )
 
@@ -93,19 +94,20 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="load_dwell_set_desc_vehs",
             ),
             node(
-                func=classify_vehicles,
+                func=mark_vehicle_centers,
                 inputs=[
                     "vehicles_raw",
                     "vehicle_location_pairs_labelled",
-                    "params:classify_vehicles",
+                    "params:mark_vehicle_centers",
+                    "params:load_dwell_set",
                 ],
-                outputs="vehicles_with_class",
-                name="classify_vehicles",
+                outputs="vehicles_with_centers",
+                name="mark_vehicle_centers",
             ),
             node(
                 func=get_operating_segment,
                 inputs=[
-                    "vehicles_with_class",
+                    "vehicles_with_centers",
                     "dwell_obj_desc_vehs",
                     "params:operating_segment",
                 ],
@@ -113,9 +115,19 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="get_operating_segment",
             ),
             node(
-                func=get_vehicle_observation_frames,
+                func=classify_vehicles,
                 inputs=[
                     "vehicles_with_segment",
+                    "vehicle_location_pairs_labelled",
+                    "params:classify_vehicles",
+                ],
+                outputs="vehicles_with_class",
+                name="classify_vehicles",
+            ),
+            node(
+                func=get_vehicle_observation_frames,
+                inputs=[
+                    "vehicles_with_class",
                     "dwell_obj_desc_vehs",
                     "params:observation_frames",
                 ],
@@ -135,10 +147,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=mark_location_regions,
                 inputs=[
                     "vehs_with_weight_class_group",
-                    "vehicle_location_pairs_labelled",
                     "state_boundaries",
                     "params:mark_location_regions",
-                    "params:load_dwell_set",
                 ],
                 outputs="vehicles_labelled",
                 name="mark_location_regions",
