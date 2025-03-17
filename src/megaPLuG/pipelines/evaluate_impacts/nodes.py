@@ -529,7 +529,7 @@ def sample_vehicle_windows(
     smpler = SliceWeightSampler(
         strat_cols=params_sample["stratify_cols"],
         target_count_col=params_sample["target_count_col"],
-        verbose=True,
+        verbose=False,
     )
     smpler.prepare(sources=winds, frame=frame, targets=targets)
 
