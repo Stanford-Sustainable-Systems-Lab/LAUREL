@@ -49,6 +49,7 @@ filter_dwells:
     crit: is_crit_day
   drop_cols:
    - range_estim
+   - trip_miles_is_refresh
 
 vehicles:
   battery_capacity_kwh:
@@ -59,11 +60,11 @@ vehicles:
       True:
         6: 400
         7: 400
-        8: 600
+        8: 1000
       False:
         6: 600
         7: 600
-        8: 1200
+        8: 1000
   consump_rate_kwh_per_mi:
     id_columns:
       - has_home_base
@@ -72,11 +73,11 @@ vehicles:
       True:
         6: 1.25
         7: 1.25
-        8: 2.08
+        8: 2.0
       False:
         6: 3.06
         7: 3.06
-        8: 3.12
+        8: 2.0
   minimum_times:
     plug_in_mins: 5
     plug_out_mins: 5
@@ -106,7 +107,7 @@ simulate_charging_choice:
     consumed_kwh: energy_use_kwh
     dwell_hrs: dwell_time_hrs
     avail_kw: max_power_kw
-    reset: reset_state_before_keep_dwells
+    reset: reset_state_before
     batt_cap: battery_capacity_kwh
     random_seed: random_seed
     rng_alpha: initial_soc_alpha

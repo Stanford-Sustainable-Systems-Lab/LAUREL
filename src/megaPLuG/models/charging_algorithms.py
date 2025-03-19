@@ -94,7 +94,7 @@ class AbstractChargingChoiceStrategy(ABC):
         """
         col_dtypes = {}
         for col, dtype in zip(df.columns, df.dtypes):
-            if dtype.name == np.bool.__name__:
+            if dtype.name in self._replace_dtypes:
                 col_dtypes.update({col: self._replace_dtypes[dtype.name]})
         return col_dtypes
 
