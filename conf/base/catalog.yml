@@ -366,6 +366,20 @@ navistar_by_state:
     index: True
     layer: navistar_by_state
 
+vehicle_peak_load_by_substation:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/08_reporting/vehicle_peak_load_by_substation.gpkg
+  save_args:
+    index: True
+    layer: vehicle_peak_load_by_substation
+
+capacity_consumed_percent_by_substation:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/08_reporting/capacity_consumed_percent_by_substation.gpkg
+  save_args:
+    index: True
+    layer: capacity_consumed_percent_by_substation
+
 peak_load_addition_by_substation:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
   filepath: data/08_reporting/peak_load_addition_by_substation.gpkg
@@ -382,6 +396,12 @@ substation_overcapacity_by_scenario:
 profiles_by_location_and_segment_no_map:
   type: matplotlib.MatplotlibWriter
   filepath: data/08_reporting/profiles_by_location_and_segment_no_map.png
+  save_args:
+    bbox_inches: tight
+
+profile_examples_with_uncertainty:
+  type: matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/profile_examples_with_uncertainty.png
   save_args:
     bbox_inches: tight
 
