@@ -441,12 +441,14 @@ class SliceWeightSampler:
             )
         self.source_idx_name = sources.index.name
 
-        trgts = targets.groupby(self.strat_cols)[self.target_count_col].sum()
+        trgts = targets.groupby(self.strat_cols, observed=True)[
+            self.target_count_col
+        ].sum()
         trgts.name = "n_samples"
         trgts = trgts.astype(int)
         trgts = trgts.reset_index()
 
-        srcs = sources.groupby(self.strat_cols).apply(
+        srcs = sources.groupby(self.strat_cols, observed=True).apply(
             lambda grp: grp.index.unique().to_series().values,
             include_groups=False,
         )
@@ -454,7 +456,7 @@ class SliceWeightSampler:
         srcs = srcs.reset_index()
         srcs["n_nonempty_slices"] = srcs["choice_indices"].transform(lambda x: x.size)
 
-        srcs_w_zeros = frame.groupby(self.strat_cols).size()
+        srcs_w_zeros = frame.groupby(self.strat_cols, observed=True).size()
         srcs_w_zeros.name = "n_possible_slices"
         srcs_w_zeros = srcs_w_zeros.reset_index()
 
