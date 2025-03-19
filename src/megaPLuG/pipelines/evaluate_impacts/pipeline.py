@@ -160,20 +160,6 @@ def create_pipeline(**kwargs) -> Pipeline:
         ),
         pipeline(
             report_profiles_pipe,
-            namespace="land_op_segment",
-            parameters=profile_group_fixed_params,
-            inputs=profile_group_fixed_inputs,
-            tags="scenario_run",
-        ),
-        pipeline(
-            report_profiles_pipe,
-            namespace="op_segment",
-            parameters=profile_group_fixed_params,
-            inputs=profile_group_fixed_inputs,
-            tags="scenario_run",
-        ),
-        pipeline(
-            report_profiles_pipe,
             namespace="jurisdiction",
             parameters=profile_group_fixed_params,
             inputs=profile_group_fixed_inputs,

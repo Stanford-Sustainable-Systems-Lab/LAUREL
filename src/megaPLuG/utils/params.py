@@ -16,7 +16,8 @@ def set_entity_params(
         entities = entities.data
 
     orig_idx = entities.index.names
-    entities = entities.reset_index()
+    if orig_idx != [None]:
+        entities = entities.reset_index()
 
     for k, v in params.items():
         if isinstance(v, dict) and set(v.keys()) == {"id_columns", "values"}:
@@ -41,8 +42,8 @@ def set_entity_params(
             flat = flatten_dict({k: v})
             for col, val in flat.items():
                 entities[col] = val
-
-    entities = entities.set_index(orig_idx)
+    if orig_idx != [None]:
+        entities = entities.set_index(orig_idx)
 
     if entity_is_dwellset:
         return_val.data = entities
@@ -81,3 +82,24 @@ def flatten_dict(d: dict, parent_key: str = None, sep: str = "_"):
         else:
             items.append((new_key, v))
     return dict(items)
+
+
+def extract_params(params: dict, key_map: dict) -> dict:
+    """Extract the parameters of interest from a config for this scenario.
+
+    Args:
+        params: the dict of parameters used directly by `kedro`
+        key_map: the dict of (reporting key, kedro parameter key) pairs. The kedro
+            parameter keys may be tuples of any length, which will be interpreted as the
+            key at each level of the dictionary.
+
+    Returns: A dictionary of only the selected parameters which is only one level deep.
+    """
+
+    def get_value_from_dict(d, keys):
+        for key in keys:
+            d = d[key]
+        return d
+
+    res = {k: get_value_from_dict(params, v) for k, v in key_map.items()}
+    return res

@@ -110,6 +110,8 @@ class ScenarioReader(ABC):
                 names=names,
                 metadata=metadata,
             )
+        elif isinstance(test_data, dict):
+            coll = {names[pth]: loader() for pth, loader in parts.items()}
         else:
             raise NotImplementedError(
                 "ScenarioReader collation for this dataset type has not been implemented."
@@ -121,7 +123,7 @@ class ScenarioReader(ABC):
         self: Self,
         partitions: dict[str, object],
         names: dict[str, str],
-        metadata: pd.DataFrame,
+        metadata: dict[str, tuple],
     ) -> pd.DataFrame:
         """Collate partitions with dataframe data into a single long dataframe with
         keys given by the scenario name and selected metadata.

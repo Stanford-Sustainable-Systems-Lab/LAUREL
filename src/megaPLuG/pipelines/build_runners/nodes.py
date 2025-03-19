@@ -12,6 +12,7 @@ from megaPLuG.scenarios.build import (  # noqa: F401
 
 from .batt_man import BatteryManageScenarioBuilder  # noqa: F401
 from .ca_eight import CalifClass8ScenarioBuilder  # noqa: F401
+from .sense import SenseScenarioBuilder  # noqa: F401
 
 
 def generate_scenario_configs(scen_params: dict, all_params: dict) -> dict:

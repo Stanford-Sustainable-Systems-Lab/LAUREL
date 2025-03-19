@@ -83,7 +83,35 @@ clean_vius_by_weight_class:
 
 build_vius_scaling_totals:
   totals_col: n_vehs
-  weight_col: weight
+  weight_col: n_vehs_intersect
   id_cols:
     region: home_base_state
     weight_class: gvw_class
+
+format_substation_profiles:
+  col_renamer:
+    substation_id: SubID
+  columns:
+    substation_id: substation_id
+    month_hour: MonthHour
+    month: month
+    hour: time_local_hour
+    baseload: High
+
+format_substation_capacities:
+  col_renamer:
+    substation_id: substationid
+    substation_name: substationname
+    rating_mw: facilityratingmw
+  substation_id: substation_id
+  capacity: facilityratingmw
+
+describe_substation_usage:
+  drop_substation_cols:
+    - geometry
+  columns:
+    substation_id: substation_id
+    hour: time_local_hour
+    baseload_mw: max_base_by_hour_mw
+    rating_mw: rating_mw
+    cap_avail_mw: cap_avail_mw

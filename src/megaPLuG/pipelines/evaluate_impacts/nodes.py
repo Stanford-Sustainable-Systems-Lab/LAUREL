@@ -13,7 +13,10 @@ from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.group_times import HourOfWeekdayGrouper
 from megaPLuG.models.summarize import EventExpander, NonzeroGroupedSummarizer
 from megaPLuG.utils.h3 import cells_to_region_polygons
-from megaPLuG.utils.time import calc_local_time_attrs, total_hours
+from megaPLuG.utils.time import (
+    calc_local_time,
+    total_hours,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +43,10 @@ def assign_regions(
     reg_cols = [pcols["hex_col"]] + grp_cols + [pcols["timezone_col"]]
     mrg = hex_regions.reset_index().loc[:, reg_cols]
     events = events.merge(mrg, how="left", on=pcols["hex_col"])
-    events = events.set_index(orig_idx)
+    if orig_idx != [None]:
+        events = events.set_index(orig_idx)
+    else:
+        events = events.drop(columns=["index"])
     return events
 
 
@@ -93,10 +99,10 @@ def report_by_region_peaks(
     peaks = profs.loc[max_idx]
 
     logger.info("Calculating local time attributes")
-    peaks = calc_local_time_attrs(
+    peaks = calc_local_time(
         df=peaks,
         time_cols=pcols["time_col"],
-        attrs=params["local_time_attrs"],
+        local_cols=pcols["time_col"] + "_local",
         tz_col=pcols["timezone_col"],
     )
     peaks = peaks.set_index(orig_idx)
@@ -130,12 +136,16 @@ def report_by_region_quantiles(
     grped_nonzero = nonzero_exp.groupby(grouper)[pcols["profile_col"]].max()
     grped_nonzero = grped_nonzero.reset_index()
 
+    tgpars = params["time_grouper"]
     grouper = HourOfWeekdayGrouper(
         time_col=pcols["time_col"],
         tz_col=pcols["timezone_col"],
+        start_time=pd.Timestamp(tgpars["start_time"]),
+        end_time=pd.Timestamp(tgpars["end_time"]),
+        possible_tzs=tgpars["possible_tzs"],
     )
     grped_nonzero = grouper.add_group_classes(grped_nonzero)
-    group_counts_tz = grouper.get_possible_obs_counts(grped_nonzero)
+    group_counts_tz = grouper.get_possible_obs_counts()
     group_counts_tz = group_counts_tz.reset_index()
     grp_merge_cols = [pcols["timezone_col"]] + grouper.time_group_cols
     grped_nonzero = grped_nonzero.merge(group_counts_tz, how="left", on=grp_merge_cols)
