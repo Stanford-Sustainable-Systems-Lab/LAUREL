@@ -105,8 +105,13 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     dw.data["keep_dwells"] = dw.data["keep_dwells"].astype("boolean")
     dw.data["keep_dwells"] = dw.data["keep_dwells"].replace(False, pd.NA)
     dw.data.dropna(subset="keep_dwells", inplace=True)
-    drop_cols = ["keep_dwells"] + list(flt_cols.values()) + params["drop_cols"]
+    dw.data["keep_dwells"] = dw.data["keep_dwells"].astype(bool)
+    drop_cols = (
+        ["keep_dwells"] + list(flt_cols.values()) + params["drop_cols"] + accum_cols
+    )
     dw.data = dw.data.drop(columns=drop_cols)
+    renamer = {f"{old}_keep_dwells": old for old in accum_cols}
+    dw.data = dw.data.rename(columns=renamer)
 
     new_len = len(dw.data)
     abs_diff = old_len - new_len
