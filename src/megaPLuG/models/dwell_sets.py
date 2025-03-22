@@ -204,6 +204,7 @@ class DwellSet:
         self,
         keep_mask_col: str,
         accum_cols: str | list[str] = None,
+        reverse: bool = False,
         inplace: bool = False,
     ) -> Self | None:
         """Filter out individual dwells while merging trips together.
@@ -233,6 +234,7 @@ class DwellSet:
             reset_col=self.reset,
             veh_col=self.veh,
             replace_dtypes=self._replace_dtypes,
+            reverse=reverse,
         )
         if self.is_dask:
             new.data = new.data.map_partitions(self._accum_masked_df, **kws)
@@ -252,6 +254,7 @@ class DwellSet:
         reset_col: str,
         veh_col: str,
         replace_dtypes: dict[str, str],
+        reverse: bool,
     ) -> pd.DataFrame:
         if isinstance(accum_cols, str):
             accum_cols = [accum_cols]
@@ -274,6 +277,7 @@ class DwellSet:
                     logics=logics,
                     vals=vals[col][idxs],
                     outs=outs[col][idxs],
+                    reverse=reverse,
                 )
 
         # Build output dataframe
@@ -309,13 +313,18 @@ class DwellSet:
         logics: np.recarray,
         vals: np.ndarray,
         outs: np.ndarray,
+        reverse: bool = False,
     ) -> np.ndarray:
         nsteps = logics.shape[0]
         if not nsteps == vals.shape[0] == outs.shape[0]:
             raise RuntimeError("The three arrays must have the same length.")
 
         cum_sum = 0
-        for i in range(nsteps):
+        if reverse:
+            itr = range(-1, -(nsteps + 1), -1)
+        else:
+            itr = range(nsteps)
+        for i in itr:
             if logics["keep"][i]:
                 if logics["reset"][i]:  # With reset, we just copy the original
                     outs[i] = vals[i]
