@@ -205,6 +205,7 @@ class DwellSet:
         keep_mask_col: str,
         accum_cols: str | list[str] = None,
         reverse: bool = False,
+        write_all: bool = False,
         inplace: bool = False,
     ) -> Self | None:
         """Filter out individual dwells while merging trips together.
@@ -235,6 +236,7 @@ class DwellSet:
             veh_col=self.veh,
             replace_dtypes=self._replace_dtypes,
             reverse=reverse,
+            write_all=write_all,
         )
         if self.is_dask:
             new.data = new.data.map_partitions(self._accum_masked_df, **kws)
@@ -255,6 +257,7 @@ class DwellSet:
         veh_col: str,
         replace_dtypes: dict[str, str],
         reverse: bool,
+        write_all: bool,
     ) -> pd.DataFrame:
         if isinstance(accum_cols, str):
             accum_cols = [accum_cols]
@@ -278,6 +281,7 @@ class DwellSet:
                     vals=vals[col][idxs],
                     outs=outs[col][idxs],
                     reverse=reverse,
+                    write_all=write_all,
                 )
 
         # Build output dataframe
@@ -288,7 +292,8 @@ class DwellSet:
             new_col = _get_new_col_name(col)
             df[new_col] = outs[col]
             df[new_col] = df[new_col].convert_dtypes()
-            df.loc[~df[keep_mask_col], new_col] = pd.NA
+            if not write_all:
+                df.loc[~df[keep_mask_col], new_col] = pd.NA
 
         return df
 
@@ -314,6 +319,7 @@ class DwellSet:
         vals: np.ndarray,
         outs: np.ndarray,
         reverse: bool = False,
+        write_all: bool = False,
     ) -> np.ndarray:
         nsteps = logics.shape[0]
         if not nsteps == vals.shape[0] == outs.shape[0]:
@@ -325,16 +331,18 @@ class DwellSet:
         else:
             itr = range(nsteps)
         for i in itr:
-            if logics["keep"][i]:
-                if logics["reset"][i]:  # With reset, we just copy the original
-                    outs[i] = vals[i]
-                else:  # With no reset, we apply accumulation
-                    outs[i] = vals[i] + cum_sum
+            if logics["reset"][i]:  # With reset, we just copy the original
+                cur = vals[i]
+            else:  # With no reset, we apply accumulation
+                cur = vals[i] + cum_sum
+
+            if logics["keep"][i]:  # If we're keeping this row, then reset the cumsum
                 cum_sum = 0
-            elif logics["reset"][i]:  # Implicitly, this is reset and not keep
-                cum_sum = vals[i]
             else:
-                cum_sum = vals[i] + cum_sum
+                cum_sum = cur
+
+            if logics["keep"][i] or write_all:  # Optionally, write out the result
+                outs[i] = cur
         return outs
 
     def drop_masked(
