@@ -204,6 +204,8 @@ class DwellSet:
         self,
         keep_mask_col: str,
         accum_cols: str | list[str] = None,
+        reverse: bool = False,
+        write_all: bool = False,
         inplace: bool = False,
     ) -> Self | None:
         """Filter out individual dwells while merging trips together.
@@ -233,6 +235,8 @@ class DwellSet:
             reset_col=self.reset,
             veh_col=self.veh,
             replace_dtypes=self._replace_dtypes,
+            reverse=reverse,
+            write_all=write_all,
         )
         if self.is_dask:
             new.data = new.data.map_partitions(self._accum_masked_df, **kws)
@@ -252,6 +256,8 @@ class DwellSet:
         reset_col: str,
         veh_col: str,
         replace_dtypes: dict[str, str],
+        reverse: bool,
+        write_all: bool = False,
     ) -> pd.DataFrame:
         if isinstance(accum_cols, str):
             accum_cols = [accum_cols]
@@ -274,6 +280,7 @@ class DwellSet:
                     logics=logics,
                     vals=vals[col][idxs],
                     outs=outs[col][idxs],
+                    reverse=reverse,
                 )
 
         # Build output dataframe
@@ -284,7 +291,8 @@ class DwellSet:
             new_col = _get_new_col_name(col)
             df[new_col] = outs[col]
             df[new_col] = df[new_col].convert_dtypes()
-            df.loc[~df[keep_mask_col], new_col] = pd.NA
+            if not write_all:
+                df.loc[~df[keep_mask_col], new_col] = pd.NA
 
         return df
 
@@ -309,23 +317,31 @@ class DwellSet:
         logics: np.recarray,
         vals: np.ndarray,
         outs: np.ndarray,
+        reverse: bool = False,
     ) -> np.ndarray:
         nsteps = logics.shape[0]
         if not nsteps == vals.shape[0] == outs.shape[0]:
             raise RuntimeError("The three arrays must have the same length.")
 
         cum_sum = 0
-        for i in range(nsteps):
-            if logics["keep"][i]:
-                if logics["reset"][i]:  # With reset, we just copy the original
-                    outs[i] = vals[i]
-                else:  # With no reset, we apply accumulation
-                    outs[i] = vals[i] + cum_sum
-                cum_sum = 0
-            elif logics["reset"][i]:  # Implicitly, this is reset and not keep
-                cum_sum = vals[i]
+        prev_reset = False
+        if reverse:
+            itr = range(-1, -(nsteps + 1), -1)
+        else:
+            itr = range(nsteps)
+        for i in itr:
+            if (not reverse and logics["reset"][i]) or (reverse and prev_reset):
+                cur = vals[i]  # With reset, we just copy the original
             else:
-                cum_sum = vals[i] + cum_sum
+                cur = vals[i] + cum_sum  # With no reset, we apply accumulation
+            prev_reset = logics["reset"][i]
+
+            if logics["keep"][i]:  # If we're keeping this row, then reset the cumsum
+                cum_sum = 0
+            else:
+                cum_sum = cur
+
+            outs[i] = cur
         return outs
 
     def drop_masked(
