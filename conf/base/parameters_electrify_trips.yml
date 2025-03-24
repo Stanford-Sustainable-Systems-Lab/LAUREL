@@ -21,35 +21,28 @@ filter_vehicles:
         - 8
   keep_only_filter_cols: False
 
-mark_substantial_dwells:
-  veh_param_cols:
-    plug_in: minimum_times_plug_in_mins
-    plug_out: minimum_times_plug_out_mins
-    batt_cap: battery_capacity_kwh
-    soc_boost: dwell_min_soc_boost_frac
-  max_power_col: max_power_kw
-  time_cols_w_unit:
-    minimum_times_plug_in_mins: minute
-    minimum_times_plug_out_mins: minute
-  dwell_time_col: dwell_time_hrs
+calc_energy_use:
+  consump_col: consump_rate_kwh_per_mi
+  energy_col: energy_use_kwh
 
 mark_critical_days:
   loc_col: location
   refresh_locations:
-    - home_base
+    - depot
   refresh_col: is_refresh
   crit_col: is_crit_day
   batt_cap_col: battery_capacity_kwh
-  consump_col: consump_rate_kwh_per_mi
+  energy_col: energy_use_kwh
+  energy_col_next_trip: energy_use_kwh_next
+  energy_col_remain_shift: energy_use_kwh_shift
 
 filter_dwells:
   filter_cols:
-    substantial_soc: big_boost
     refresh: is_refresh
     crit: is_crit_day
   drop_cols:
-   - range_estim
-   - trip_miles_is_refresh
+   - battery_capacity_kwh
+   - is_crit_day
 
 vehicles:
   battery_capacity_kwh:
@@ -95,7 +88,7 @@ locations:
     id_columns:
       - location
     values:
-      home_base:
+      depot:
         - none
         - depot
       other:
@@ -110,11 +103,6 @@ charging_modes:
   enroute:
     max_power_kw: 1000
   id_column: charge_mode
-
-
-calc_energy_use:
-  consump_col: consump_rate_kwh_per_mi
-  energy_col: energy_use_kwh
 
 simulate_charging_choice:
   input_cols:

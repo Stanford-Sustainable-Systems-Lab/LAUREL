@@ -36,30 +36,13 @@ def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
     return dw
 
 
-def mark_substantial_dwells(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
-    """Mark dwells which could provide substantial SoC to each vehicle."""
-    pcols = params["veh_param_cols"]
-    for col, unit in params["time_cols_w_unit"].items():
-        vehs[col] = pd.to_timedelta(vehs[col], unit=unit)
-    dw.data = dw.data.merge(vehs.loc[:, list(pcols.values())], how="left", on=dw.veh)
-
-    # Adjust dwell start and end times to allow time for vehicle to plug in and out
-    dw.data[dw.end] = dw.data[dw.end] - dw.data[pcols["plug_out"]]
-    dw.data[dw.start] = dw.data[dw.start] + dw.data[pcols["plug_in"]]
-
-    dwell_time_col = params["dwell_time_col"]
-    dw.data[dwell_time_col] = total_hours(dw.data[dw.end] - dw.data[dw.start])
-
-    # Calculate potential SoC increase of this dwell
-    dw.data["soc_boost_potential"] = (
-        dw.data[params["max_power_col"]]
-        * dw.data[dwell_time_col]
-        / dw.data[pcols["batt_cap"]]
+def calc_energy_use(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
+    """Calculate energy use for all trips."""
+    dw.data = dw.data.merge(vehs.loc[:, [params["consump_col"]]], how="left", on=dw.veh)
+    dw.data[params["energy_col"]] = (
+        dw.data[dw.trip_dist] * dw.data[params["consump_col"]]
     )
-    dw.data["big_boost"] = dw.data["soc_boost_potential"] > dw.data[pcols["soc_boost"]]
-
-    drop_cols = list(pcols.values()) + ["soc_boost_potential"]
-    dw.data = dw.data.drop(columns=drop_cols)
+    dw.data = dw.data.drop(columns=[params["consump_col"]])
     return dw
 
 
@@ -68,15 +51,21 @@ def mark_critical_days(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellS
     refr_col = params["refresh_col"]
     refr_locs = set(params["refresh_locations"])
     dw.data[refr_col] = dw.data[params["loc_col"]].isin(refr_locs)
-    dw.accum_masked(refr_col, accum_cols=dw.trip_dist, inplace=True)
 
-    # Apply vehicle-specific estimated range
-    vehs["range_estim"] = vehs[params["batt_cap_col"]] / vehs[params["consump_col"]]
-    dw.data = dw.data.merge(vehs.loc[:, ["range_estim"]], how="left", on=dw.veh)
+    nrg_col_next = params["energy_col_next_trip"]
+    nrg_col_shift = params["energy_col_remain_shift"]
+    dw.data[nrg_col_next] = dw.data.groupby(dw.veh)[params["energy_col"]].shift(-1)
+    dw.accum_masked(
+        refr_col, accum_cols=nrg_col_next, reverse=True, write_all=True, inplace=True
+    )
+    dw.data = dw.data.rename(columns={f"{nrg_col_next}_{refr_col}": nrg_col_shift})
 
+    # Apply vehicle-specific battery capacity
+    dw.data = dw.data.merge(
+        vehs.loc[:, [params["batt_cap_col"]]], how="left", on=dw.veh
+    )
     crcol = params["crit_col"]
-    veh_day_trip_dist_col = f"{dw.trip_dist}_{refr_col}"
-    dw.data[crcol] = dw.data[veh_day_trip_dist_col] > dw.data["range_estim"]
+    dw.data[crcol] = dw.data[nrg_col_shift] > dw.data[params["batt_cap_col"]]
 
     # Assume a critical day for partial days, since the point of the critical days
     # assumption is to reduce public charging on days when we're sure it's unnecessary
@@ -84,9 +73,8 @@ def mark_critical_days(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellS
     is_critical = dw.data[crcol].astype("boolean")
     is_refresh = dw.data[refr_col].astype("boolean")
     dw.data[crcol] = (is_refresh & is_critical) ^ ~(is_refresh | pd.NA)
-    dw.data[crcol] = (
-        dw.data[crcol].groupby(dw.veh, sort=False).bfill().fillna(True).astype(bool)
-    )
+    dw.data[crcol] = dw.data[crcol].groupby(dw.veh, sort=False).ffill()
+    dw.data[crcol] = dw.data[crcol].fillna(True).astype(bool)
     return dw
 
 
@@ -96,9 +84,7 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     old_len = len(dw.data)
 
     flt_cols = params["filter_cols"]
-    dw.data["keep_dwells"] = dw.data[flt_cols["substantial_soc"]] & (
-        dw.data[flt_cols["refresh"]] | dw.data[flt_cols["crit"]]
-    )
+    dw.data["keep_dwells"] = dw.data[flt_cols["refresh"]] | dw.data[flt_cols["crit"]]
     accum_cols = [dw.trip_dist, dw.trip_dur, dw.reset]
     dw.accum_masked("keep_dwells", accum_cols=accum_cols, inplace=True)
 
@@ -106,9 +92,7 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     dw.data["keep_dwells"] = dw.data["keep_dwells"].replace(False, pd.NA)
     dw.data.dropna(subset="keep_dwells", inplace=True)
     dw.data["keep_dwells"] = dw.data["keep_dwells"].astype(bool)
-    drop_cols = (
-        ["keep_dwells"] + list(flt_cols.values()) + params["drop_cols"] + accum_cols
-    )
+    drop_cols = ["keep_dwells"] + params["drop_cols"] + accum_cols
     dw.data = dw.data.drop(columns=drop_cols)
     renamer = {f"{old}_keep_dwells": old for old in accum_cols}
     dw.data = dw.data.rename(columns=renamer)
@@ -117,16 +101,6 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     abs_diff = old_len - new_len
     pct_diff = round(new_len / old_len * 100, 1)
     logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
-    return dw
-
-
-def calc_energy_use(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
-    """Calculate energy use for all trips."""
-    dw.data = dw.data.merge(vehs.loc[:, [params["consump_col"]]], how="left", on=dw.veh)
-    dw.data[params["energy_col"]] = (
-        dw.data[dw.trip_dist] * dw.data[params["consump_col"]]
-    )
-    dw.data = dw.data.drop(columns=[params["consump_col"]])
     return dw
 
 
