@@ -257,7 +257,7 @@ class DwellSet:
         veh_col: str,
         replace_dtypes: dict[str, str],
         reverse: bool,
-        write_all: bool,
+        write_all: bool = False,
     ) -> pd.DataFrame:
         if isinstance(accum_cols, str):
             accum_cols = [accum_cols]
@@ -281,7 +281,6 @@ class DwellSet:
                     vals=vals[col][idxs],
                     outs=outs[col][idxs],
                     reverse=reverse,
-                    write_all=write_all,
                 )
 
         # Build output dataframe
@@ -319,7 +318,6 @@ class DwellSet:
         vals: np.ndarray,
         outs: np.ndarray,
         reverse: bool = False,
-        write_all: bool = False,
     ) -> np.ndarray:
         nsteps = logics.shape[0]
         if not nsteps == vals.shape[0] == outs.shape[0]:
@@ -343,8 +341,7 @@ class DwellSet:
             else:
                 cum_sum = cur
 
-            if logics["keep"][i] or write_all:  # Optionally, write out the result
-                outs[i] = cur
+            outs[i] = cur
         return outs
 
     def drop_masked(
