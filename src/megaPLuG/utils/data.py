@@ -9,6 +9,49 @@ from pandas.core import common as com
 from pandas.core.dtypes.common import is_dict_like
 
 
+def merge_dataframes_node(
+    left: pd.DataFrame | dd.DataFrame,
+    right: pd.DataFrame,
+    params: dict,
+) -> pd.DataFrame | dd.DataFrame:
+    """Merge two dataframes together as a Kedro node.
+
+    This function assumes that the left dataframe is large, and that the right dataframe
+    is adding some sort of metadata on to it.
+
+    This function preserves the index of the left dataframe. It also allows you to
+    select only a subset of columns from the right dataframe.
+    """
+    if not isinstance(left, pd.DataFrame | dd.DataFrame):
+        raise RuntimeError("'left' must be a Pandas or Dask dataframe.")
+    if not isinstance(right, pd.DataFrame):
+        raise RuntimeError("'right' must be a Pandas dataframe.")
+    is_dask = isinstance(left, dd.DataFrame)
+
+    if not len(params["keep_right_columns"]) >= 1:
+        raise RuntimeError(
+            "At least one column must be kept from the 'right' dataframe"
+        )
+
+    mrg = right.reset_index()
+    mrg = mrg.loc[:, params["keep_right_columns"]]
+
+    if not is_dask:
+        orig_idx = left.index.names
+        left = left.reset_index()
+
+        merged = left.merge(right=mrg, **params["merge_kwargs"])
+
+        if orig_idx != [None]:
+            merged = merged.set_index(orig_idx)
+        else:
+            merged = merged.drop(columns=["index"])
+    else:
+        raise NotImplementedError("Dask features not yet implemented.")
+
+    return merged
+
+
 def merge_on_int_cols(
     left: dd.DataFrame,
     right: pd.DataFrame,
