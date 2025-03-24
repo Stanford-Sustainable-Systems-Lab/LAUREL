@@ -326,15 +326,17 @@ class DwellSet:
             raise RuntimeError("The three arrays must have the same length.")
 
         cum_sum = 0
+        prev_reset = False
         if reverse:
             itr = range(-1, -(nsteps + 1), -1)
         else:
             itr = range(nsteps)
         for i in itr:
-            if logics["reset"][i]:  # With reset, we just copy the original
-                cur = vals[i]
-            else:  # With no reset, we apply accumulation
-                cur = vals[i] + cum_sum
+            if (not reverse and logics["reset"][i]) or (reverse and prev_reset):
+                cur = vals[i]  # With reset, we just copy the original
+            else:
+                cur = vals[i] + cum_sum  # With no reset, we apply accumulation
+            prev_reset = logics["reset"][i]
 
             if logics["keep"][i]:  # If we're keeping this row, then reset the cumsum
                 cum_sum = 0
