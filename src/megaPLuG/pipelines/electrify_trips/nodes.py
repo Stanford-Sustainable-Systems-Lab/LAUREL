@@ -56,7 +56,10 @@ def mark_critical_days(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellS
 
     nrg_col_next = params["energy_col_next_trip"]
     nrg_col_shift = params["energy_col_remain_shift"]
-    dw.data[nrg_col_next] = dw.data.groupby(dw.veh)[params["energy_col"]].shift(-1)
+    fill_val = dw.data[params["energy_col"]].mean()  # Imputing shifted values
+    dw.data[nrg_col_next] = dw.data.groupby(dw.veh)[params["energy_col"]].shift(
+        -1, fill_value=fill_val
+    )
     dw.accum_masked(
         refr_col, accum_cols=nrg_col_next, reverse=True, write_all=True, inplace=True
     )
