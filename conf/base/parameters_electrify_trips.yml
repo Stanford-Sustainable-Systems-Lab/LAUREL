@@ -167,4 +167,3 @@ manage_charging:
     energy: charge_kwh
     duration: dwell_time_hrs
     max_power: max_power_kw
-    scale_up: weight
