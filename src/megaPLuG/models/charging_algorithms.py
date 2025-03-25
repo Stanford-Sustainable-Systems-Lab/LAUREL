@@ -247,6 +247,7 @@ class AbstractChargingChoiceStrategy(ABC):
                     avail_kwh >= veh["batt_cap"]
                 ):  # If full recharge is possible, then revive
                     cur_energy = 0.0
+                    cur_delay = 0.0
                     chg = veh["batt_cap"]
                     dly = 0.0
                     mode = max_power_mode
