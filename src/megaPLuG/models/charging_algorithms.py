@@ -211,6 +211,7 @@ class AbstractChargingChoiceStrategy(ABC):
         modes: np.recarray,
         outs: np.recarray,
         rng: np.random.Generator,
+        round_decimals: int = 4,
     ) -> np.ndarray:
         """Simulate the evolution of the SoC with charging choices.
 
@@ -236,6 +237,7 @@ class AbstractChargingChoiceStrategy(ABC):
                 dwls["dwell_hrs"][i] - dwls["refresh"][i] * cur_delay, 0
             )
             delay_reduction = dwls["dwell_hrs"][i] - avail_time
+            delay_reduction = np.round(delay_reduction, round_decimals)
             outs["delay_dec_hrs"][i] = delay_reduction
             cur_delay = cur_delay - delay_reduction
 
@@ -257,6 +259,7 @@ class AbstractChargingChoiceStrategy(ABC):
                     mode = np.argmin(modes["avail_kw"])
             else:
                 chg, dly, mode = choice_func(cur_energy, dwls[i], veh, modes)
+            dly = np.round(dly, round_decimals)
             outs["charge_kwh"][i] = chg
             outs["delay_inc_hrs"][i] = dly
             outs["charge_mode"][i] = mode
