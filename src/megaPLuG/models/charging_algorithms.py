@@ -33,8 +33,22 @@ class AbstractChargingChoiceStrategy(ABC):
     # for creation instructions
     _output_records_dtype = np.dtype(
         {
-            "names": ["dwell_init_kwh", "charge_kwh", "delay_hrs", "charge_mode"],
-            "formats": [np.float64, np.float64, np.float64, np.int32],
+            "names": [
+                "dwell_init_kwh",
+                "charge_kwh",
+                "dwell_init_delay_hrs",
+                "delay_inc_hrs",
+                "delay_dec_hrs",
+                "charge_mode",
+            ],
+            "formats": [
+                np.float64,
+                np.float64,
+                np.float64,
+                np.float64,
+                np.float64,
+                np.int32,
+            ],
         }
     )
     _renamer: dict
@@ -217,10 +231,12 @@ class AbstractChargingChoiceStrategy(ABC):
             cur_energy -= dwls["consumed_kwh"][i]
             outs["dwell_init_kwh"][i] = cur_energy
 
+            outs["dwell_init_delay_hrs"][i] = cur_delay
             avail_time = np.maximum(
                 dwls["dwell_hrs"][i] - dwls["refresh"][i] * cur_delay, 0
             )
             delay_reduction = dwls["dwell_hrs"][i] - avail_time
+            outs["delay_dec_hrs"][i] = delay_reduction
             cur_delay = cur_delay - delay_reduction
 
             # Manage vehicles running out of energy and resuscitating
@@ -241,7 +257,7 @@ class AbstractChargingChoiceStrategy(ABC):
             else:
                 chg, dly, mode = choice_func(cur_energy, dwls[i], veh, modes)
             outs["charge_kwh"][i] = chg
-            outs["delay_hrs"][i] = dly
+            outs["delay_inc_hrs"][i] = dly
             outs["charge_mode"][i] = mode
             cur_energy += chg
             cur_delay += dly
