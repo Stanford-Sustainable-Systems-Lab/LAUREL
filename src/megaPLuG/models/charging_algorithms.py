@@ -330,6 +330,10 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         modes: np.recarray,
     ) -> np.ndarray:
         """Choose the charging energy, delay, and mode for a dwell."""
+        # Set some weighting constants
+        EXTREME = 100.0
+        BETA_DELAY = 0.01
+
         # Select energy needed so that we only charge when we cannot make the next trip
         # And we only charge to 100% when needed for the next trip
         buff = veh["soc_buffer_low"] * veh["batt_cap"]
@@ -365,7 +369,8 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         powers_flat = np.ravel(
             powers.repeat(N_CHG_OPTS).reshape((-1, N_CHG_OPTS)).T
         )  # TODO: Consider pre-computing this and passing in for speed
-        div = np.where(powers_flat == 0.0, 0.0, e_cap / powers_flat)
+        div = np.where(powers_flat == 0.0, EXTREME / BETA_DELAY, e_cap / powers_flat)
+        div = np.where(e_cap == 0.0, 0.0, div)
         delta = np.maximum(div - dwl["dwell_hrs"], 0)
         soc_next = (cur_energy + e_cap - dwl["consumed_kwh_next"]) / veh["batt_cap"]
 
@@ -373,7 +378,6 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         # First, for the SoC at the end the next trip
         v_soc_next = np.zeros_like(soc_next)
         EPS = 1e-4
-        EXTREME = 100.0
         low_bnd = 0 + EPS
         high_bnd = 1 - EPS
         std_idx = np.logical_and(soc_next > low_bnd, soc_next < high_bnd)
@@ -389,7 +393,6 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         v_dsoc = 1 - (dsoc - 1) ** 2
 
         # Third, for the delay during this dwell
-        BETA_DELAY = 0.01
         v_delay = BETA_DELAY * delta
 
         # Dropped softmax because it is monotonic and we're not using the probabilities
