@@ -11,13 +11,14 @@ from megaPLuG.utils.data import filter_by_vals_in_cols
 from megaPLuG.utils.params import set_entity_params
 
 from .nodes import (
-    assign_regions,
-    assign_scale_up_factor,
     calc_energy_use,
     filter_dwells,
     filter_vehicles,
     manage_charging,
     mark_critical_days,
+    merge_dwellset_node,
+    prepare_mode_loc_corresp,
+    prepare_modes,
     simulate_charging_choice,
 )
 
@@ -50,16 +51,31 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="filter_vehicles",
             ),
             node(
-                func=set_entity_params,
-                inputs=["dwell_obj_filtered_vehs", "params:locations"],
-                outputs="dwell_obj_w_avail",
-                name="set_entity_params_locations",
-                tags="frame-spatiotemporal",
+                func=prepare_modes,
+                inputs="params:charging_modes",
+                outputs="charging_modes",
+                name="prepare_modes",
+            ),
+            node(
+                func=prepare_mode_loc_corresp,
+                inputs=["charging_modes", "params:mode_location_corresp"],
+                outputs="mode_loc_corresp",
+                name="prepare_mode_loc_corresp",
+            ),
+            node(
+                func=merge_dwellset_node,
+                inputs=[
+                    "dwell_obj_filtered_vehs",
+                    "mode_loc_corresp",
+                    "params:merge_avail_modes",
+                ],
+                outputs="dwell_obj_w_avail_modes",
+                name="merge_dwellset_node_avail_modes",
             ),
             node(
                 func=calc_energy_use,
                 inputs=[
-                    "dwell_obj_w_avail",
+                    "dwell_obj_w_avail_modes",
                     "vehicles_with_params",
                     "params:calc_energy_use",
                 ],
@@ -90,7 +106,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=[
                     "dwell_obj_crit_dwells",
                     "vehicles_with_params",
-                    "params:charging_modes",
+                    "charging_modes",
                     "params:simulate_charging_choice",
                 ],
                 outputs="dwell_obj_w_charging",
@@ -98,27 +114,19 @@ def create_pipeline(**kwargs) -> Pipeline:
                 tags="frame-charging_choice",
             ),
             node(
-                func=assign_regions,
-                inputs=["dwell_obj_w_charging", "hex_region_corresp"],
-                outputs="dwell_obj_w_regions",
-                name="assign_regions_electrify",
-                tags="frame-charging_management",
-            ),
-            node(
-                func=assign_scale_up_factor,
+                func=merge_dwellset_node,
                 inputs=[
-                    "dwell_obj_w_regions",
-                    "vehicles_labelled",
-                    "params:assign_scale_up_factor",
+                    "dwell_obj_w_charging",
+                    "charging_modes",
+                    "params:merge_chosen_mode",
                 ],
-                outputs="dwell_obj_w_scaling",
-                name="assign_scale_up_factor",
-                tags="frame-charging_management",
+                outputs="dwell_obj_w_modes",
+                name="merge_dwellset_node_chosen_mode",
             ),
             node(
                 func=manage_charging,
                 inputs=[
-                    "dwell_obj_w_scaling",
+                    "dwell_obj_w_modes",
                     "params:manage_charging",
                 ],
                 outputs="events",

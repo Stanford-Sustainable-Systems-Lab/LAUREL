@@ -83,7 +83,17 @@ vehicles:
     master_seed: 42 # Each vehicle gets their own seed based on this one and their ID
     seed_id_col: veh_id
 
-locations:
+charging_modes:
+  none:
+    max_power_kw: 0
+  depot:
+    max_power_kw: 350
+  enroute:
+    max_power_kw: 1000
+  name_column: mode_name
+  id_column: mode_id
+
+mode_location_corresp:
   charge_modes_avail:
     id_columns:
       - location
@@ -94,15 +104,17 @@ locations:
       other:
         - none
         - enroute
+    value_col: avail_modes
+  value_col_bool: avail_modes_bool
 
-charging_modes:
-  none:
-    max_power_kw: 0
-  depot:
-    max_power_kw: 350
-  enroute:
-    max_power_kw: 1000
-  id_column: charge_mode
+merge_avail_modes:
+  keep_right_columns:
+    - location
+    - avail_modes_bool
+  merge_kwargs:
+    how: left
+    'on':
+      - location
 
 simulate_charging_choice:
   input_cols:

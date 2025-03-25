@@ -11,6 +11,8 @@ import pandas as pd
 from megaPLuG.models.charging_algorithms import SoCThreshChargingChoiceStrategy
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.manage_charging import _MANAGER_MAP
+from megaPLuG.utils.data import merge_dataframes_node
+from megaPLuG.utils.params import build_df_from_dict
 from megaPLuG.utils.time import total_hours
 
 logger = logging.getLogger(__name__)
@@ -104,8 +106,45 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     return dw
 
 
+def prepare_modes(modes: dict) -> pd.DataFrame:
+    """Prepare the modes dataframe."""
+    name_col = modes.pop("name_column")
+    id_col = modes.pop("id_column")
+    modes = pd.DataFrame.from_dict(data=modes, orient="index")
+    modes.index.name = name_col
+    modes = modes.reset_index()
+    modes.index.name = id_col
+    return modes
+
+
+def prepare_mode_loc_corresp(modes: pd.DataFrame, params: dict) -> DwellSet:
+    """Assign modes to each dwell using a boolean vector of mode availability."""
+    avail_dict = params["charge_modes_avail"]
+    avails = build_df_from_dict(
+        d=avail_dict["values"],
+        id_cols=avail_dict["id_columns"],
+        value_col=avail_dict["value_col"],
+    )
+
+    poss = modes["mode_name"]
+    avails[params["value_col_bool"]] = avails[avail_dict["value_col"]].transform(
+        lambda av: np.isin(poss, av)
+    )
+    return avails
+
+
+def merge_dwellset_node(dw: DwellSet, right: pd.DataFrame, params: dict) -> DwellSet:
+    """Use merge_dataframes_node on a DwellSet."""
+    dw.data = merge_dataframes_node(
+        left=dw.data,
+        right=right,
+        params=params,
+    )
+    return dw
+
+
 def simulate_charging_choice(
-    dw: DwellSet, vehs: pd.DataFrame, modes: dict, params: dict
+    dw: DwellSet, vehs: pd.DataFrame, modes: pd.DataFrame, params: dict
 ) -> DwellSet:
     """Simulate the charging choices of each vehicle."""
     dw.sort_by_veh_time()

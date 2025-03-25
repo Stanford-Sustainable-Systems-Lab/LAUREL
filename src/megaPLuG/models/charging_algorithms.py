@@ -6,7 +6,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
-from megaPLuG.utils.data import IndexIntegerizer, to_arrays
+from megaPLuG.utils.data import to_arrays
 
 
 class AbstractChargingChoiceStrategy(ABC):
@@ -131,21 +131,37 @@ class AbstractChargingChoiceStrategy(ABC):
         modes: pd.DataFrame,
     ) -> pd.DataFrame:
         """Run the simulation for a single vehicle by calling the sub-class-specific JIT-ed simulator."""
-        # TODO: Extremely slow, must use some sort of merging to speed this up
-        poss = modes.index.get_level_values(0)
-        dwells.data[self.modes_avail] = dwells.data[self.modes_avail].transform(
-            lambda av: np.isin(poss, av)
-        )
-        inter = IndexIntegerizer(int_col="mode_id")
-        modes = inter.integerize(modes)
+        if np.any(vehs.index.duplicated()):
+            raise RuntimeError("Duplicate vehicle ids detected")
+
+        # Convert index to integer if it's not already
+        try:
+            # First check if it's numeric but not integer
+            if pd.api.types.is_numeric_dtype(
+                modes.index
+            ) and not pd.api.types.is_integer_dtype(modes.index):
+                modes.index = modes.index.astype(int)
+            # Then check if it's not numeric at all
+            elif not pd.api.types.is_numeric_dtype(modes.index):
+                raise TypeError(
+                    f"Modes index must have integer dtype, got {modes.index.dtype}"
+                )
+        except (ValueError, TypeError) as e:
+            # This will catch both non-numeric values and explicit TypeError from above
+            raise TypeError(
+                f"Modes dataframe index must be convertible to integer. Error: {e}"
+            )
+
+        # Additional validation that index is integer type after any conversions
+        if not pd.api.types.is_integer_dtype(modes.index):
+            raise TypeError(
+                f"Modes index must have integer dtype, got {modes.index.dtype}"
+            )
 
         dwl_recs = self.convert_to_records(dwells.data)
         veh_recs = self.convert_to_records(vehs)
         mode_recs = self.convert_to_records(modes)
         rngs = vehs[self.random_seed].transform(lambda s: np.random.default_rng(seed=s))
-
-        if np.any(vehs.index.duplicated()):
-            raise RuntimeError("Duplicate vehicle ids detected")
 
         veh_idxr = pd.Series(data=np.arange(len(vehs)), index=vehs.index)
         grp_idxs = dwells.data.groupby(dwells.veh).indices
