@@ -239,7 +239,7 @@ class AbstractChargingChoiceStrategy(ABC):
             delay_reduction = dwls["dwell_hrs"][i] - avail_time
             delay_reduction = np.round(delay_reduction, round_decimals)
             outs["delay_dec_hrs"][i] = delay_reduction
-            cur_delay = cur_delay - delay_reduction
+            cur_delay -= delay_reduction
 
             # Manage vehicles running out of energy and resuscitating
             max_power_mode = np.argmax(dwls["modes_avail"] * modes["avail_kw"])
