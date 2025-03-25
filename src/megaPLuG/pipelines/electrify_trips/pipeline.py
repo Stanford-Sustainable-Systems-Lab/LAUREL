@@ -11,6 +11,7 @@ from megaPLuG.utils.data import filter_by_vals_in_cols
 from megaPLuG.utils.params import set_entity_params
 
 from .nodes import (
+    apply_delays,
     calc_energy_use,
     filter_dwells,
     filter_vehicles,
@@ -124,9 +125,15 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="merge_dwellset_node_chosen_mode",
             ),
             node(
+                func=apply_delays,
+                inputs=["dwell_obj_w_modes", "params:apply_delays"],
+                outputs="dwell_obj_w_delays",
+                name="apply_delays",
+            ),
+            node(
                 func=manage_charging,
                 inputs=[
-                    "dwell_obj_w_modes",
+                    "dwell_obj_w_delays",
                     "params:manage_charging",
                 ],
                 outputs="events",

@@ -183,6 +183,32 @@ def assign_scale_up_factor(
     return dw
 
 
+def apply_delays(dw: DwellSet, params: dict) -> DwellSet:
+    """Apply the delays found in charging choice to dwell duration, start time, and end
+    time.
+
+    We apply the cumulative delay up to the present time to the beginning and end times
+    of each dwell. Then we additionally reduce the dwell period by the delay reduction
+    and increase the end time by the new delay added at this dwell.
+    """
+    dly_cols = params["delay_columns"]
+    tdelt_cols = {}
+    for prm_key, col in dly_cols.items():
+        td_col = f"{col}_tdelta"
+        dw.data[td_col] = pd.to_timedelta(dw.data[col], unit=params["delay_unit"])
+        tdelt_cols.update({prm_key: td_col})
+
+    cum_dly = dw.data[tdelt_cols["cumul_hrs"]]
+    dw.data[dw.start] += cum_dly
+    dw.data[dly_cols["dwell_hrs"]] = total_hours(
+        dw.data[tdelt_cols["dwell_hrs"]] - dw.data[tdelt_cols["decrease_hrs"]]
+    )
+    dw.data[dw.end] += cum_dly + dw.data[tdelt_cols["increase_hrs"]]
+
+    dw.data = dw.data.drop(columns=list(tdelt_cols.values()))
+    return dw
+
+
 def manage_charging(dw: DwellSet, params: dict) -> pd.DataFrame:
     """Manage the charging of vehicles within each dwell to create charging events."""
     # Drop dwells with NaN charging energy, which probably resulted from vehicle deaths

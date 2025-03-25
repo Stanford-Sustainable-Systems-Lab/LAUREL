@@ -151,6 +151,14 @@ merge_chosen_mode:
     right_on:
       - mode_id
 
+apply_delays:
+  delay_columns:
+    cumul_hrs: dwell_init_delay_hrs
+    increase_hrs: delay_inc_hrs
+    decrease_hrs: delay_dec_hrs
+    dwell_hrs: dwell_time_hrs
+  delay_unit: hour
+
 manage_charging:
   charging_manager: ImmediateChargingManager
   drop_na_cols:
