@@ -8,7 +8,7 @@ import logging
 import numpy as np
 import pandas as pd
 
-from megaPLuG.models.charging_algorithms import SoCThreshChargingChoiceStrategy
+from megaPLuG.models.charging_algorithms import ForwardLookingChargingChoiceStrategy
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.manage_charging import _MANAGER_MAP
 from megaPLuG.utils.data import merge_dataframes_node
@@ -77,6 +77,7 @@ def mark_critical_days(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellS
     dw.data[crcol] = (is_refresh & is_critical) ^ ~(is_refresh | pd.NA)
     dw.data[crcol] = dw.data[crcol].groupby(dw.veh, sort=False).ffill()
     dw.data[crcol] = dw.data[crcol].fillna(True).astype(bool)
+    dw.data[refr_col] = dw.data[refr_col].fillna(False).astype(bool)
     return dw
 
 
@@ -98,6 +99,7 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     dw.data = dw.data.drop(columns=drop_cols)
     renamer = {f"{old}_keep_dwells": old for old in accum_cols}
     dw.data = dw.data.rename(columns=renamer)
+    dw.data[dw.reset] = dw.data[dw.reset].astype(bool)
 
     new_len = len(dw.data)
     abs_diff = old_len - new_len
@@ -152,10 +154,7 @@ def simulate_charging_choice(
     dwell_time_col = params["input_cols"]["dwell_hrs"]
     dw.data[dwell_time_col] = total_hours(dw.data[dw.end] - dw.data[dw.start])
 
-    id_col = modes.pop("id_column")
-    modes = pd.DataFrame.from_dict(data=modes, orient="index")
-    modes.index.name = id_col
-    strat = SoCThreshChargingChoiceStrategy(**params["input_cols"])
+    strat = ForwardLookingChargingChoiceStrategy(**params["input_cols"])
     dw.data = strat.run(dwells=dw, vehs=vehs, modes=modes)
     return dw
 

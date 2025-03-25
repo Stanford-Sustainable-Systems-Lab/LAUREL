@@ -3,6 +3,7 @@ from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
+from numba import jit
 from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
@@ -20,16 +21,20 @@ class AbstractChargingChoiceStrategy(ABC):
     consumed_kwh: str
     dwell_hrs: str
     modes_avail: str
+    refresh: str
     reset: str
     batt_cap: str
     random_seed: str
-    _replace_dtypes: dict = {np.bool.__name__: "u1"}
+    _replace_dtypes: dict = {
+        np.bool.__name__: "u1",
+        pd.Float64Dtype().name: np.dtypes.Float64DType().name,
+    }
     # See https://numpy.org/doc/stable/user/basics.rec.html#structured-datatype-creation
     # for creation instructions
     _output_records_dtype = np.dtype(
         {
-            "names": ["dwell_init_kwh", "charge_kwh", "charge_mode"],
-            "formats": [np.float64, np.float64, np.str_],
+            "names": ["dwell_init_kwh", "charge_kwh", "delay_hrs", "charge_mode"],
+            "formats": [np.float64, np.float64, np.float64, np.int32],
         }
     )
     _renamer: dict
@@ -40,6 +45,7 @@ class AbstractChargingChoiceStrategy(ABC):
         dwell_hrs: str,
         modes_avail: str,
         avail_kw: str,
+        refresh: str,
         reset: str,
         batt_cap: str,
         random_seed: str,
@@ -68,6 +74,7 @@ class AbstractChargingChoiceStrategy(ABC):
         self.dwell_hrs = dwell_hrs
         self.modes_avail = modes_avail
         self.avail_kw = avail_kw
+        self.refresh = refresh
         self.reset = reset
         self.batt_cap = batt_cap
         self.random_seed = random_seed
@@ -182,7 +189,7 @@ class AbstractChargingChoiceStrategy(ABC):
         return dwells_w_charging
 
     @staticmethod
-    # @jit
+    @jit
     def _simulate(
         choice_func: Callable,
         dwls: np.recarray,
@@ -199,27 +206,45 @@ class AbstractChargingChoiceStrategy(ABC):
         """
         nsteps = dwls.shape[0]
         cur_energy = np.nan
+        cur_delay = 0.0
         for i in range(nsteps):
+            # Manage hard resets of vehicles, including at the beginning
             if dwls["reset"][i]:
                 soc = rng.beta(a=veh["rng_alpha"], b=veh["rng_beta"])
                 cur_energy = veh["batt_cap"] * soc
+
+            # Update vehicle status
             cur_energy -= dwls["consumed_kwh"][i]
             outs["dwell_init_kwh"][i] = cur_energy
-            max_power = np.max(dwls["modes_avail"] * modes["avail_kw"])
-            avail_kwh = dwls["dwell_hrs"][i] * max_power
+
+            avail_time = np.maximum(
+                dwls["dwell_hrs"][i] - dwls["refresh"][i] * cur_delay, 0
+            )
+            delay_reduction = dwls["dwell_hrs"][i] - avail_time
+            cur_delay = cur_delay - delay_reduction
+
+            # Manage vehicles running out of energy and resuscitating
+            max_power_mode = np.argmax(dwls["modes_avail"] * modes["avail_kw"])
+            avail_kwh = dwls["dwell_hrs"][i] * modes["avail_kw"][max_power_mode]
             if np.isnan(cur_energy) or cur_energy < 0:  # Currently dead
                 if (
                     avail_kwh >= veh["batt_cap"]
-                ):  # If full recharge is possible, then refresh
-                    cur_energy = 0
+                ):  # If full recharge is possible, then revive
+                    cur_energy = 0.0
                     chg = veh["batt_cap"]
+                    dly = 0.0
+                    mode = max_power_mode
                 else:  # If not, then become/stay dead
                     chg = np.nan
+                    dly = np.nan
+                    mode = np.argmin(modes["avail_kw"])
             else:
-                chg = choice_func(cur_energy, dwls[i], veh, modes)
+                chg, dly, mode = choice_func(cur_energy, dwls[i], veh, modes)
             outs["charge_kwh"][i] = chg
-            outs["charge_mode"][i] = "None"  # TODO: Implement mode selection
+            outs["delay_hrs"][i] = dly
+            outs["charge_mode"][i] = mode
             cur_energy += chg
+            cur_delay += dly
 
         return outs
 
@@ -250,7 +275,7 @@ class SoCThreshChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         super().__init__(**kwargs)
 
     @staticmethod
-    # @jit
+    @jit
     def _choose_charging(
         cur_energy: float,
         dwl: np.recarray,
@@ -270,3 +295,106 @@ class SoCThreshChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         else:
             chg = 0
         return chg
+
+
+class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
+    """A charging choice strategy where the vehicle looks ahead to the next trip and
+    the rest of the current shift to determine when to charge.
+    """
+
+    soc_buffer_low: str
+    soc_buffer_high: str
+    consumed_kwh_next: str
+    consumed_kwh_shift: str
+
+    def __init__(
+        self,
+        soc_buffer_low: str,
+        soc_buffer_high: str,
+        consumed_kwh_next: str,
+        consumed_kwh_shift: str,
+        **kwargs,
+    ) -> None:
+        self.soc_buffer_low = soc_buffer_low
+        self.soc_buffer_high = soc_buffer_high
+        self.consumed_kwh_next = consumed_kwh_next
+        self.consumed_kwh_shift = consumed_kwh_shift
+        super().__init__(**kwargs)
+
+    @staticmethod
+    @jit
+    def _choose_charging(
+        cur_energy: float,
+        dwl: np.recarray,
+        veh: np.recarray,
+        modes: np.recarray,
+    ) -> np.ndarray:
+        """Choose the charging energy, delay, and mode for a dwell."""
+        # Select energy needed so that we only charge when we cannot make the next trip
+        # And we only charge to 100% when needed for the next trip
+        buff = veh["soc_buffer_low"] * veh["batt_cap"]
+        nrg_needed_trip = np.maximum(dwl["consumed_kwh_next"] + buff - cur_energy, 0)
+        nrg_needed_shift = np.maximum(dwl["consumed_kwh_shift"] + buff - cur_energy, 0)
+
+        nrg_max_soft_cap_soc = veh["soc_buffer_high"] * veh["batt_cap"] - cur_energy
+        nrg_needed_norm = np.minimum(
+            nrg_needed_shift * (nrg_needed_trip > 0), nrg_max_soft_cap_soc
+        )
+        nrg_needed_extr = np.maximum(nrg_needed_trip, nrg_needed_norm)
+
+        # Structure this array so that options up and to the left (smaller indices in the
+        # flattened array) are more attractive given a tie. For example, lower power and
+        # less delay options should be preferred.
+        N_CHG_OPTS = 3
+        powers = modes["avail_kw"] * dwl["modes_avail"]
+        n_powers = powers.shape[0]
+        n_opts = N_CHG_OPTS * n_powers
+        e = np.zeros(n_opts)
+
+        # Option 1: No charging
+        # e[0:n_powers] remains 0
+
+        # Option 2: Charge for available time
+        e[n_powers : 2 * n_powers] = powers * dwl["dwell_hrs"]
+
+        # Option 3: Charge to meet needs
+        e[2 * n_powers :] = nrg_needed_extr
+
+        # Calculate outcomes
+        e_cap = np.minimum(e, veh["batt_cap"] - cur_energy)
+        powers_flat = np.ravel(
+            powers.repeat(N_CHG_OPTS).reshape((-1, N_CHG_OPTS)).T
+        )  # TODO: Consider pre-computing this and passing in for speed
+        div = np.where(powers_flat == 0.0, 0.0, e_cap / powers_flat)
+        delta = np.maximum(div - dwl["dwell_hrs"], 0)
+        soc_next = (cur_energy + e_cap - dwl["consumed_kwh_next"]) / veh["batt_cap"]
+
+        # Calculate indirect utilities
+        # First, for the SoC at the end the next trip
+        v_soc_next = np.zeros_like(soc_next)
+        EPS = 1e-4
+        EXTREME = 100.0
+        low_bnd = 0 + EPS
+        high_bnd = 1 - EPS
+        std_idx = np.logical_and(soc_next > low_bnd, soc_next < high_bnd)
+        not_extr = soc_next[std_idx]
+        v_soc_next[std_idx] = -np.log(
+            (1 - not_extr) / ((1 / veh["soc_buffer_low"] - 1) * not_extr)
+        )
+        v_soc_next[soc_next <= low_bnd] = -EXTREME
+        v_soc_next[soc_next >= high_bnd] = EXTREME
+
+        # Second, for the change in SoC during this dwell
+        dsoc = np.minimum(e / veh["batt_cap"], 1 - soc_next)
+        v_dsoc = 1 - (dsoc - 1) ** 2
+
+        # Third, for the delay during this dwell
+        BETA_DELAY = 0.01
+        v_delay = BETA_DELAY * delta
+
+        # Dropped softmax because it is monotonic and we're not using the probabilities
+        sel_idx = np.argmax(v_soc_next + v_dsoc - v_delay)
+        chg = e_cap[sel_idx]
+        delay = delta[sel_idx]
+        mode = sel_idx % n_powers
+        return (chg, delay, mode)

@@ -79,6 +79,8 @@ vehicles:
     alpha: 5
     beta: 5
   charge_soc_thresh: 0.5
+  soc_buffer_low: 0.1
+  soc_buffer_high: 0.8
   random_seed:
     master_seed: 42 # Each vehicle gets their own seed based on this one and their ID
     seed_id_col: veh_id
@@ -119,20 +121,35 @@ merge_avail_modes:
 simulate_charging_choice:
   input_cols:
     consumed_kwh: energy_use_kwh
+    consumed_kwh_next: energy_use_kwh_next
+    consumed_kwh_shift: energy_use_kwh_shift
     dwell_hrs: dwell_time_hrs
-    modes_avail: charge_modes_avail
+    modes_avail: avail_modes_bool
     avail_kw: max_power_kw
+    refresh: is_refresh
     reset: reset_state_before
     batt_cap: battery_capacity_kwh
     random_seed: random_seed
     rng_alpha: initial_soc_alpha
     rng_beta: initial_soc_beta
-    charge_soc: charge_soc_thresh
+    soc_buffer_low: soc_buffer_low
+    soc_buffer_high: soc_buffer_high
 
 assign_scale_up_factor:
   apply_scaling: False
   veh_cols:
     - weight
+
+merge_chosen_mode:
+  keep_right_columns:
+    - mode_id
+    - max_power_kw
+  merge_kwargs:
+    how: left
+    left_on:
+      - charge_mode
+    right_on:
+      - mode_id
 
 manage_charging:
   charging_manager: ImmediateChargingManager
