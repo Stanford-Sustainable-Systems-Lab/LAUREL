@@ -21,6 +21,18 @@ filter_vehicles:
         - 8
   keep_only_filter_cols: False
 
+merge_vehicle_params:
+  keep_right_columns:
+    - veh_id
+    - consump_rate_kwh_per_mi
+    - minimum_times_plug_in_mins
+    - minimum_times_plug_out_mins
+    - battery_capacity_kwh
+  merge_kwargs:
+    how: left
+    'on':
+      - veh_id
+
 calc_energy_use:
   consump_col: consump_rate_kwh_per_mi
   energy_col: energy_use_kwh

@@ -52,6 +52,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="filter_vehicles",
             ),
             node(
+                func=merge_dwellset_node,
+                inputs=[
+                    "dwell_obj_filtered_vehs",
+                    "vehicles_with_params",
+                    "params:merge_vehicle_params",
+                ],
+                outputs="dwell_obj_w_veh_params",
+                name="merge_dwellset_node_veh_params",
+            ),
+            node(
                 func=prepare_modes,
                 inputs="params:charging_modes",
                 outputs="charging_modes",
