@@ -40,6 +40,10 @@ filter_dwells:
   filter_cols:
     refresh: is_refresh
     crit: is_crit_day
+  accum_cols_forward_extra:
+    - energy_use_kwh
+  accum_cols_reverse:
+    - energy_use_kwh_next
   drop_cols:
    - battery_capacity_kwh
    - is_crit_day
