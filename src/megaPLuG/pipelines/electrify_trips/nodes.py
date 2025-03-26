@@ -172,27 +172,6 @@ def simulate_charging_choice(
     return dw
 
 
-def assign_regions(dw: DwellSet, hex_regions: pd.DataFrame) -> DwellSet:
-    """Assign larger regions to the DwellSet based on hexagon ids."""
-    orig_idx = dw.data.index.names
-    dw.data = dw.data.reset_index()
-    dw.data = dw.data.merge(hex_regions, how="left", on=dw.hex)
-    dw.data = dw.data.set_index(orig_idx)
-    return dw
-
-
-def assign_scale_up_factor(
-    dw: DwellSet, vehs: pd.DataFrame, params: dict
-) -> pd.DataFrame:
-    """Assign the factor by which each dwell's power will be scaled up."""
-    if params["apply_scaling"]:
-        mrg = vehs.loc[:, params["veh_cols"]]
-        dw.data = dw.data.merge(mrg, how="left", on=dw.veh)
-    else:
-        dw.data.loc[:, params["veh_cols"]] = 1.0
-    return dw
-
-
 def apply_delays(dw: DwellSet, params: dict) -> DwellSet:
     """Apply the delays found in charging choice to dwell duration, start time, and end
     time.
