@@ -59,6 +59,7 @@ filter_dwells:
   filter_cols:
     refresh: is_refresh
     crit: is_crit_day
+  dwell_time_col: dwell_time_hrs
   accum_cols_forward_extra:
     - energy_use_kwh
   accum_cols_reverse:

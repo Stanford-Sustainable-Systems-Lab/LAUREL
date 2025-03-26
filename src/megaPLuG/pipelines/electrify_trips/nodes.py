@@ -95,12 +95,20 @@ def mark_critical_days(dw: DwellSet, params: dict) -> DwellSet:
 
 
 def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
-    """Filter out the en-route dwells on non-critical days."""
+    """Filter out the en-route dwells on non-critical days.
+
+    We drop dwells wich are:
+        - not a refresh location OR not enroute during a critical day
+        - AND which have a duration longer than the plug_in + plug_out time
+    """
     logger.info("Filter by dwells by accumulating through")
     old_len = len(dw.data)
 
     flt_cols = params["filter_cols"]
-    dw.data["keep_dwells"] = dw.data[flt_cols["refresh"]] | dw.data[flt_cols["crit"]]
+    is_critical = dw.data[flt_cols["refresh"]] | dw.data[flt_cols["crit"]]
+    is_long_enough = dw.data[params["dwell_time_col"]] >= 0
+    dw.data["keep_dwells"] = is_critical & is_long_enough
+
     accum_cols_internal = [dw.trip_dist, dw.trip_dur, dw.reset]
     accum_cols_fw = accum_cols_internal + params["accum_cols_forward_extra"]
     accum_cols_rv = params["accum_cols_reverse"]
