@@ -38,17 +38,30 @@ def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
     return dw
 
 
-def calc_energy_use(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
-    """Calculate energy use for all trips."""
-    dw.data = dw.data.merge(vehs.loc[:, [params["consump_col"]]], how="left", on=dw.veh)
-    dw.data[params["energy_col"]] = (
-        dw.data[dw.trip_dist] * dw.data[params["consump_col"]]
-    )
-    dw.data = dw.data.drop(columns=[params["consump_col"]])
+def calc_dwell_durations(dw: DwellSet, params: dict) -> DwellSet:
+    """Mark dwells which could provide substantial SoC to each vehicle."""
+    iocols = params["in_out_time_cols"]
+    for col in iocols.values():
+        dw.data[col] = pd.to_timedelta(dw.data[col], unit=params["in_out_time_unit"])
+
+    # Adjust dwell start and end times to allow time for vehicle to plug in and out
+    dw.data[dw.end] -= dw.data[iocols["plug_out"]]
+    dw.data[dw.start] += dw.data[iocols["plug_in"]]
+
+    dwell_time_col = params["dwell_time_col"]
+    dw.data[dwell_time_col] = total_hours(dw.data[dw.end] - dw.data[dw.start])
     return dw
 
 
-def mark_critical_days(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
+def calc_energy_use(dw: DwellSet, params: dict) -> DwellSet:
+    """Calculate energy use for all trips."""
+    dw.data[params["energy_col"]] = (
+        dw.data[dw.trip_dist] * dw.data[params["consump_col"]]
+    )
+    return dw
+
+
+def mark_critical_days(dw: DwellSet, params: dict) -> DwellSet:
     """Mark critical days, vehicle-days which cannot be achieved on a single charge."""
     refr_col = params["refresh_col"]
     refr_locs = set(params["refresh_locations"])
@@ -66,9 +79,6 @@ def mark_critical_days(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellS
     dw.data = dw.data.rename(columns={f"{nrg_col_next}_{refr_col}": nrg_col_shift})
 
     # Apply vehicle-specific battery capacity
-    dw.data = dw.data.merge(
-        vehs.loc[:, [params["batt_cap_col"]]], how="left", on=dw.veh
-    )
     crcol = params["crit_col"]
     dw.data[crcol] = dw.data[nrg_col_shift] > dw.data[params["batt_cap_col"]]
 
@@ -157,10 +167,6 @@ def simulate_charging_choice(
 ) -> DwellSet:
     """Simulate the charging choices of each vehicle."""
     dw.sort_by_veh_time()
-
-    dwell_time_col = params["input_cols"]["dwell_hrs"]
-    dw.data[dwell_time_col] = total_hours(dw.data[dw.end] - dw.data[dw.start])
-
     strat = ForwardLookingChargingChoiceStrategy(**params["input_cols"])
     dw.data = strat.run(dwells=dw, vehs=vehs, modes=modes)
     return dw

@@ -33,6 +33,13 @@ merge_vehicle_params:
     'on':
       - veh_id
 
+calc_dwell_durations:
+  dwell_time_col: dwell_time_hrs
+  in_out_time_cols:
+    plug_in: minimum_times_plug_in_mins
+    plug_out: minimum_times_plug_out_mins
+  in_out_time_unit: minute
+
 calc_energy_use:
   consump_col: consump_rate_kwh_per_mi
   energy_col: energy_use_kwh

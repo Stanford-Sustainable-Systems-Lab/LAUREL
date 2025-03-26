@@ -12,6 +12,7 @@ from megaPLuG.utils.params import set_entity_params
 
 from .nodes import (
     apply_delays,
+    calc_dwell_durations,
     calc_energy_use,
     filter_dwells,
     filter_vehicles,
@@ -62,6 +63,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="merge_dwellset_node_veh_params",
             ),
             node(
+                func=calc_dwell_durations,
+                inputs=[
+                    "dwell_obj_w_veh_params",
+                    "params:calc_dwell_durations",
+                ],
+                outputs="dwell_obj_w_dur",
+                name="calc_dwell_durations",
+                tags="frame-spatiotemporal",
+            ),
+            node(
                 func=prepare_modes,
                 inputs="params:charging_modes",
                 outputs="charging_modes",
@@ -76,7 +87,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=merge_dwellset_node,
                 inputs=[
-                    "dwell_obj_filtered_vehs",
+                    "dwell_obj_w_dur",
                     "mode_loc_corresp",
                     "params:merge_avail_modes",
                 ],
@@ -87,7 +98,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=calc_energy_use,
                 inputs=[
                     "dwell_obj_w_avail_modes",
-                    "vehicles_with_params",
                     "params:calc_energy_use",
                 ],
                 outputs="dwell_obj_w_energy",
@@ -98,7 +108,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=mark_critical_days,
                 inputs=[
                     "dwell_obj_w_energy",
-                    "vehicles_with_params",
                     "params:mark_critical_days",
                 ],
                 outputs="dwell_obj_crit_days",
