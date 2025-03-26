@@ -91,8 +91,12 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
 
     flt_cols = params["filter_cols"]
     dw.data["keep_dwells"] = dw.data[flt_cols["refresh"]] | dw.data[flt_cols["crit"]]
-    accum_cols = [dw.trip_dist, dw.trip_dur, dw.reset]
-    dw.accum_masked("keep_dwells", accum_cols=accum_cols, inplace=True)
+    accum_cols_internal = [dw.trip_dist, dw.trip_dur, dw.reset]
+    accum_cols_fw = accum_cols_internal + params["accum_cols_forward_extra"]
+    accum_cols_rv = params["accum_cols_reverse"]
+    accum_cols = accum_cols_fw + accum_cols_rv
+    revs = ([False] * len(accum_cols_fw)) + ([True] * len(accum_cols_rv))
+    dw.accum_masked("keep_dwells", accum_cols=accum_cols, reverse=revs, inplace=True)
 
     dw.data["keep_dwells"] = dw.data["keep_dwells"].astype("boolean")
     dw.data["keep_dwells"] = dw.data["keep_dwells"].replace(False, pd.NA)
