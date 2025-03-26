@@ -1,0 +1,180 @@
+# This is a boilerplate parameters config generated for pipeline 'prepare_totals'
+# using Kedro 0.19.11.
+#
+# Documentation for this file format can be found in "Parameters"
+# Link: https://docs.kedro.org/en/0.19.11/configuration/parameters.html
+
+filter_vius_in_use: # See VIUS microdata dictionary for info
+  filters:
+    BUSRELATED:
+      value_isin:
+        - 1 # Some commercial activity
+        - 2 # Personal use only
+        - 4 # Not reported
+    GVWR_CLASS:
+      value_isin:
+        - "3"
+        - "4"
+        - "5"
+        - "6"
+        - "7"
+        - "8"
+  keep_only_filter_cols: False
+
+prepare_for_merging:
+  col_renamer:
+    tab_weight: TABWEIGHT
+    gvw_class: GVWR_CLASS
+    reg_state: REGSTATE
+    cab_day: CABDAY
+  dist_bin_col_prefix: RO_
+  primary_dist_col: primary_op_dist_vius
+
+vius_classifications:
+  primary_op_dist: # From Ledna et al. 2024 Table S2.1
+    id_columns:
+      - primary_op_dist_vius
+    values:
+      "RO_0_50": "0-99 Miles"
+      "RO_51_100": "0-99 Miles"
+      "RO_101_200": "100-249 Miles"
+      "RO_201_500": "250-499 Miles"
+      "RO_GT500": "500+ Miles"
+      "NA": "NA"
+  home_base_reported: # See VIUS microdata dictionary for info
+    id_columns:
+      - HBSTATE
+    values:
+      "61": "Home Base in Register State"
+      "62": "Home Base not in Register State"
+      "63": "No Home Base"
+      "64": "Not Reported"
+      "X": "Not In Use"
+  weight_class_group: # From Ledna et al. 2024
+    id_columns:
+      - gvw_class
+    values:
+      "3": "Light-Medium (Class 3)"
+      "4": "Medium (Classes 4-6)"
+      "5": "Medium (Classes 4-6)"
+      "6": "Medium (Classes 4-6)"
+      "7": "Heavy (Classes 7-8)"
+      "8": "Heavy (Classes 7-8)"
+
+aggregate_vius_totals:
+  home_base_code_col: home_base_reported
+  home_base_region_col: home_base_state
+  region_source_col: reg_state
+  op_dist_col: primary_op_dist
+  fill_op_dist: "500+ Miles"
+  spread_condition_cols:
+    - gvw_class
+    - primary_op_dist
+  disagg_condition_cols:
+    - weight_class_group
+    - primary_op_dist
+  group_cols:
+    - weight_class_group
+    - home_base_state
+    - gvw_class
+    - primary_op_dist
+  weight_col: tab_weight
+  out_prob_col: cond_prob
+
+adoption_forecast_classifications:
+  primary_op_dist: # From Ledna et al. 2024 Table S2.1
+    id_columns:
+      - "Market Segment"
+    values:
+      "0-99 Miles": "0-99 Miles"
+      "100-249 Miles": "100-249 Miles"
+      "250-499 Miles": "250-499 Miles"
+      "500+ Miles": "500+ Miles"
+      "500-749 Miles": "500+ Miles"
+      "750-999 Miles": "500+ Miles"
+      "1000-1499 Miles": "500+ Miles"
+      "1500-1999 Miles": "500+ Miles"
+      "2000+ Miles": "500+ Miles"
+  fuel_type:
+    id_columns:
+      - Technology
+    values:
+      ICEV: diesel
+      HEV: diesel
+      FCEV: hydrogen
+      EV-150: electricity
+      EV-300: electricity
+      EV-500: electricity
+
+aggregate_adoption_forecast_totals:
+  weight_col: vehicle_stock
+  col_renamer:
+    weight_class_group: Vehicle Class
+    scenario: Scenario
+    year: Year
+    vehicle_stock: Vehicle Stock
+  group_cols:
+    - scenario
+    - year
+    - weight_class_group
+    - fuel_type
+    - primary_op_dist
+  vehicle_stock_mult: 1000000
+
+create_disaggregated_adoption:
+  merge_cols:
+    - weight_class_group
+    - primary_op_dist
+  orig_totals_col: vehicle_stock
+  disagg_factor_col: cond_prob
+  final_totals_col: n_vehs_target
+  keep_group_cols:
+    - scenario
+    - year
+    - home_base_state
+    - gvw_class
+    - fuel_type
+    - primary_op_dist
+
+build_mandates_by_group:
+  acf_groups:
+    value_column: milestone_group
+    id_columns:
+      - primary_op_dist
+      - gvw_class
+    values:
+      "0-99 Miles":
+        8: 2
+      "100-249 Miles":
+        8: 2
+      "250-499 Miles":
+        8: 2
+      "500+ Miles":
+        8: 3
+  frame_years:
+    min: 2025
+    max: 2050
+  mandate_fraction_col: fleet_frac_zev
+  mou_state_col: state
+  weight_class_col: gvw_class
+  col_renamer:
+    home_base_state: state
+
+concat_projections_with_mandates:
+  scenario_col: scenario
+  totals_col: n_vehs_target
+  fuel_type_col: fuel_type
+  mandate_fraction_col: ${build_mandates_by_group.mandate_fraction_col}
+  mandate_active_col: is_mandate_active
+  group_cols:
+    - scenario
+    - home_base_state
+    - primary_op_dist
+    - gvw_class
+    - year
+  zev_fuel_types:
+    - electricity
+    - hydrogen
+  default_fuel_types:
+    - diesel
+    - electricity

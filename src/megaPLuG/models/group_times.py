@@ -135,3 +135,24 @@ class DateGrouper(AbstractTimeGrouper):
         df[self.time_group_cols[0]] = df[local_col].dt.floor(self.freq)
         df = df.drop(columns=local_col)
         return df
+
+
+class LocalHourOfDayGrouper(AbstractTimeGrouper):
+    """Note: This class has only been tested with the frequency of '1h'."""
+
+    freq: str = "1h"
+    _time_attrs: list[str] = ["hour"]
+    _time_group_cols: list[str] = ["slice_time_relative"]
+
+    @property
+    def time_group_cols(self: Self) -> list[str]:
+        return self._time_group_cols
+
+    @property
+    def time_attrs(self: Self) -> list[str]:
+        return self._time_attrs
+
+    def add_group_classes(self: Self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add the group classes columns to a dataframe."""
+        df = calc_time_attrs(df=df, time_col=self.time_col, attrs=self.time_attrs)
+        return df

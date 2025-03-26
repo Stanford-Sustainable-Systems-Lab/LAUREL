@@ -144,6 +144,8 @@ entrypoints==0.4
     # via jupyter-client
 esbonio==0.16.4
     # via megaplug
+et-xmlfile==2.0.0
+    # via openpyxl
 executing==2.0.1
     # via stack-data
 fastapi==0.110.1
@@ -423,6 +425,8 @@ numpyro==0.13.2
     # via megaplug
 omegaconf==2.3.0
     # via kedro
+openpyxl==3.1.5
+    # via megaplug
 openturns==1.24
     # via megaplug
 opt-einsum==3.3.0

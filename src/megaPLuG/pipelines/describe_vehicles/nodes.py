@@ -15,7 +15,10 @@ from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.utils.data import merge_on_int_cols
-from megaPLuG.utils.geo import calc_operating_radius
+from megaPLuG.utils.geo import (
+    METERS_PER_MILE,
+    find_time_weighted_centers,
+)
 from megaPLuG.utils.h3 import add_geometries
 from megaPLuG.utils.params import build_df_from_dict
 from megaPLuG.utils.time import total_hours
@@ -35,38 +38,16 @@ def filter_substantial_dwells(dw: DwellSet, params: dict) -> DwellSet:
     return dw
 
 
-def get_operating_segment(
-    vehs: pd.DataFrame, dw: DwellSet, params: dict
-) -> pd.DataFrame:
-    """Calculate the operating segment of each vehicle based on operating radius."""
-    if not isinstance(dw.data, gpd.GeoDataFrame):
-        logger.info("Converting DwellSet data to GeoDataFrame.")
-        dw.to_geodataframe()
-
-    logger.info("Calculating operating radii")
-    tqdm.pandas()
-    rads = dw.data.groupby(dw.veh).geometry.progress_aggregate(calc_operating_radius)
-    rads.name = "operating_radius_miles"
-    max_rad = rads.max()
-    rads = rads.to_frame()
-    bins = params["radius_bin_low_bounds_miles"]
-    rads[params["segment_col"]] = pd.cut(
-        rads["operating_radius_miles"],
-        bins=list(bins.values()) + [max_rad],
-        labels=list(bins.keys()),
-        include_lowest=True,
-    )
-    vehs = vehs.merge(rads.loc[:, [params["segment_col"]]], how="left", on=dw.veh)
-    return vehs
-
-
 def get_vehicle_observation_frames(
     vehs: pd.DataFrame, dw: DwellSet, params: dict
 ) -> pd.DataFrame:
     """Get the total time and mileage over which each vehicle is observed."""
+    dw.sort_by_veh_time()
     veh_obs = dw.data.groupby(dw.veh).agg(
-        obs_time_first=pd.NamedAgg(dw.start, "min"),
-        obs_time_last=pd.NamedAgg(dw.end, "max"),
+        obs_time_first=pd.NamedAgg(dw.start, "first"),
+        obs_hex_first=pd.NamedAgg(dw.hex, "first"),
+        obs_time_last=pd.NamedAgg(dw.end, "last"),
+        obs_hex_last=pd.NamedAgg(dw.hex, "last"),
         dist_traveled_col=pd.NamedAgg(dw.trip_dist, "sum"),
     )
     veh_obs["obs_time_col"] = veh_obs["obs_time_last"] - veh_obs["obs_time_first"]
@@ -232,7 +213,7 @@ def classify_vehicles(
         params["loc_col"]
     ].value_counts()
     veh_loc_cts = veh_loc_cts.unstack(params["loc_col"])
-    veh_loc_cts["has_home_base"] = veh_loc_cts["home_base"] > 0
+    veh_loc_cts["has_home_base"] = veh_loc_cts[params["base_location_type"]] > 0
     vehs = vehs.merge(
         veh_loc_cts.loc[:, ["has_home_base"]], how="left", on=params["veh_col"]
     )
@@ -255,30 +236,109 @@ def mark_weight_class_group(vehs: pd.DataFrame, params: dict) -> pd.DataFrame:
     return vehs
 
 
-def mark_location_regions(
-    vehs: pd.DataFrame,
-    veh_locs: pd.DataFrame,
-    regions: gpd.GeoDataFrame,
-    params: dict,
-    dwell_params: dict,
+def mark_vehicle_centers(
+    vehs: pd.DataFrame, veh_locs: pd.DataFrame, params: dict, dwell_params: dict
 ) -> pd.DataFrame:
-    """Mark the region of chosen locations by intersecting location points with region polygons."""
+    """Mark the characteristic center coordinates for each vehicle.
+
+    If the vehicle has any depot locations, then select one of those based on priority
+    parameters and sorting.
+    """
     veh_col = dwell_params["veh"]
     hex_col = dwell_params["hex"]
     loc_col = params["location_col"]
+
+    vlocs = veh_locs.reset_index()
+    par_sort = params["sort_primary_locations_to_top"]
+    vlocs = vlocs.sort_values(by=par_sort["columns"], ascending=par_sort["ascending"])
+    is_base_loc_type = vlocs[loc_col] == params["base_location_type"]
+    bases = vlocs.loc[is_base_loc_type, [veh_col, hex_col]]
+    bases = bases.drop_duplicates(subset=[veh_col], keep="first")
+    bases[hex_col] = bases[hex_col].astype(str)
+    bases = bases.rename(columns={hex_col: params["home_base_col"]})
+
+    vehs = vehs.merge(bases, how="left", on=veh_col)
+    vehs = vehs.set_index(veh_col)
+    vehs[params["home_base_col"]] = vehs[params["home_base_col"]].fillna(
+        str(params["nan_int"])
+    )  # Using zero as a NaN to preserve ints
+    vehs[params["home_base_col"]] = vehs[params["home_base_col"]].astype(int)
+    return vehs
+
+
+def get_operating_segment(
+    vehs: pd.DataFrame, dw: DwellSet, params: dict
+) -> pd.DataFrame:
+    """Calculate the operating segment of each vehicle based primary operating distance.
+    If a vehicle does not have a home base, then use the time-weighted center as the
+    reference point instead.
+    """
+    if not isinstance(dw.data, gpd.GeoDataFrame):
+        logger.info("Converting DwellSet data to GeoDataFrame.")
+        dw.to_geodataframe()
+
+    dw.data = dw.data.to_crs(params["proj_crs"])
+    logger.info(
+        "Get the time-weighted center location for vehicles without identifiable depots."
+    )
+    veh_no_home = vehs[params["home_base_col"]] == params["nan_int"]
+    vehs_wo_homes = vehs.loc[veh_no_home].index
+    dw_wo_homes = dw.copy_without_data()
+    dw_wo_homes.data = dw.data.loc[vehs_wo_homes]
+
+    dw_wo_homes.data["dwell_hrs"] = total_hours(
+        dw_wo_homes.data[dw.end] - dw_wo_homes.data[dw.start]
+    )
+    centers = find_time_weighted_centers(
+        gdf=dw_wo_homes.data,
+        grp_col=dw_wo_homes.veh,
+        weight_col="dwell_hrs",
+    )
+
+    bases = vehs.loc[~veh_no_home, :]
+    bases = add_geometries(data=bases, hex_col=params["home_base_col"])
+    bases = bases.to_crs(params["proj_crs"])
+    all_centers = pd.concat([centers.geometry, bases.geometry], axis=0)
+    all_centers.name = "center"
+
+    logger.info("Calculating distances from center location.")
+    dw.data = dw.data.merge(all_centers, how="left", on=dw.veh)
+    dw.data["rad_miles"] = (
+        dw.data.geometry.distance(dw.data["center"]) / METERS_PER_MILE
+    )
+    max_rad = dw.data["rad_miles"].max()
+    bins = params["radius_bin_low_bounds_miles"]
+    dw.data["rad_miles_bin"] = pd.cut(
+        dw.data["rad_miles"],
+        bins=list(bins.values()) + [max_rad],
+        labels=list(bins.keys()),
+        include_lowest=True,
+    )
+
+    segs = dw.data.groupby([dw.veh, "rad_miles_bin"])[dw.trip_dist].sum()
+    segs = segs.unstack(level="rad_miles_bin", fill_value=0.0)
+    segs[params["segment_col"]] = segs.idxmax(axis=1)
+
+    vehs = vehs.merge(segs.loc[:, params["segment_col"]], how="left", on=dw.veh)
+    return vehs
+
+
+def mark_location_regions(
+    vehs: pd.DataFrame,
+    regions: gpd.GeoDataFrame,
+    params: dict,
+) -> pd.DataFrame:
+    """Mark the region of chosen locations by intersecting location points with region polygons."""
+    veh_col = params["veh_col"]
     loc_reg_col = params["location_region_col"]
 
-    veh_locs = veh_locs.reset_index()
-    bases = veh_locs.loc[
-        ~veh_locs[loc_col].isna(), [veh_col, hex_col, loc_col]
-    ].drop_duplicates()
-    bases = add_geometries(bases, hex_col=hex_col)
+    bases = vehs.loc[vehs[params["home_base_col"]] != params["nan_int"], :]
+    bases = add_geometries(bases, hex_col=params["home_base_col"])
     bases = bases.to_crs(regions.crs)
     mrg = regions.loc[:, [params["region_name_col"], regions.geometry.name]]
     base_regs = bases.sjoin(mrg, how="left")
     base_regs = base_regs.rename(columns={params["region_name_col"]: loc_reg_col})
-    base_regs = base_regs.loc[:, [veh_col, loc_reg_col]].drop_duplicates(subset=veh_col)
-    base_regs = base_regs.set_index(veh_col)
+    base_regs = base_regs.loc[:, [loc_reg_col]]
     vehs = vehs.merge(base_regs, how="left", on=veh_col)
     vehs[loc_reg_col] = vehs[loc_reg_col].fillna(params["na_region_fill"])
     return vehs

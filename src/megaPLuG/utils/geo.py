@@ -4,6 +4,7 @@ from numba import jit
 from shapely.geometry import LineString, Point
 
 EARTH_RADIUS_MILES = 3963.0
+METERS_PER_MILE = 1609.344
 
 
 def find_time_weighted_centers(

@@ -1,3 +1,4 @@
+import datetime
 from typing import Self
 
 import numpy as np
@@ -33,10 +34,20 @@ class EventExpander:
         self.group_cols = group_cols
         self.freq = freq
 
-    def expand_events(self: Self, events: pd.DataFrame) -> pd.DataFrame:
+    def expand_events(
+        self: Self, events: pd.DataFrame, return_expansions_only: bool = False
+    ) -> pd.DataFrame:
         """Expand out events to cover all intermediate time units given their start and
         end timestamps.
         """
+        source_tz = events[self.time_col].dt.tz
+        if source_tz == datetime.UTC:
+            send_to_utc = False  # If source time is UTC, then it is already compatible
+        elif source_tz is None:
+            send_to_utc = True
+        else:
+            raise RuntimeError("The source time column must be time zone naïve or UTC.")
+
         end_of_time_group = events[self.time_col].dt.ceil(self.freq)
         end_of_event = events[self.time_col] + events[self.dur_col]
         events["overflow"] = end_of_time_group < end_of_event
@@ -48,17 +59,26 @@ class EventExpander:
         group_inter = IndexIntegerizer(int_col="codes")
         need_expansion = group_inter.integerize(need_expansion)
         need_expansion = need_expansion.reset_index()
+        if send_to_utc:
+            need_expansion[self.time_col] = need_expansion[
+                self.time_col
+            ].dt.tz_localize(datetime.UTC)
 
         expanded = self._expand_events_wrapper(need_expansion)
 
+        if send_to_utc:
+            expanded[self.time_col] = expanded[self.time_col].dt.tz_localize(None)
         expanded = expanded.set_index("codes")
         expanded = group_inter.deintegerize(expanded)
         expanded = expanded.reset_index()
 
-        keep_cols = self.group_cols + [self.time_col, self.value_col]
-        not_expanded = events.loc[~events["overflow"], keep_cols]
-        all_nonzero = pd.concat([expanded, not_expanded], axis=0, ignore_index=True)
-        return all_nonzero
+        if return_expansions_only:
+            return expanded
+        else:
+            keep_cols = self.group_cols + [self.time_col, self.value_col]
+            not_expanded = events.loc[:, keep_cols]
+            all_nonzero = pd.concat([expanded, not_expanded], axis=0, ignore_index=True)
+            return all_nonzero
 
     def _expand_events_wrapper(self: Self, df: pd.DataFrame) -> pd.DataFrame:
         """Convert pandas Series to numpy arrays and set dtypes for self._expand_events_core()."""
@@ -103,9 +123,10 @@ class EventExpander:
         """
         n_periods = starts.shape[0]
         ends_plus = ends + tstep_ns
-        n_stamps = np.floor_divide(ends_plus - starts, tstep_ns)
+        starts_plus = starts + tstep_ns
+        n_stamps = np.floor_divide(ends_plus - starts_plus, tstep_ns)
         tot_stamps = np.sum(n_stamps)
-        times_exp = np.zeros(tot_stamps, dtype=starts.dtype)
+        times_exp = np.zeros(tot_stamps, dtype=starts_plus.dtype)
         vals_exp = np.zeros(tot_stamps, dtype=vals.dtype)
         grps_exp = np.zeros(tot_stamps, dtype=grps.dtype)
         cursor = 0
@@ -113,7 +134,7 @@ class EventExpander:
             next_cursor = cursor + n_stamps[i]
             idxs = np.arange(cursor, next_cursor, dtype=np.int64)
             times_exp[idxs] = np.arange(
-                starts[i], ends_plus[i], tstep_ns, dtype=times_exp.dtype
+                starts_plus[i], ends_plus[i], tstep_ns, dtype=times_exp.dtype
             )
             vals_exp[idxs] = vals[i]
             grps_exp[idxs] = grps[i]

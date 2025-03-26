@@ -1,9 +1,69 @@
+import itertools
+import logging
 from typing import Self
 
 import dask.dataframe as dd
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+
+def get_merge_params(
+    merge_params: dict,
+    right_df: pd.DataFrame,
+    *args: list[list[str]],
+) -> dict:
+    """Update the params argument to the merge_datframes_node function."""
+    targets = merge_params["keep_right_columns"] + list(itertools.chain(*args))
+    sources = right_df.columns.tolist() + right_df.index.names
+    concats = list(set(targets).intersection(sources))
+    merge_params["keep_right_columns"] = concats
+    return merge_params
+
+
+def merge_dataframes_node(
+    left: pd.DataFrame | dd.DataFrame,
+    right: pd.DataFrame,
+    params: dict,
+) -> pd.DataFrame | dd.DataFrame:
+    """Merge two dataframes together as a Kedro node.
+
+    This function assumes that the left dataframe is large, and that the right dataframe
+    is adding some sort of metadata on to it.
+
+    This function preserves the index of the left dataframe. It also allows you to
+    select only a subset of columns from the right dataframe.
+    """
+    if not isinstance(left, pd.DataFrame | dd.DataFrame):
+        raise RuntimeError("'left' must be a Pandas or Dask dataframe.")
+    if not isinstance(right, pd.DataFrame):
+        raise RuntimeError("'right' must be a Pandas dataframe.")
+    is_dask = isinstance(left, dd.DataFrame)
+
+    if not len(params["keep_right_columns"]) >= 1:
+        raise RuntimeError(
+            "At least one column must be kept from the 'right' dataframe"
+        )
+
+    mrg = right.reset_index()
+    mrg = mrg.loc[:, params["keep_right_columns"]]
+
+    if not is_dask:
+        orig_idx = left.index.names
+        left = left.reset_index()
+
+        merged = left.merge(right=mrg, **params["merge_kwargs"])
+
+        if orig_idx != [None]:
+            merged = merged.set_index(orig_idx)
+        else:
+            merged = merged.drop(columns=["index"])
+    else:
+        raise NotImplementedError("Dask features not yet implemented.")
+
+    return merged
 
 
 def merge_on_int_cols(

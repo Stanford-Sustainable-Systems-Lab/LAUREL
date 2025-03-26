@@ -7,70 +7,108 @@
 summarize_vehicles:
   dead_energy_col: dwell_init_kwh
 
+localize_time_from_hexes:
+  time_cols_source:
+    - time
+  time_cols_local:
+    - time_local
+  sort_result: False
+  sort_cols:
+    - veh_id
+    - time_local
+
+filter_events:
+  power_col: hex_kw_diff
+  drop_na_cols:
+    - substation_id
+
+build_slice_frame:
+  columns_input:
+    first_hex: obs_hex_first
+    first_time: obs_time_first
+    last_hex: obs_hex_last
+    last_time: obs_time_last
+  freq: 1d
+  frame_cols:
+    vehicle: veh_id
+    time: slice_time_start
+
 eval_columns:
   hex_col: hex_id
   veh_col: veh_id
   timezone_col: tz
   time_col: time
-  group_cols:
+  group_cols: None # Filled in by the specific modular pipeline settings
+  profile_col: power_kw
+  duration_col: duration
+
+substation.group_columns:
     - substation_id
-    - op_segment
-  profile_col: power_kw
-  duration_col: duration
 
-substation.eval_columns:
-  hex_col: hex_id
-  veh_col: veh_id
-  timezone_col: tz
-  time_col: time
-  group_cols:
-    - substation_id
-  profile_col: power_kw
-  duration_col: duration
-
-land_op_segment.eval_columns:
-  hex_col: hex_id
-  veh_col: veh_id
-  timezone_col: tz
-  time_col: time
-  group_cols:
-    - land_use
-    - op_segment
-  profile_col: power_kw
-  duration_col: duration
-
-op_segment.eval_columns:
-  hex_col: hex_id
-  veh_col: veh_id
-  timezone_col: tz
-  time_col: time
-  group_cols:
-    - op_segment
+jurisdiction.group_columns:
     - state
-  profile_col: power_kw
-  duration_col: duration
 
-jurisdiction.eval_columns:
-  hex_col: hex_id
-  veh_col: veh_id
-  timezone_col: tz
-  time_col: time
-  group_cols:
-    - state
-  profile_col: power_kw
-  duration_col: duration
+stratify_columns: ${sample_slices.stratify_cols}
 
-profiles_from_events:
-  power_col: hex_kw_diff
-  drop_null_groups: True
+build_sampling_totals:
+  totals_column: n_vehs_target
+  filter_totals:
+    filters:
+      gvw_class:
+        value_isin:
+          - "8"
+      scenario:
+        value_isin:
+          - Central
+      is_mandate_active:
+        value_isin:
+          - True
+      fuel_type:
+        value_isin:
+          - electricity
+      year:
+        value_isin:
+          - 2030
+    keep_only_filter_cols: False
 
-report_by_region_peaks:
-  local_time_attrs:
-    - day_of_week
-    - hour
 
-report_by_region_quantiles:
-  freq: 1h
+assign_metadata_location:
+  keep_right_columns:
+    - hex_id
+    # Other columns will be added at runtime
+  merge_kwargs:
+    how: left
+    'on': hex_id # Using quotes here because "on" somehow gets interpreted as "True" without quotes
+    validate: many_to_one
+
+assign_metadata_vehicle:
+  keep_right_columns:
+    - veh_id
+    # Other columns will be added at runtime
+  merge_kwargs:
+    how: left
+    'on': veh_id # Using quotes here because "on" somehow gets interpreted as "True" without quotes
+    validate: many_to_one
+
+slice_events:
+    slice_freq: 1d
+    power_col: hex_kw_diff
+    slice_id_col: slice_time_start
+    slice_time_col: slice_time_relative
+    source_time_col: time_local
+    bootstrap_id_col: bootstrap_id
+
+sample_slices:
+    seed_for_seeds: 1
+    n_bootstraps: 250
+    stratify_cols:
+      - home_base_state
+      - primary_op_dist
+    target_count_col: n_vehs_target
+    discrete_freq: 1h
+    skip_resampling: False
+
+summarize_slices:
   quantiles:
     - 0.00
     - 0.05
@@ -79,12 +117,5 @@ report_by_region_quantiles:
     - 0.60
     - 0.95
     - 1.00
-  time_grouper:
-    start_time: 2023-01-01
-    end_time: 2023-12-31
-    possible_tzs:
-      - America/Los_Angeles
-
-add_region_geoms:
-  hex_col: hex_id
-  region_col: substation_id
+  possible_tzs:
+    - America/Los_Angeles

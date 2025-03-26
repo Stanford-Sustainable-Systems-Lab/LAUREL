@@ -36,7 +36,7 @@ mark_substantial_dwells:
 mark_critical_days:
   loc_col: location
   refresh_locations:
-    - home_base
+    - depot
   refresh_col: is_refresh
   crit_col: is_crit_day
   batt_cap_col: battery_capacity_kwh
@@ -95,7 +95,7 @@ locations:
     id_columns:
       - location
     values:
-      home_base: 350
+      depot: 350
       other: 1000
 
 calc_energy_use:
@@ -114,17 +114,11 @@ simulate_charging_choice:
     rng_beta: initial_soc_beta
     charge_soc: charge_soc_thresh
 
-assign_scale_up_factor:
-  apply_scaling: False
-  veh_cols:
-    - weight
-
 manage_charging:
-  charging_manager: ImmediateChargingManager
+  charging_manager: MinPowerChargingManager
   drop_na_cols:
     - charge_kwh
   input_cols: # keys should match the keyword arguments of the charging manager
     energy: charge_kwh
     duration: dwell_time_hrs
     max_power: max_power_kw
-    scale_up: weight
