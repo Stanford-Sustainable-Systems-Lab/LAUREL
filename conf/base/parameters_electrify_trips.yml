@@ -64,8 +64,11 @@ filter_dwells:
   accum_cols_reverse:
     - energy_use_kwh_next
   drop_cols:
-   - battery_capacity_kwh
-   - is_crit_day
+    - minimum_times_plug_in_mins
+    - minimum_times_plug_out_mins
+    - consump_rate_kwh_per_mi
+    - battery_capacity_kwh
+    - is_crit_day
 
 vehicles:
   battery_capacity_kwh:
