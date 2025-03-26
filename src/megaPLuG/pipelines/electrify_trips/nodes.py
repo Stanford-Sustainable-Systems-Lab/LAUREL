@@ -33,7 +33,7 @@ def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
 
     new_len = len(dw.data)
     abs_diff = old_len - new_len
-    pct_diff = round(new_len / old_len * 100, 1)
+    pct_diff = round(abs_diff / old_len * 100, 1)
     logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
     return dw
 
@@ -110,7 +110,7 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
 
     new_len = len(dw.data)
     abs_diff = old_len - new_len
-    pct_diff = round(new_len / old_len * 100, 1)
+    pct_diff = round(abs_diff / old_len * 100, 1)
     logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
     return dw
 
