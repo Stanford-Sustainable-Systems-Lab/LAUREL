@@ -1,4 +1,5 @@
 import itertools
+import logging
 from typing import Self
 
 import dask.dataframe as dd
@@ -7,6 +8,21 @@ import numpy as np
 import pandas as pd
 from pandas.core import common as com
 from pandas.core.dtypes.common import is_dict_like
+
+logger = logging.getLogger(__name__)
+
+
+def get_merge_params(
+    merge_params: dict,
+    right_df: pd.DataFrame,
+    *args: list[list[str]],
+) -> dict:
+    """Update the params argument to the merge_datframes_node function."""
+    targets = merge_params["keep_right_columns"] + list(itertools.chain(*args))
+    sources = right_df.columns.tolist() + right_df.index.names
+    concats = list(set(targets).intersection(sources))
+    merge_params["keep_right_columns"] = concats
+    return merge_params
 
 
 def merge_dataframes_node(

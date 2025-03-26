@@ -23,6 +23,7 @@ strip_vehicle_attrs:
   veh_attr_cols:
     - veh_type
     - vin_gvw
+  min_trips_per_veh: 2
   persist: True
 
 trip_derived_cols:
@@ -72,8 +73,7 @@ get_vius_by_weight_class:
 
 clean_vius_by_home_base_state:
   drop_idx_values:
-    - No Home Base
-    - Not Reported
+    - Any State (including No Home Base and Not Reported)
   replace_values:
     Massachussetts: Massachusetts # Correcting spelling
 
@@ -82,11 +82,35 @@ clean_vius_by_weight_class:
     - Any Gross Vehicle Weight Rating Class
 
 build_vius_scaling_totals:
-  totals_col: n_vehs
-  weight_col: n_vehs_intersect
+  col_renamer:
+    tab_weight: TABWEIGHT
+    gvw_class: GVWR_CLASS
+    reg_state: REGSTATE
+    cab_day: CABDAY
+  totals_col: tab_weight
+  home_source_col: HBSTATE
+  cab_source_col: cab_day
   id_cols:
     region: home_base_state
     weight_class: gvw_class
+    cab_day: cab_day
+  home_base_corresp:
+    id_columns:
+      - ${build_vius_scaling_totals.home_source_col}
+    values:
+      "61": "Home Base in Register State"
+      "62": "Home Base not in Register State"
+      "63": "No Home Base"
+      "64": "Not Reported"
+      "X": "Not In Use"
+  cab_type_corresp:
+    id_columns:
+      - ${build_vius_scaling_totals.cab_source_col}
+    values:
+      "1": "Day Cab"
+      "2": "Sleeper Cab"
+      "4": "Not Reported"
+      "X": "Not a Tractor Truck"
 
 format_substation_profiles:
   col_renamer:

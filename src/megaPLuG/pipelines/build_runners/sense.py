@@ -47,9 +47,7 @@ class SenseScenarioBuilder(ScenarioBuilder):
             cur_vehs["minimum_times"]["plug_out_mins"] = pars["time_to_initiate_mins"]
 
             cur_locs = deepcopy(self.params["locations"])
-            cur_locs["max_power_kw"]["values"]["home_base"] = pars[
-                "charge_speed_kw_depot"
-            ]
+            cur_locs["max_power_kw"]["values"]["depot"] = pars["charge_speed_kw_depot"]
             cur_locs["max_power_kw"]["values"]["other"] = pars[
                 "charge_speed_kw_enroute"
             ]

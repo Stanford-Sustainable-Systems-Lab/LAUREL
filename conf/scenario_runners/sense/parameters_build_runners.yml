@@ -38,7 +38,7 @@ scenario_params:
     charge_thresh_soc:
       dist: Beta
       params:
-        - 3.4
+        - 6.5
         - 10
         - 0
         - 1
@@ -92,7 +92,7 @@ scenario_params:
       - locations
       - max_power_kw
       - values
-      - home_base
+      - depot
     charge_speed_kw_enroute:
       - locations
       - max_power_kw

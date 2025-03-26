@@ -9,13 +9,6 @@ substantial_dwells:
   drop_cols:
     - trip_hrs
 
-operating_segment:
-  radius_bin_low_bounds_miles:
-    local: 0
-    regional: 100
-    long-haul: 300
-  segment_col: op_segment
-
 observation_frames:
   column_namer:
     dist_traveled_col: total_obs_miles
@@ -57,11 +50,12 @@ label_veh_loc_pairs:
     id_cols:
       cluster: cluster
     vals:
-      1: home_base
+      1: depot
 
 classify_vehicles:
   veh_col: veh_id
   loc_col: location
+  base_location_type: depot
 
 mark_locations:
   veh_loc_cols:
@@ -82,19 +76,32 @@ weight_class_group:
     7: Medium-Heavy Duty (Class 7)
     8: Heavy Duty (Class 8)
 
-mark_location_regions:
-  na_region_fill: "Any State (including No Home Base and Not Reported)"
+mark_vehicle_centers:
+  sort_primary_locations_to_top:
+    columns:
+      - n_visits
+    ascending:
+      - False
   location_col: location
-  location_region_col: home_base_state
-  region_name_col: NAME
+  base_location_type: depot
+  home_base_col: home_base_hex
+  nan_int: 0
 
-vehicle_scaling_weights:
-  group_cols:
-   - home_base_state
-   - gvw_class
-  summaries:
-    veh_id: nunique
-  total_cols:
-    target: n_vehs_intersect
-    source: n_vehs_trips
-  weight_col: weight
+operating_segment:
+  home_base_col: ${mark_vehicle_centers.home_base_col}
+  nan_int: ${mark_vehicle_centers.nan_int}
+  proj_crs: EPSG:5070
+  radius_bin_low_bounds_miles:
+    "0-99 Miles": 0
+    "100-249 Miles": 100
+    "250-499 Miles": 250
+    "500+ Miles": 500
+  segment_col: primary_op_dist
+
+mark_location_regions:
+  na_region_fill: "No Home Base"
+  location_region_col: home_base_state
+  region_name_col: STUSPS
+  home_base_col: ${mark_vehicle_centers.home_base_col}
+  nan_int: ${mark_vehicle_centers.nan_int}
+  veh_col: ${load_dwell_set.veh}

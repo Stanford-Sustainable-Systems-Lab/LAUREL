@@ -48,6 +48,7 @@ mark_critical_days:
   loc_col: location
   refresh_locations:
     - depot
+    - depot
   refresh_col: is_refresh
   crit_col: is_crit_day
   batt_cap_col: battery_capacity_kwh
@@ -187,7 +188,7 @@ apply_delays:
   delay_unit: hour
 
 manage_charging:
-  charging_manager: ImmediateChargingManager
+  charging_manager: MinPowerChargingManager
   drop_na_cols:
     - charge_kwh
   input_cols: # keys should match the keyword arguments of the charging manager

@@ -95,5 +95,6 @@ def get_hexes_by_area(areas: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame
         hex_col=params["hex_col"],
     )
     hexes = hexes.reset_index()
+    hexes = hexes.drop_duplicates(subset=params["hex_col"])
     hexes = hexes.set_index(params["hex_col"])
     return hexes

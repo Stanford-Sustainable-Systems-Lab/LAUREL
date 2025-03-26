@@ -10,13 +10,18 @@ from megaPLuG.scenarios.io import (
     read_scenario_partition,
     write_scenario_partition,
 )
+from megaPLuG.utils.data import get_merge_params, merge_dataframes_node
 
 from .nodes import (
-    assign_regions,
-    assign_vehicle_metadata,
-    get_load_profiles,
-    report_by_region_peaks,
-    report_by_region_quantiles,
+    build_eval_columns,
+    build_sampling_totals,
+    build_slice_frame,
+    filter_events,
+    filter_slices_time,
+    localize_time_from_hexes,
+    sample_vehicle_windows,
+    slice_vehicle_windows,
+    summarize_vehicle_window_quantiles,
     summarize_vehicles,
 )
 
@@ -74,59 +79,151 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags=["report_vehicles", "scenario_run"],
     )
 
-    report_profiles_pipe = pipeline(
+    report_profiles_scaled_prep_pipe = pipeline(
         [
             node(
-                func=assign_regions,
-                inputs=["events_eval", "hex_region_corresp", "params:eval_columns"],
-                outputs="events_w_regions",
-                name="assign_regions_eval",
+                func=get_merge_params,
+                inputs=[
+                    "params:assign_metadata_location",
+                    "hex_region_corresp",
+                    "params:stratify_columns",
+                    "params:substation.group_columns",
+                    "params:jurisdiction.group_columns",
+                ],
+                outputs="merge_params_locations",
+                name="get_merge_params_locations",
             ),
             node(
-                func=assign_vehicle_metadata,
+                func=merge_dataframes_node,
+                inputs=[
+                    "events_eval",
+                    "hex_region_corresp",
+                    "merge_params_locations",
+                ],
+                outputs="events_w_regions",
+                name="assign_metadata_location",
+            ),
+            node(
+                func=get_merge_params,
+                inputs=[
+                    "params:assign_metadata_vehicle",
+                    "vehicles_evaluated",
+                    "params:stratify_columns",
+                    "params:substation.group_columns",
+                    "params:jurisdiction.group_columns",
+                ],
+                outputs="merge_params_vehicles",
+                name="get_merge_params_vehicles",
+            ),
+            node(
+                func=merge_dataframes_node,
                 inputs=[
                     "events_w_regions",
                     "vehicles_evaluated",
-                    "params:eval_columns",
+                    "merge_params_vehicles",
                 ],
                 outputs="events_w_metadata",
-                name="assign_vehicle_metadata",
+                name="assign_metadata_vehicles_to_events",
             ),
             node(
-                func=get_load_profiles,
+                func=filter_events,  # TODO: Add location filtering to this
+                inputs=["events_w_metadata", "params:filter_events"],
+                outputs="events_filtered",
+                name="filter_events",
+            ),
+            node(
+                func=localize_time_from_hexes,
                 inputs=[
-                    "events_w_metadata",
-                    "params:profiles_from_events",
+                    "events_filtered",
+                    "params:localize_time_from_hexes",
                     "params:eval_columns",
                 ],
-                outputs="profiles",
-                name="get_load_profiles",
+                outputs="events_w_local_time",
+                name="localize_time_from_hexes",
             ),
             node(
-                func=report_by_region_peaks,
+                func=slice_vehicle_windows,
                 inputs=[
-                    "profiles",
-                    "params:report_by_region_peaks",
+                    "events_w_local_time",
+                    "params:slice_events",
                     "params:eval_columns",
                 ],
-                outputs="report_by_region_peaks",
-                name="report_by_region_peaks",
+                outputs="slices",
+                name="slice_vehicle_windows",
             ),
             node(
-                func=report_by_region_quantiles,
+                func=filter_slices_time,
+                inputs=["slices", "params:slice_events", "params:eval_columns"],
+                outputs="slices_filtered",
+                name="filter_slices_of_events",
+            ),
+            node(
+                func=build_slice_frame,
+                inputs=["vehicles_evaluated", "params:build_slice_frame"],
+                outputs="slice_frame",
+                name="build_slice_frame",
+            ),
+            node(
+                func=merge_dataframes_node,
                 inputs=[
-                    "profiles",
-                    "params:report_by_region_quantiles",
+                    "slice_frame",
+                    "vehicles_evaluated",
+                    "merge_params_vehicles",
+                ],
+                outputs="slice_frame_w_metadata",
+                name="assign_metadata_vehicles_to_slice_frame",
+            ),
+            node(
+                func=filter_slices_time,
+                inputs=[
+                    "slice_frame_w_metadata",
+                    "params:slice_events",
                     "params:eval_columns",
+                ],
+                outputs="slice_frame_filtered",
+                name="filter_slices_of_slice_frame",
+            ),
+            node(
+                func=build_sampling_totals,
+                inputs=["adoption_scenarios", "params:build_sampling_totals"],
+                outputs="sampling_totals",
+                name="build_sampling_totals",
+            ),
+        ],
+        tags="scenario_run",
+    )
+
+    report_profiles_scaled_pipe = pipeline(
+        [
+            node(
+                func=build_eval_columns,
+                inputs=["params:eval_columns", "params:group_columns"],
+                outputs="eval_columns",
+                name="build_eval_columns",
+            ),
+            node(
+                func=sample_vehicle_windows,
+                inputs=[
+                    "slices_filtered",
+                    "slice_frame_filtered",
+                    "sampling_totals",
+                    "params:slice_events",
+                    "params:sample_slices",
+                    "eval_columns",
+                ],
+                outputs=["bootstrap_profiles", "report_by_region_energies"],
+                name="sample_vehicle_windows",
+            ),
+            node(
+                func=summarize_vehicle_window_quantiles,
+                inputs=[
+                    "bootstrap_profiles",
+                    "params:slice_events",
+                    "params:summarize_slices",
+                    "eval_columns",
                 ],
                 outputs="report_by_region_quantiles",
-                name="report_by_region_quantiles",
-            ),
-            node(
-                func=write_scenario_partition,
-                inputs=["report_by_region_peaks", "params:results_partition"],
-                outputs="report_by_region_peaks_partition",
-                name="write_scenario_partition_hexes_peaks",
+                name="summarize_vehicle_window_quantiles",
             ),
             node(
                 func=write_scenario_partition,
@@ -134,32 +231,39 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="report_by_region_quantiles_partition",
                 name="write_scenario_partition_hexes_quants",
             ),
+            node(
+                func=write_scenario_partition,
+                inputs=["report_by_region_energies", "params:results_partition"],
+                outputs="report_by_region_energies_partition",
+                name="write_scenario_partition_region_energies",
+            ),
         ],
         tags="report_profiles",
     )
 
     profile_group_fixed_params = {
-        "params:profiles_from_events",
         "params:results_partition",
-        "params:report_by_region_peaks",
-        "params:report_by_region_quantiles",
+        "params:eval_columns",
+        "params:slice_events",
+        "params:sample_slices",
+        "params:summarize_slices",
     }
     profile_group_fixed_inputs = {
-        "events_eval",
-        "hex_region_corresp",
-        "vehicles_evaluated",
+        "slices_filtered",
+        "slice_frame_filtered",
+        "sampling_totals",
     }
 
     report_profiles_pipes = [
         pipeline(
-            report_profiles_pipe,
+            report_profiles_scaled_pipe,
             namespace="substation",
             parameters=profile_group_fixed_params,
             inputs=profile_group_fixed_inputs,
             tags="scenario_run",
         ),
         pipeline(
-            report_profiles_pipe,
+            report_profiles_scaled_pipe,
             namespace="jurisdiction",
             parameters=profile_group_fixed_params,
             inputs=profile_group_fixed_inputs,
@@ -167,4 +271,9 @@ def create_pipeline(**kwargs) -> Pipeline:
         ),
     ]
 
-    return read_pipe + report_vehicles_pipe + sum(report_profiles_pipes)
+    return (
+        read_pipe
+        + report_vehicles_pipe
+        + report_profiles_scaled_prep_pipe
+        + sum(report_profiles_pipes)
+    )

@@ -3,6 +3,24 @@ navistar:
   type: dask.ParquetDataset
   filepath: data/01_raw/Navistar/stanford_dataset_v2/
 
+vius_public_use:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/VIUS/vius_2021_puf.csv
+
+ledna_adoption:
+  type: pandas.ExcelDataset
+  filepath: data/01_raw/Ledna_2024_Forecasts/Data_Supplement_Final_010424.xlsx
+  load_args:
+    sheet_name: D-VehicleStock
+
+advanced_clean_fleets_milestones:
+ type: pandas.CSVDataset
+ filepath: data/01_raw/ACF/zev_milestones.csv
+
+advanced_clean_trucks_states:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/ACF/act_states.csv
+
 vius_home_base_state_raw:
   type: text.TextDataset
   filepath: data/01_raw/VIUS/vius_home_base_state_url.txt
@@ -93,6 +111,10 @@ vius_weight_class:
 vius_scaling:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vius_scaling.feather
+
+adoption_scenarios:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/adoption_scenarios.feather
 
 substation.usage:
   type: pandas.FeatherDataset
@@ -229,6 +251,13 @@ substation.report_by_region_quantiles_partition:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
+substation.report_by_region_energies_partition:
+  type: partitions.PartitionedDataset
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_energies/substation"
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
+
 land_op_segment.report_by_region_peaks_partition:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_peaks/land_op_segment"
@@ -267,6 +296,13 @@ jurisdiction.report_by_region_peaks_partition:
 jurisdiction.report_by_region_quantiles_partition:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_quantiles/jurisdiction"
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
+
+jurisdiction.report_by_region_energies_partition:
+  type: partitions.PartitionedDataset
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_energies/jurisdiction"
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
@@ -334,6 +370,20 @@ navistar_by_state:
     index: True
     layer: navistar_by_state
 
+vehicle_peak_load_by_substation:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/08_reporting/vehicle_peak_load_by_substation.gpkg
+  save_args:
+    index: True
+    layer: vehicle_peak_load_by_substation
+
+capacity_consumed_percent_by_substation:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/08_reporting/capacity_consumed_percent_by_substation.gpkg
+  save_args:
+    index: True
+    layer: capacity_consumed_percent_by_substation
+
 peak_load_addition_by_substation:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
   filepath: data/08_reporting/peak_load_addition_by_substation.gpkg
@@ -350,6 +400,12 @@ substation_overcapacity_by_scenario:
 profiles_by_location_and_segment_no_map:
   type: matplotlib.MatplotlibWriter
   filepath: data/08_reporting/profiles_by_location_and_segment_no_map.png
+  save_args:
+    bbox_inches: tight
+
+profile_examples_with_uncertainty:
+  type: matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/profile_examples_with_uncertainty.png
   save_args:
     bbox_inches: tight
 
@@ -386,6 +442,12 @@ sensitivity_single_substation:
 sensitivity_sum_of_capacity_consumed:
   type: matplotlib.MatplotlibWriter
   filepath: data/08_reporting/sensitivity_sum_of_capacity_consumed.png
+  save_args:
+    bbox_inches: tight
+
+primary_operating_distance_distribution:
+  type: matplotlib.MatplotlibWriter
+  filepath: data/08_reporting/primary_operating_distance_distribution.png
   save_args:
     bbox_inches: tight
 
