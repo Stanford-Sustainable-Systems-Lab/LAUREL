@@ -256,11 +256,17 @@ class DwellSet:
         reset_col: str,
         veh_col: str,
         replace_dtypes: dict[str, str],
-        reverse: bool,
+        reverse: bool | list[bool],
         write_all: bool = False,
     ) -> pd.DataFrame:
         if isinstance(accum_cols, str):
             accum_cols = [accum_cols]
+        if isinstance(reverse, bool):
+            reverse = [reverse] * len(accum_cols)
+        elif isinstance(reverse, list) and (len(reverse) != len(accum_cols)):
+            raise ValueError(
+                "'reverse' must be a single bool or a list of bools of the same length as 'accum_cols'."
+            )
 
         logic_renamer = {keep_mask_col: "keep", reset_col: "reset"}
         logic_df = df.loc[:, list(logic_renamer.keys())]
@@ -273,14 +279,15 @@ class DwellSet:
 
         # Using pandas groupby indices to move over dwell recarray
         grp_idxs = df.groupby(veh_col).indices
+        col_rev = list(zip(accum_cols, reverse))
         for grp, idxs in tqdm(grp_idxs.items()):
             logics = logic_recs[idxs]
-            for col in accum_cols:
+            for col, rev in col_rev:
                 outs[col][idxs] = DwellSet._accum_masked_core(
                     logics=logics,
                     vals=vals[col][idxs],
                     outs=outs[col][idxs],
-                    reverse=reverse,
+                    reverse=rev,
                 )
 
         # Build output dataframe
