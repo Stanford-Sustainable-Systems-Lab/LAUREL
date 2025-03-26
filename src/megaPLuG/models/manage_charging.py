@@ -163,8 +163,15 @@ class MinPowerChargingManager(IndependentDwellChargingManager):
         pwr_cols = [f"{seqn}_{self.suffixes['power']}" for seqn in self.seq_names]
         time_cols = [f"{seqn}_{self.suffixes['time']}" for seqn in self.seq_names]
         self.dw.data[time_cols[0]] = self.dw.data[self.dw.start]
-        self.dw.data[pwr_cols[0]] = (
-            self.dw.data[self.energy] / self.dw.data[self.duration]
+
+        zero_energy = self.dw.data[self.energy] == 0.0
+        zero_dur = self.dw.data[self.duration] == 0.0
+        good_div = ~(zero_energy | zero_dur)
+
+        self.dw.data[pwr_cols[0]] = 0.0
+        self.dw.data.loc[good_div, pwr_cols[0]] = (
+            self.dw.data.loc[good_div, self.energy]
+            / self.dw.data.loc[good_div, self.duration]
         )
         self.dw.data[time_cols[-1]] = self.dw.data[self.dw.end]
         self.dw.data[pwr_cols[-1]] = -self.dw.data[pwr_cols[0]]
@@ -182,12 +189,22 @@ class ImmediateChargingManager(IndependentDwellChargingManager):
         self.dw.data[time_cols[0]] = self.dw.data[self.dw.start]
         self.dw.data[pwr_cols[0]] = self.dw.data[self.max_power]
         # Assumes that units are kWh, kW, and hours
-        charge_hrs = self.dw.data[self.energy] / self.dw.data[self.max_power]
-        charge_time = pd.to_timedelta(charge_hrs, unit="hour")
+        zero_energy = self.dw.data[self.energy] == 0.0
+        zero_power = self.dw.data[self.max_power] == 0.0
+        good_div = ~(zero_energy | zero_power)
+        self.dw.data["charge_hrs"] = 0.0
+        self.dw.data.loc[good_div, "charge_hrs"] = (
+            self.dw.data.loc[good_div, self.energy]
+            / self.dw.data.loc[good_div, self.max_power]
+        )
+        charge_time = pd.to_timedelta(self.dw.data["charge_hrs"], unit="hour")
+
         charge_end = (self.dw.data[self.dw.start] + charge_time).dt.round(freq="s")
         charge_end = charge_end.clip(upper=self.dw.data[self.dw.end])
         self.dw.data[time_cols[-1]] = charge_end
         self.dw.data[pwr_cols[-1]] = -self.dw.data[self.max_power]
+
+        self.dw.data = self.dw.data.drop(columns=["charge_hrs"])
         return self
 
 
