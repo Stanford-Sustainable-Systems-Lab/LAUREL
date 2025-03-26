@@ -242,7 +242,7 @@ class AbstractChargingChoiceStrategy(ABC):
             cur_delay -= delay_reduction
 
             # Manage vehicles running out of energy and resuscitating
-            max_power_mode = np.argmax(dwls["modes_avail"] * modes["avail_kw"])
+            max_power_mode = np.argmax(dwls["modes_avail"][i] * modes["avail_kw"])
             avail_kwh = dwls["dwell_hrs"][i] * modes["avail_kw"][max_power_mode]
             if np.isnan(cur_energy) or cur_energy < 0:  # Currently dead
                 if (
