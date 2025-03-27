@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Summarize the results for each vehicle."""
+    # Number of deaths by vehicle
     dw.data["is_death"] = dw.data[params["dead_energy_col"]] < 0
     n_deaths = dw.data.groupby(dw.veh, sort=False)["is_death"].sum()
     n_deaths.name = "n_deaths"
@@ -34,6 +35,30 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
 
     logger.info("Deaths per vehicle:")
     logger.info(n_deaths.describe())
+
+    # Delay as fraction of shift duration for each vehicle
+    dw.data["shift_id"] = dw.data.groupby(dw.veh)[params["shift_refresh_col"]].cumsum()
+    dw.data["shift_id"] = dw.data.groupby(dw.veh)["shift_id"].shift(1, fill_value=0)
+    dw.data["trip_start_time"] = dw.data.groupby(dw.veh)[dw.end].shift(1)
+
+    delays = dw.data.groupby([dw.veh, "shift_id"]).agg(
+        max_delay_hrs=pd.NamedAgg("dwell_init_delay_hrs", "max"),
+        shift_start=pd.NamedAgg("trip_start_time", "first"),
+        shift_end=pd.NamedAgg(dw.end, "last"),
+    )
+    delays = delays.dropna(subset=["shift_start"])
+
+    dfcol = params["delay_frac_col"]
+    delays["shift_dur_hrs"] = total_hours(delays["shift_end"] - delays["shift_start"])
+    delays[dfcol] = delays["max_delay_hrs"] / delays["shift_dur_hrs"]
+    veh_delays = delays.groupby(dw.veh)[dfcol].quantile(params["delay_frac_quantile"])
+    vehs = vehs.merge(veh_delays, how="left", on=dw.veh)
+
+    pctl = int(params["delay_frac_quantile"] * 100)
+    logger.info(
+        f"Delay as fraction of vehicle shift length per vehicle [{pctl}th percentile]:"
+    )
+    logger.info(veh_delays.describe())
     return vehs
 
 
