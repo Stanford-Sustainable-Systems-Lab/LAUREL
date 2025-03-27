@@ -45,7 +45,7 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     dw.data["trip_start_time"] = dw.data.groupby(dw.veh)[dw.end].shift(1)
 
     delays = dw.data.groupby([dw.veh, "shift_id"]).agg(
-        max_delay_hrs=pd.NamedAgg("dwell_init_delay_hrs", "max"),
+        max_delay_hrs=pd.NamedAgg(params["delay_hrs_col"], "max"),
         shift_start=pd.NamedAgg("trip_start_time", "first"),
         shift_end=pd.NamedAgg(dw.end, "last"),
     )
