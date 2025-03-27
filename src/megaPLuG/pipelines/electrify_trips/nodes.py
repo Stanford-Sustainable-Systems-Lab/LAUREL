@@ -198,7 +198,9 @@ def apply_delays(dw: DwellSet, params: dict) -> DwellSet:
     cum_dly = dw.data[tdelt_cols["cumul_hrs"]]
     dw.data[dw.start] += cum_dly
     dw.data[dly_cols["dwell_hrs"]] = total_hours(
-        dw.data[tdelt_cols["dwell_hrs"]] - dw.data[tdelt_cols["decrease_hrs"]]
+        dw.data[tdelt_cols["dwell_hrs"]]
+        - dw.data[tdelt_cols["decrease_hrs"]]
+        + dw.data[tdelt_cols["increase_hrs"]]
     )
     dw.data[dw.end] += cum_dly + dw.data[tdelt_cols["increase_hrs"]]
 
