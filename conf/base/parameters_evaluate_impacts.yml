@@ -9,12 +9,14 @@ summarize_vehicles:
   delay_hrs_col: dwell_init_delay_hrs
   obs_duration_col: obs_duration
   delay_frac_quantiles:
-    - 0.90
-    - 1.00
+    thresh: 0.90
+    max: 1.00
   shift_refresh_col: is_refresh
   delay_frac_col: delay_frac
   delay_pct_prefix: delay_frac_pct
-
+  thresholds:
+    n_deaths_per_week_max: 0.5
+    delay_frac_max: 0.1
 
 localize_time_from_hexes:
   time_cols_source:
