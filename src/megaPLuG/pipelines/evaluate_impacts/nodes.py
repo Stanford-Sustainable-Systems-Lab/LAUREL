@@ -17,6 +17,7 @@ from megaPLuG.utils.data import IndexIntegerizer, filter_by_vals_in_cols
 from megaPLuG.utils.h3 import cells_to_region_polygons
 from megaPLuG.utils.logging import SuppressLogs
 from megaPLuG.utils.time import (
+    HOURS_PER_WEEK,
     calc_local_time,
     calc_time_zones_from_hexes,
     total_hours,
@@ -32,9 +33,11 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     n_deaths = dw.data.groupby(dw.veh, sort=False)["is_death"].sum()
     n_deaths.name = "n_deaths"
     vehs = vehs.merge(n_deaths, how="inner", on=dw.veh)
+    weeks_obs = total_hours(vehs[params["obs_duration_col"]]) / HOURS_PER_WEEK
+    vehs["n_deaths_per_week"] = vehs["n_deaths"] / weeks_obs
 
-    logger.info("Deaths per vehicle:")
-    logger.info(n_deaths.describe())
+    logger.info("Deaths per week per vehicle:")
+    logger.info(vehs["n_deaths_per_week"].describe())
 
     # Delay as fraction of shift duration for each vehicle
     dw.data["shift_id"] = dw.data.groupby(dw.veh)[params["shift_refresh_col"]].cumsum()

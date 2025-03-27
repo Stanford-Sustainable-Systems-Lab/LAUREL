@@ -6,6 +6,7 @@
 
 summarize_vehicles:
   dead_energy_col: dwell_init_kwh
+  obs_duration_col: obs_duration
   delay_frac_quantiles:
     - 0.90
     - 1.00

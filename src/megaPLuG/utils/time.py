@@ -11,6 +11,7 @@ from tzfpy import get_tz
 logger = logging.getLogger(__name__)
 
 SECS_PER_HOUR = 3600
+HOURS_PER_WEEK = 168
 
 
 def calc_time_zones_from_hexes(
