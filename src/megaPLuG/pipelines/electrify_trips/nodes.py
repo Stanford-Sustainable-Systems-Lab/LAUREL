@@ -217,4 +217,6 @@ def manage_charging(dw: DwellSet, params: dict) -> pd.DataFrame:
     manager_cls = _MANAGER_MAP[params["charging_manager"]]
     manager = manager_cls(dw=dw, **params["input_cols"])
     events = manager.get_events()
+    pow_col = manager_cls.suffixes["power"]
+    events[pow_col] = events[pow_col].round(params["round_decimals"])
     return events
