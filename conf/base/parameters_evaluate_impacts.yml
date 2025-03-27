@@ -6,9 +6,12 @@
 
 summarize_vehicles:
   dead_energy_col: dwell_init_kwh
-  delay_frac_quantile: 0.90
+  delay_frac_quantiles:
+    - 0.90
+    - 1.00
   shift_refresh_col: is_refresh
   delay_frac_col: delay_frac
+  delay_pct_prefix: delay_frac_pct
 
 
 localize_time_from_hexes:
