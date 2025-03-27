@@ -232,18 +232,19 @@ class AbstractChargingChoiceStrategy(ABC):
             cur_energy -= dwls["consumed_kwh"][i]
             outs["dwell_init_kwh"][i] = cur_energy
 
+            # Check if we can decrease delay at this dwell
             outs["dwell_init_delay_hrs"][i] = cur_delay
-            avail_time = np.maximum(
-                dwls["dwell_hrs"][i] - dwls["refresh"][i] * cur_delay, 0
-            )
-            delay_reduction = dwls["dwell_hrs"][i] - avail_time
-            delay_reduction = np.round(delay_reduction, round_decimals)
+            if dwls["refresh"][i] and dwls["dwell_hrs"][i] > cur_delay:
+                delay_reduction = cur_delay
+            else:
+                delay_reduction = 0.0
             outs["delay_dec_hrs"][i] = delay_reduction
             cur_delay -= delay_reduction
+            avail_hrs = dwls["dwell_hrs"][i] - delay_reduction
 
             # Manage vehicles running out of energy and resuscitating
             max_power_mode = np.argmax(dwls["modes_avail"][i] * modes["avail_kw"])
-            avail_kwh = dwls["dwell_hrs"][i] * modes["avail_kw"][max_power_mode]
+            avail_kwh = avail_hrs * modes["avail_kw"][max_power_mode]
             if np.isnan(cur_energy) or cur_energy < 0:  # Currently dead
                 if (
                     avail_kwh >= veh["batt_cap"]
@@ -258,8 +259,7 @@ class AbstractChargingChoiceStrategy(ABC):
                     dly = np.nan
                     mode = np.argmin(modes["avail_kw"])
             else:
-                chg, dly, mode = choice_func(cur_energy, dwls[i], veh, modes)
-            dly = np.round(dly, round_decimals)
+                chg, dly, mode = choice_func(cur_energy, avail_hrs, dwls[i], veh, modes)
             outs["charge_kwh"][i] = chg
             outs["delay_inc_hrs"][i] = dly
             outs["charge_mode"][i] = mode
@@ -345,6 +345,7 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
     @jit
     def _choose_charging(
         cur_energy: float,
+        avail_hrs: float,
         dwl: np.recarray,
         veh: np.recarray,
         modes: np.recarray,
@@ -379,7 +380,7 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         # e[0:n_powers] remains 0
 
         # Option 2: Charge for available time
-        e[n_powers : 2 * n_powers] = powers * dwl["dwell_hrs"]
+        e[n_powers : 2 * n_powers] = powers * avail_hrs
 
         # Option 3: Charge to meet needs
         e[2 * n_powers :] = nrg_needed_extr
@@ -391,7 +392,7 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         )  # TODO: Consider pre-computing this and passing in for speed
         div = np.where(powers_flat == 0.0, EXTREME / BETA_DELAY, e_cap / powers_flat)
         div = np.where(e_cap == 0.0, 0.0, div)
-        delta = np.maximum(div - dwl["dwell_hrs"], 0)
+        delta = np.maximum(div - avail_hrs, 0)
         soc_next = (cur_energy + e_cap - dwl["consumed_kwh_next"]) / veh["batt_cap"]
 
         # Calculate indirect utilities
