@@ -70,7 +70,7 @@ class DelayScenarioReader(ScenarioReader):
 
     def name_scenario(self: Self, path: Path) -> str:
         meta = self.get_metadata_values(path=path)
-        batt_cap = re.search(r"(?<=range_)(\d+)", meta["batt_cap"]).group() + "mi"
+        batt_cap = re.search(r"(?<=batt_cap_)(\d+)", meta["batt_cap"]).group() + "kWh"
         depot_kw = re.search(r"(?<=depot_)(\d+)", meta["depot_kw"]).group() + "kw Home"
         enroute_kw = (
             re.search(r"(?<=enroute_)(\d+)", meta["enroute_kw"]).group() + "kw Away"
