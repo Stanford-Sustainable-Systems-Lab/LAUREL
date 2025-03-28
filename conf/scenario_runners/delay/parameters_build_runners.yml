@@ -1,0 +1,34 @@
+# This is a boilerplate parameters config generated for pipeline 'build_runners'
+# using Kedro 0.19.5.
+#
+# Documentation for this file format can be found in "Parameters"
+# Link: https://docs.kedro.org/en/0.19.5/configuration/parameters.html
+
+slurm_command: local # Valid values are "sbatch" and "salloc"
+
+slurm_resources:
+  partition: serc
+  ntasks: 2 # I believe that this is what we need for SequentialRunner, while ParallelRunner needs n_examples + 1
+  cpus-per-task: 1 # Using multiple CPUs takes a lot of effort (e.g. Dask cluster)
+  mem-per-cpu: 32GB # Increasing memory, since I've had some memory errors
+  gpus: 0
+  time: 0-00:30 # Reducing time requirement, since with more processors we're going faster.
+  array: 0-23 # 2 at a time is enforced by Gurobi license
+
+cmd_line_calls:
+  prefix: rye run
+  kedro:
+    tags: scenario_run_vehs
+    # params: partition_data_dir=$GROUP_SCRATCH/passow/megaPLuG
+
+scenario_params:
+  builder: DelayScenarioBuilder
+  batt_cap_kwh:
+    - 550
+    - 1000
+  depot_kw_levels:
+    - 100
+    - 350
+  enroute_kw_levels:
+    - 350
+    - 1000
