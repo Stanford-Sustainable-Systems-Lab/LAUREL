@@ -14,9 +14,11 @@ summarize_vehicles:
   shift_refresh_col: is_refresh
   delay_frac_col: delay_frac
   delay_pct_prefix: delay_frac_pct
+  drop_events_col: drop_events
   thresholds:
     n_deaths_per_week_max: 0.5
     delay_frac_max: 0.1
+    delay_hrs_max: 5
 
 localize_time_from_hexes:
   time_cols_source:
@@ -30,6 +32,7 @@ localize_time_from_hexes:
 
 filter_events:
   power_col: hex_kw_diff
+  drop_events_col: drop_events
   drop_na_cols:
     - substation_id
 
@@ -95,6 +98,7 @@ assign_metadata_location:
 assign_metadata_vehicle:
   keep_right_columns:
     - veh_id
+    - drop_events
     # Other columns will be added at runtime
   merge_kwargs:
     how: left

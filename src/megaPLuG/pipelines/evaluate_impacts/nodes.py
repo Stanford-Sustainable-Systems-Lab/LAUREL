@@ -79,13 +79,37 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     vehs["dies_too_freq"] = vehs["n_deaths_per_week"] > thrs["n_deaths_per_week_max"]
     vehs["delays_too_long_rel"] = vehs[qtl_cols["thresh"]] > thrs["delay_frac_max"]
     vehs["delays_too_long_abs"] = vehs["max_delay_hrs"] > thrs["delay_hrs_max"]
+    vehs[params["drop_events_col"]] = (
+        vehs["dies_too_freq"]
+        | vehs["delays_too_long_rel"]
+        | vehs["delays_too_long_abs"]
+    )
+
+    logger.info("Vehicles to be dropped [%] based on reason:")
+    reasons = [
+        "dies_too_freq",
+        "delays_too_long_rel",
+        "delays_too_long_abs",
+        params["drop_events_col"],
+    ]
+    logger.info(np.round(vehs.loc[:, reasons].sum(axis=0) / len(vehs) * 100, 2))
     return vehs
 
 
 def filter_events(events: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Filter events down to only include the ones we want to summarize."""
-    events = events.loc[events[params["power_col"]] != 0]
+    old_len = len(events)
+
+    nonzero_power = events[params["power_col"]] != 0
+    vehicle_feasible = ~events[params["drop_events_col"]]
+    events = events.loc[nonzero_power & vehicle_feasible, :]
     events = events.dropna(subset=params["drop_na_cols"])
+    events = events.drop(columns=[params["drop_events_col"]])
+
+    new_len = len(events)
+    abs_diff = old_len - new_len
+    pct_diff = round(abs_diff / old_len * 100, 1)
+    logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
     return events
 
 
