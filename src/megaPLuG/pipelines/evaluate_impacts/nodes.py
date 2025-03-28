@@ -55,25 +55,30 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     delays["shift_dur_hrs"] = total_hours(delays["shift_end"] - delays["shift_start"])
     delays[dfcol] = delays["max_delay_hrs"] / delays["shift_dur_hrs"]
     qtls = params["delay_frac_quantiles"]
-    veh_delays = delays.groupby(dw.veh)[dfcol].quantile(list(qtls.values()))
-    veh_delays = veh_delays.unstack(level=1)
+
+    delays_grp = delays.groupby(dw.veh)
+    veh_delays_rel = delays_grp[dfcol].quantile(list(qtls.values()))
+    veh_delays_rel = veh_delays_rel.unstack(level=1)
     pfx = params["delay_pct_prefix"]
     qtl_cols = {key: f"{pfx}_{int(val * 100)}" for key, val in qtls.items()}
-    veh_delays.columns = list(qtl_cols.values())
-    vehs = vehs.merge(veh_delays, how="left", on=dw.veh)
+    veh_delays_rel.columns = list(qtl_cols.values())
+    vehs = vehs.merge(veh_delays_rel, how="left", on=dw.veh)
+
+    veh_delays_abs = delays_grp["max_delay_hrs"].max()
+    vehs = vehs.merge(veh_delays_abs, how="left", on=dw.veh)
 
     for cur_qtl in qtls.keys():
         pctl = int(qtls[cur_qtl] * 100)
         logger.info(
             f"Delay as fraction of vehicle shift length per vehicle [{pctl}th percentile]:"
         )
-        logger.info(veh_delays[qtl_cols[cur_qtl]].describe())
+        logger.info(veh_delays_rel[qtl_cols[cur_qtl]].describe())
 
     # Get boolean columns for which vehicles are included in load profiles
     thrs = params["thresholds"]
     vehs["dies_too_freq"] = vehs["n_deaths_per_week"] > thrs["n_deaths_per_week_max"]
-    vehs["delays_too_long"] = vehs[qtl_cols["thresh"]] > thrs["delay_frac_max"]
-
+    vehs["delays_too_long_rel"] = vehs[qtl_cols["thresh"]] > thrs["delay_frac_max"]
+    vehs["delays_too_long_abs"] = vehs["max_delay_hrs"] > thrs["delay_hrs_max"]
     return vehs
 
 
