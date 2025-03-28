@@ -54,7 +54,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="collate_partitions_events",
             ),
         ],
-        tags="scenario_run",
+        tags=["scenario_run", "scenario_run_vehs"],
     )
 
     report_vehicles_pipe = pipeline(
@@ -76,7 +76,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="write_scenario_partition_vehicles",
             ),
         ],
-        tags=["report_vehicles", "scenario_run"],
+        tags=["report_vehicles", "scenario_run", "scenario_run_vehs"],
     )
 
     report_profiles_scaled_prep_pipe = pipeline(
