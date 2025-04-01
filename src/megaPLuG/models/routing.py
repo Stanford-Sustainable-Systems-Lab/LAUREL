@@ -33,6 +33,17 @@ class GraphhopperContainerRouter(ABC):
 
     def __enter__(self: Self):
         """Start the container and return a GraphHopper client."""
+        cmd_rout = self._build_router_command()
+        self.spin_up(cmd_rout)
+        return Graphhopper(base_url=f"http://localhost:{self.port}")
+
+    def __exit__(self: Self, exc_type, exc_val, exc_tb):
+        """Stop the container when exiting the context."""
+        print("Stopping GraphHopper...")
+        self.container.stop_existing()
+
+    def spin_up(self: Self, cmd: str) -> None:
+        """Spin up the container with the given command for the entrypoint."""
         self.container = DockerContainerRunner(
             name=self.container_name,
             image=self.image,
@@ -45,31 +56,12 @@ class GraphhopperContainerRouter(ABC):
 
         # Start the container
         print("Starting GraphHopper...")
-        cmd_rout = self._build_router_command()
-        self.container.start(cmd=cmd_rout)
+        self.container.start(cmd=cmd)
 
         # Wait for service to be ready
         print(f"Waiting {self.startup_delay} seconds for initialization...")
         time.sleep(self.startup_delay)
-
-        # Check if container is running
-        if not self.container.is_running():
-            stderr = (
-                self.container.process.stderr.read()
-                if self.container.process
-                else "No process error"
-            )
-            raise RuntimeError(
-                f"Failed to start GraphHopper container. Error: {stderr}"
-            )
-
-        # Return the client
-        return Graphhopper(base_url=f"http://localhost:{self.port}")
-
-    def __exit__(self: Self, exc_type, exc_val, exc_tb):
-        """Stop the container when exiting the context."""
-        print("Stopping GraphHopper...")
-        self.container.stop_existing()
+        self.container.check_is_running()
 
     def _build_router_command(self: Self) -> list[str]:
         """Build the command args that go to the routing container itself."""
@@ -140,6 +132,13 @@ class AbstractContainerRunner(ABC):
     def is_running(self: Self) -> bool:
         """Check if the container is running."""
         pass
+
+    def check_is_running(self: Self) -> None:
+        """Report if the container is running."""
+        # Check if container is running
+        if not self.is_running():
+            stderr = self.process.stderr.read() if self.process else "No process error"
+            raise RuntimeError(f"Failed to start container. Error: {stderr}")
 
     @abstractmethod
     def stop_existing(self: Self) -> None:
