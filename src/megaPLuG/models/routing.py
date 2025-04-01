@@ -1,4 +1,5 @@
 import subprocess
+import sys
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -132,23 +133,53 @@ class AbstractContainerRunner(ABC):
 
         print("Starting container...")
         if wait_for_completion:
-            result = subprocess.run(
+            self.process = subprocess.Popen(
                 run_cmd,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                check=False,
+                bufsize=1,  # Line buffered
             )
 
-            # Check for errors
-            if result.returncode != 0:
+            stdout_lines = []
+            stderr_lines = []
+
+            print("Process output:")
+            while self.process.poll() is None:
+                # Read stdout
+                stdout_line = self.process.stdout.readline()
+                if stdout_line:
+                    print(f"  {stdout_line.rstrip()}")
+                    stdout_lines.append(stdout_line)
+
+                # Read stderr
+                stderr_line = self.process.stderr.readline()
+                if stderr_line:
+                    print(f"  [ERROR] {stderr_line.rstrip()}", file=sys.stderr)
+                    stderr_lines.append(stderr_line)
+
+            # Read any remaining output after process completed
+            for line in self.process.stdout:
+                if line:
+                    print(f"  {line.rstrip()}")
+                    stdout_lines.append(line)
+
+            for line in self.process.stderr:
+                if line:
+                    print(f"  [ERROR] {line.rstrip()}", file=sys.stderr)
+                    stderr_lines.append(line)
+
+            # Check return code
+            if self.process.returncode != 0:
                 raise RuntimeError(
-                    f"Process failed with return code {result.returncode}. "
-                    f"Error: {result.stderr}"
+                    f"Process failed with return code {self.process.returncode}. "
+                    f"Error: {' '.join(stderr_lines)}"
                 )
 
-            # Store stdout/stderr for potential debugging
-            self.stdout = result.stdout
-            self.stderr = result.stderr
+            # Store output for later reference
+            self.stdout = "\n".join(stdout_lines)
+            self.stderr = "\n".join(stderr_lines)
+            print("Process completed successfully")
 
         else:
             self.process = subprocess.Popen(
