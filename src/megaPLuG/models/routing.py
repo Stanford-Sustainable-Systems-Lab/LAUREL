@@ -36,7 +36,9 @@ class GraphhopperContainerRouter(ABC):
         self._stop_existing_container()
 
         # Build the command based on container type
-        cmd = self._build_run_command()
+        cmd_cont = self._build_container_command()
+        cmd_rout = self._build_router_command()
+        cmd = cmd_cont + cmd_rout
 
         # Start the container
         print("Starting GraphHopper...")
@@ -63,8 +65,17 @@ class GraphhopperContainerRouter(ABC):
         print("Stopping GraphHopper...")
         self._stop_existing_container()
 
+    def _build_router_command(self: Self) -> list[str]:
+        """Build the command args that go to the routing container itself."""
+        # Add command arguments for within the container itself
+        cmd = []
+        if len(self.cmd_kwargs) > 0:
+            cmd_ls = [item for pair in self.cmd_kwargs.items() for item in pair]
+            cmd.extend(cmd_ls)
+        return cmd
+
     @abstractmethod
-    def _build_run_command(self: Self) -> list[str]:
+    def _build_container_command(self: Self) -> list[str]:
         """Build the container run command."""
         pass
 
@@ -82,7 +93,7 @@ class GraphhopperContainerRouter(ABC):
 class GraphhopperDockerRouter(GraphhopperContainerRouter):
     """Docker implementation of GraphHopper container router."""
 
-    def _build_run_command(self: Self) -> list[str]:
+    def _build_container_command(self: Self) -> list[str]:
         """Build the docker run command."""
         cmd = ["docker", "run", "-d"]
         cmd.extend(["--name", self.container_name])
@@ -91,12 +102,6 @@ class GraphhopperDockerRouter(GraphhopperContainerRouter):
             ["--mount", f"type=bind,src={self.graph_dir},dst={self.target_graph_dir}"]
         )
         cmd.extend([self.image])
-
-        # Add command arguments for within the container itself
-        if len(self.cmd_kwargs) > 0:
-            cmd_ls = [item for pair in self.cmd_kwargs.items() for item in pair]
-            cmd.extend(cmd_ls)
-
         return cmd
 
     def _is_container_running(self: Self) -> bool:
@@ -130,7 +135,7 @@ class GraphhopperDockerRouter(GraphhopperContainerRouter):
 class GraphhopperSingularityRouter(GraphhopperContainerRouter):
     """Singularity implementation of GraphHopper container router."""
 
-    def _build_run_command(self: Self) -> list[str]:
+    def _build_container_command(self: Self) -> list[str]:
         """Build the singularity run command."""
         cmd = ["singularity", "instance", "run"]
         cmd.extend(
@@ -143,12 +148,6 @@ class GraphhopperSingularityRouter(GraphhopperContainerRouter):
         cmd.extend(["--bind", f"{self.graph_dir}:{self.target_graph_dir}"])
         cmd.extend([self.image])
         cmd.extend([self.container_name])
-
-        # Add command arguments for within the container itself
-        if len(self.cmd_kwargs) > 0:
-            cmd_ls = [item for pair in self.cmd_kwargs.items() for item in pair]
-            cmd.extend(cmd_ls)
-
         return cmd
 
     def _is_container_running(self: Self) -> bool:
