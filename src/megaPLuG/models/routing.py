@@ -1,18 +1,13 @@
 import subprocess
 import time
+from abc import ABC, abstractmethod
 from typing import Self
 
 from routingpy import Graphhopper
 
 
-class GraphhopperContainerRouter:
-    """Context manager class to handle GraphHopper container lifecycle.
-
-    This class can run a Docker container using either Docker or Singularity.
-
-    This class starts a GraphHopper routing container, waits for it to initialize,
-    and cleans it up when done.
-    """
+class GraphhopperContainerRouter(ABC):
+    """Abstract base class for container-based routing services."""
 
     # Known defaults from the GraphHopper image
     target_port: int = 8989
@@ -23,14 +18,10 @@ class GraphhopperContainerRouter:
         image: str,
         graph_dir: str,
         port: int = 8989,
-        container_engine: str = "docker",  # "docker" or "singularity"
         container_name: str = "graphhopper",
         startup_delay: int = 5,
         **cmd_kwargs,
     ):
-        if container_engine not in ["docker", "singularity"]:
-            raise ValueError(f"Unsupported container engine: {self.container_engine}")
-        self.container_engine = container_engine
         self.image = image
         self.container_name = container_name
         self.port = port
@@ -48,7 +39,7 @@ class GraphhopperContainerRouter:
         cmd = self._build_run_command()
 
         # Start the container
-        print(f"Starting GraphHopper with {self.container_engine}...")
+        print("Starting GraphHopper...")
         self.process = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
@@ -69,37 +60,37 @@ class GraphhopperContainerRouter:
 
     def __exit__(self: Self, exc_type, exc_val, exc_tb):
         """Stop the container when exiting the context."""
-        print(f"Stopping GraphHopper with {self.container_engine}...")
+        print("Stopping GraphHopper...")
         self._stop_existing_container()
 
-    def _build_run_command(self: Self):
-        """Build the container command based on the container type."""
-        cmd = [self.container_engine]
+    @abstractmethod
+    def _build_run_command(self: Self) -> list[str]:
+        """Build the container run command."""
+        pass
 
-        if self.container_engine == "docker":
-            cmd.extend(["run", "-d"])
-            cmd.extend(["--name", self.container_name])
-            cmd.extend(["--publish", f"{self.port}:{self.target_port}"])
-            cmd.extend(
-                [
-                    "--mount",
-                    f"type=bind,src={self.graph_dir},dst={self.target_graph_dir}",
-                ]
-            )  # Read-only option causes container crash for unknown reason
-            cmd.extend([self.image])
+    @abstractmethod
+    def _is_container_running(self: Self) -> bool:
+        """Check if the container is running."""
+        pass
 
-        elif self.container_engine == "singularity":
-            cmd.extend(["instance", "run"])
-            cmd.extend(
-                [
-                    "--net",
-                    "--network-args",
-                    f"portmap={self.port}:{self.target_port}/tcp",
-                ]
-            )
-            cmd.extend(["--bind", f"{self.graph_dir}:{self.target_graph_dir}"])
-            cmd.extend([self.image])
-            cmd.extend([self.container_name])
+    @abstractmethod
+    def _stop_existing_container(self: Self) -> None:
+        """Stop the container if it's running."""
+        pass
+
+
+class GraphhopperDockerRouter(GraphhopperContainerRouter):
+    """Docker implementation of GraphHopper container router."""
+
+    def _build_run_command(self: Self) -> list[str]:
+        """Build the docker run command."""
+        cmd = ["docker", "run", "-d"]
+        cmd.extend(["--name", self.container_name])
+        cmd.extend(["--publish", f"{self.port}:{self.target_port}"])
+        cmd.extend(
+            ["--mount", f"type=bind,src={self.graph_dir},dst={self.target_graph_dir}"]
+        )
+        cmd.extend([self.image])
 
         # Add command arguments for within the container itself
         if len(self.cmd_kwargs) > 0:
@@ -108,45 +99,102 @@ class GraphhopperContainerRouter:
 
         return cmd
 
-    def _is_container_running(self):
-        """Check if the container is running."""
-        if self.container_engine == "docker":
-            cmd = [
-                "docker",
-                "ps",
-                "--filter",
-                f"name={self.container_name}",
-                "--format",
-                "{{.ID}}",
-            ]
-            # If I run into trouble with the processs hanging, consider adding a timeout argument
-            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-            return bool(result.stdout.strip())
+    def _is_container_running(self: Self) -> bool:
+        """Check if the docker container is running."""
+        cmd = [
+            "docker",
+            "ps",
+            "--filter",
+            f"name={self.container_name}",
+            "--format",
+            "{{.ID}}",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        return bool(result.stdout.strip())
 
-        elif self.container_engine == "singularity":
-            # Consider using https://docs.sylabs.io/guides/4.2/user-guide/cli/singularity_instance_stats.html
-
-            result = subprocess.run(
-                ["ps", "aux"], capture_output=True, text=True, check=False
-            )
-            return self.container_name in result.stdout
-
-    def _stop_existing_container(self):
-        """Stop the container if it's running."""
+    def _stop_existing_container(self: Self) -> None:
+        """Stop the docker container if it's running."""
         if self._is_container_running():
-            if self.container_engine == "docker":
-                subprocess.run(
-                    ["docker", "stop", self.container_name],
-                    capture_output=True,
-                    check=False,
-                )
-                subprocess.run(
-                    ["docker", "rm", "-f", self.container_name],
-                    capture_output=True,
-                    check=False,
-                )
-            elif self.container_engine == "singularity":
-                subprocess.run(
-                    ["singularity", "instance", "stop", self.container_name],
-                    check=False,
-                )
+            subprocess.run(
+                ["docker", "stop", self.container_name],
+                capture_output=True,
+                check=False,
+            )
+            subprocess.run(
+                ["docker", "rm", "-f", self.container_name],
+                capture_output=True,
+                check=False,
+            )
+
+
+class GraphhopperSingularityRouter(GraphhopperContainerRouter):
+    """Singularity implementation of GraphHopper container router."""
+
+    def _build_run_command(self: Self) -> list[str]:
+        """Build the singularity run command."""
+        cmd = ["singularity", "instance", "run"]
+        cmd.extend(
+            [
+                "--net",
+                "--network-args",
+                f"portmap={self.port}:{self.target_port}/tcp",
+            ]
+        )
+        cmd.extend(["--bind", f"{self.graph_dir}:{self.target_graph_dir}"])
+        cmd.extend([self.image])
+        cmd.extend([self.container_name])
+
+        # Add command arguments for within the container itself
+        if len(self.cmd_kwargs) > 0:
+            cmd_ls = [item for pair in self.cmd_kwargs.items() for item in pair]
+            cmd.extend(cmd_ls)
+
+        return cmd
+
+    def _is_container_running(self: Self) -> bool:
+        """Check if the singularity container is running."""
+        result = subprocess.run(
+            ["ps", "aux"], capture_output=True, text=True, check=False
+        )
+        return self.container_name in result.stdout
+
+    def _stop_existing_container(self: Self) -> None:
+        """Stop the singularity container if it's running."""
+        if self._is_container_running():
+            subprocess.run(
+                ["singularity", "instance", "stop", self.container_name],
+                check=False,
+            )
+
+
+# Factory function to maintain backward compatibility
+def GraphhopperContainerRouter(
+    image: str,
+    graph_dir: str,
+    port: int = 8989,
+    container_engine: str = "docker",
+    container_name: str = "graphhopper",
+    startup_delay: int = 5,
+    **cmd_kwargs,
+) -> GraphhopperContainerRouter:
+    """Factory function to create the appropriate container router."""
+    if container_engine == "docker":
+        return GraphhopperDockerRouter(
+            image=image,
+            graph_dir=graph_dir,
+            port=port,
+            container_name=container_name,
+            startup_delay=startup_delay,
+            **cmd_kwargs,
+        )
+    elif container_engine == "singularity":
+        return GraphhopperSingularityRouter(
+            image=image,
+            graph_dir=graph_dir,
+            port=port,
+            container_name=container_name,
+            startup_delay=startup_delay,
+            **cmd_kwargs,
+        )
+    else:
+        raise ValueError(f"Unsupported container engine: {container_engine}")
