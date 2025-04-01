@@ -33,35 +33,35 @@ class GraphhopperContainerRouter(ABC):
 
     def __enter__(self: Self):
         """Start the container and return a GraphHopper client."""
-        cmd_rout = self._build_router_command()
-        self.spin_up(cmd_rout)
-        return Graphhopper(base_url=f"http://localhost:{self.port}")
-
-    def __exit__(self: Self, exc_type, exc_val, exc_tb):
-        """Stop the container when exiting the context."""
-        print("Stopping GraphHopper...")
-        self.container.stop_existing()
-
-    def spin_up(self: Self, cmd: str) -> None:
-        """Spin up the container with the given command for the entrypoint."""
         self.container = DockerContainerRunner(
             name=self.container_name,
             image=self.image,
             port_map={self.port: self.target_port},
             bind_map={self.graph_dir: self.target_graph_dir},
         )
+        self.container.stop_existing()
+        cmd_rout = self._build_router_command()
+        print("Starting GraphHopper routing server...")
+        self.container.start(cmd=cmd_rout)
+        return Graphhopper(base_url=f"http://localhost:{self.port}")
 
-        # Stop existing container if running
+    def __exit__(self: Self, exc_type, exc_val, exc_tb):
+        """Stop the container when exiting the context."""
+        print("Stopping GraphHopper routing server...")
         self.container.stop_existing()
 
-        # Start the container
-        print("Starting GraphHopper...")
-        self.container.start(cmd=cmd)
-
-        # Wait for service to be ready
-        print(f"Waiting {self.startup_delay} seconds for initialization...")
-        time.sleep(self.startup_delay)
-        self.container.check_is_running()
+    def import_graph(self: Self, url: str) -> None:
+        """Import the graph from the given URL and process it."""
+        self.container = DockerContainerRunner(
+            name=self.container_name,
+            image=self.image,
+            port_map={self.port: self.target_port},
+            bind_map={self.graph_dir: self.target_graph_dir},
+        )
+        self.container.stop_existing()
+        cmd_import = ["--import", "--url", url]
+        print("Starting GraphHopper graph import...")
+        self.container.start(cmd_import, wait_for_completion=True)
 
     def _build_router_command(self: Self) -> list[str]:
         """Build the command args that go to the routing container itself."""
@@ -92,7 +92,6 @@ class AbstractContainerRunner(ABC):
         self.image = image
         self.port_map = port_map
         self.bind_map = bind_map
-        self.up_cmd = self.build_command()
 
     @abstractmethod
     def build_command(self: Self) -> list[str]:
@@ -121,12 +120,47 @@ class AbstractContainerRunner(ABC):
         """Build the string version of a bind mount mapping."""
         pass
 
-    def start(self: Self, cmd: list[str]) -> None:
+    def start(
+        self: Self,
+        cmd: list[str],
+        wait_for_completion: bool = False,
+        startup_delay_secs: int = 5,
+    ) -> None:
         """Start the container running using the command passed."""
-        run_cmd = self.up_cmd + cmd
-        self.process = subprocess.Popen(
-            run_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-        )
+        up_cmd = self.build_command(wait_for_completion=wait_for_completion)
+        run_cmd = up_cmd + cmd
+
+        print("Starting container...")
+        if wait_for_completion:
+            result = subprocess.run(
+                run_cmd,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            # Check for errors
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"Process failed with return code {result.returncode}. "
+                    f"Error: {result.stderr}"
+                )
+
+            # Store stdout/stderr for potential debugging
+            self.stdout = result.stdout
+            self.stderr = result.stderr
+
+        else:
+            self.process = subprocess.Popen(
+                run_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            # Wait for service to be ready
+            print(f"Waiting {startup_delay_secs} seconds for initialization...")
+            time.sleep(startup_delay_secs)
+            self.check_is_running()
 
     @abstractmethod
     def is_running(self: Self) -> bool:
@@ -149,12 +183,14 @@ class AbstractContainerRunner(ABC):
 class DockerContainerRunner(AbstractContainerRunner):
     """Docker implementation of container runner."""
 
-    def build_command(self: Self) -> list[str]:
+    def build_command(self: Self, wait_for_completion: bool = False) -> list[str]:
         """Build the docker run command."""
         port_maps = self._build_map_str_list(self.port_map, self._build_port_map_str)
         bind_maps = self._build_map_str_list(self.bind_map, self._build_bind_map_str)
 
-        cmd = ["docker", "run", "-d"]
+        cmd = ["docker", "run"]
+        if not wait_for_completion:
+            cmd.extend(["-d"])
         cmd.extend(["--name", self.name])
         cmd.extend(["--publish"] + port_maps)
         cmd.extend(["--mount"] + bind_maps)
