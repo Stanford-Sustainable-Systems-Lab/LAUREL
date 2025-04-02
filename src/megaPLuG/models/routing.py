@@ -175,6 +175,7 @@ class AbstractContainerRunner(ABC):
             logger.info(f"Waiting {startup_delay_secs} seconds for initialization...")
             time.sleep(startup_delay_secs)
             self.check_is_running()
+            logger.info("Container is running.")
 
     @staticmethod
     def _log_container_prints(line: str | None) -> None:
