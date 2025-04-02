@@ -181,7 +181,7 @@ class AbstractContainerRunner(ABC):
     @staticmethod
     def _log_container_prints(line: str | None) -> None:
         if line:
-            logger.info(f"CONTAINER: {line.rstrip()}")
+            logger.info(f"[green]CONTAINER:[/] {line.rstrip()}", extra={"markup": True})
 
     @abstractmethod
     def is_running(self: Self) -> bool:
