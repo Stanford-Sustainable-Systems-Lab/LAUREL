@@ -23,6 +23,7 @@ cmd_line_calls:
 
 scenario_params:
   builder: SenseScenarioBuilder
+  display_name: sense
   sample_size: 512 # Sobol sequences work best on powers of 2
   variables:
     consump_kwh_per_mile:

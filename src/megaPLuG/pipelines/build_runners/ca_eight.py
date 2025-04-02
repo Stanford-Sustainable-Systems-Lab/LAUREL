@@ -11,7 +11,6 @@ from megaPLuG.scenarios.read import ScenarioReader
 class CalifClass8ScenarioBuilder(ScenarioBuilder):
     """Build scenarios for the California Class 8 truck model."""
 
-    display_name = "ca_eight"
     partition_level_names = (
         "run_name",
         "range_mi",

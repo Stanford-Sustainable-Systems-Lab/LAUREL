@@ -85,7 +85,6 @@ class ScenarioBuilder(ABC):
 class TestScenarioBuilder(ScenarioBuilder):
     """Builds a test scenario set with a single partition."""
 
-    display_name = "test"
     partition_level_names = ("run_name", "task_id")
 
     def _build_param_dicts(self) -> tuple[list[Path], list[dict]]:
