@@ -17,13 +17,13 @@ class ScenarioBuilder(ABC):
 
     def __init__(self, scen_params: dict, all_params: dict) -> None:
         self.scen_params = scen_params
+        if "display_name" in self.scen_params:
+            self.display_name = self.scen_params["display_name"]
+        else:
+            raise RuntimeError(
+                "The 'display_name' for the scenario was not in the scenario parameters."
+            )
         self.params = all_params
-
-    @property
-    @abstractmethod
-    def display_name(self) -> str:
-        """Get the display name used to build folders and SLURM runs for this scenario."""
-        pass  # Implement this in the concrete classes by setting the attribute display_name
 
     @property
     @abstractmethod
