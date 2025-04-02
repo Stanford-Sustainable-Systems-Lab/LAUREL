@@ -23,6 +23,7 @@ cmd_line_calls:
 
 scenario_params:
   builder: ScaleTestScenarioBuilder
+  display_name: scale_test
   is_scaled:
     - True
     - False

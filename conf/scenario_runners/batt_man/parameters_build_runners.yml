@@ -23,6 +23,7 @@ cmd_line_calls:
 
 scenario_params:
   builder: BatteryManageScenarioBuilder
+  display_name: batt_man
   battery_capacities_kwh: # These are only used for home-base, Class 8 vehicles
     - 450
     - 600

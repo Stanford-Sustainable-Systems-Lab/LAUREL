@@ -94,10 +94,11 @@ class ScenarioReader(ABC):
     def read_partitions(
         self: Self,
         partitions: dict[str, object],
-        dirs: str | list[str] = None,
+        dirs: str | list[str],
     ) -> object:
-        if dirs is None:
-            dirs = self.builder.display_name
+        """Read data from the specific directories (dirs) within a PartitionDataset
+        given by partitions.
+        """
         parts = {Path(d): o for d, o in partitions.items()}
         parts = self.select_partitions(partitions=parts, dirs=dirs)
         names = {pth: self.name_scenario(pth) for pth in parts.keys()}
@@ -144,6 +145,7 @@ class ScenarioReader(ABC):
     def list_completed_partitions(
         self: Self,
         data_partitions: dict[str, object],
+        dirs: str | list[str],
         config_partitions: dict[str, object] = None,
         incomplete: bool = False,
         report_type: str = "scenario",
@@ -155,8 +157,6 @@ class ScenarioReader(ABC):
         Returns: A list of scenario names or task ids, depending on the report_type
         argument.
         """
-        dirs = self.builder.display_name
-
         # Use the select partitions based on the builder's display name and get the set of paths
         data_partitions = {Path(d): o for d, o in data_partitions.items()}
         complete_parts = self.select_partitions(partitions=data_partitions, dirs=dirs)
