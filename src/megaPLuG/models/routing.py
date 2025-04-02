@@ -65,6 +65,7 @@ class GraphhopperContainerRouter(ABC):
         cmd_import = ["--import", "--url", url]
         logger.info("Starting GraphHopper graph import...")
         self.container.start(cmd_import, wait_for_completion=True)
+        self.container.stop_existing()
 
     def _build_router_command(self: Self) -> list[str]:
         """Build the command args that go to the routing container itself."""
@@ -246,11 +247,11 @@ class DockerContainerRunner(AbstractContainerRunner):
                 capture_output=True,
                 check=False,
             )
-            subprocess.run(
-                ["docker", "rm", "-f", self.name],
-                capture_output=True,
-                check=False,
-            )
+        subprocess.run(
+            ["docker", "rm", "-f", self.name],
+            capture_output=True,
+            check=False,
+        )
 
 
 class SingularityContainerRunner(AbstractContainerRunner):
