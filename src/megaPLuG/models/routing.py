@@ -1,11 +1,13 @@
+import logging
 import subprocess
-import sys
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Self
 
 from routingpy import Graphhopper
+
+logger = logging.getLogger(__name__)
 
 
 class GraphhopperContainerRouter(ABC):
@@ -42,13 +44,13 @@ class GraphhopperContainerRouter(ABC):
         )
         self.container.stop_existing()
         cmd_rout = self._build_router_command()
-        print("Starting GraphHopper routing server...")
+        logger.info("Starting GraphHopper routing server...")
         self.container.start(cmd=cmd_rout)
         return Graphhopper(base_url=f"http://localhost:{self.port}")
 
     def __exit__(self: Self, exc_type, exc_val, exc_tb):
         """Stop the container when exiting the context."""
-        print("Stopping GraphHopper routing server...")
+        logger.info("Stopping GraphHopper routing server...")
         self.container.stop_existing()
 
     def import_graph(self: Self, url: str) -> None:
@@ -61,7 +63,7 @@ class GraphhopperContainerRouter(ABC):
         )
         self.container.stop_existing()
         cmd_import = ["--import", "--url", url]
-        print("Starting GraphHopper graph import...")
+        logger.info("Starting GraphHopper graph import...")
         self.container.start(cmd_import, wait_for_completion=True)
 
     def _build_router_command(self: Self) -> list[str]:
@@ -131,7 +133,7 @@ class AbstractContainerRunner(ABC):
         up_cmd = self.build_command(wait_for_completion=wait_for_completion)
         run_cmd = up_cmd + cmd
 
-        print("Starting container...")
+        logger.info("Starting container...")
         if wait_for_completion:
             self.process = subprocess.Popen(
                 run_cmd,
@@ -141,45 +143,26 @@ class AbstractContainerRunner(ABC):
                 bufsize=1,  # Line buffered
             )
 
-            stdout_lines = []
-            stderr_lines = []
-
-            print("Process output:")
+            logger.info("Process output:")
+            # Print output in real-time while process is running
             while self.process.poll() is None:
-                # Read stdout
-                stdout_line = self.process.stdout.readline()
-                if stdout_line:
-                    print(f"  {stdout_line.rstrip()}")
-                    stdout_lines.append(stdout_line)
-
-                # Read stderr
-                stderr_line = self.process.stderr.readline()
-                if stderr_line:
-                    print(f"  [ERROR] {stderr_line.rstrip()}", file=sys.stderr)
-                    stderr_lines.append(stderr_line)
+                self._log_container_prints(self.process.stdout.readline())
+                self._log_container_prints(self.process.stderr.readline())
 
             # Read any remaining output after process completed
             for line in self.process.stdout:
-                if line:
-                    print(f"  {line.rstrip()}")
-                    stdout_lines.append(line)
+                self._log_container_prints(line)
 
             for line in self.process.stderr:
-                if line:
-                    print(f"  [ERROR] {line.rstrip()}", file=sys.stderr)
-                    stderr_lines.append(line)
+                self._log_container_prints(line)
 
             # Check return code
             if self.process.returncode != 0:
                 raise RuntimeError(
-                    f"Process failed with return code {self.process.returncode}. "
-                    f"Error: {' '.join(stderr_lines)}"
+                    f"Process failed with return code {self.process.returncode}."
                 )
 
-            # Store output for later reference
-            self.stdout = "\n".join(stdout_lines)
-            self.stderr = "\n".join(stderr_lines)
-            print("Process completed successfully")
+            logger.info("Process completed successfully")
 
         else:
             self.process = subprocess.Popen(
@@ -189,9 +172,14 @@ class AbstractContainerRunner(ABC):
                 text=True,
             )
             # Wait for service to be ready
-            print(f"Waiting {startup_delay_secs} seconds for initialization...")
+            logger.info(f"Waiting {startup_delay_secs} seconds for initialization...")
             time.sleep(startup_delay_secs)
             self.check_is_running()
+
+    @staticmethod
+    def _log_container_prints(line: str | None) -> None:
+        if line:
+            logger.info(f"CONTAINER: {line.rstrip()}")
 
     @abstractmethod
     def is_running(self: Self) -> bool:
