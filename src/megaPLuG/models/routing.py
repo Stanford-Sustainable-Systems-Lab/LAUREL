@@ -98,7 +98,7 @@ class AbstractContainerRunner(ABC):
         self.bind_map = bind_map
 
     @abstractmethod
-    def build_command(self: Self) -> list[str]:
+    def build_command(self: Self, wait_for_completion: bool = False) -> list[str]:
         """Build the container run command."""
         pass
 
@@ -257,7 +257,7 @@ class DockerContainerRunner(AbstractContainerRunner):
 class SingularityContainerRunner(AbstractContainerRunner):
     """Singularity implementation of container runner."""
 
-    def build_command(self: Self) -> list[str]:
+    def build_command(self: Self, wait_for_completion: bool = False) -> list[str]:
         """Build the singularity run command."""
         port_maps = self._build_map_str_list(self.port_map, self._build_port_map_str)
         bind_maps = self._build_map_str_list(self.bind_map, self._build_bind_map_str)
