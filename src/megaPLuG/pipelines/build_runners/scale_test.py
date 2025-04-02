@@ -10,7 +10,6 @@ from megaPLuG.scenarios.read import ScenarioReader
 class ScaleTestScenarioBuilder(ScenarioBuilder):
     """Build scenarios for the scaling test truck model."""
 
-    display_name = "scale_test"
     partition_level_names = (
         "run_name",
         "is_scaled",

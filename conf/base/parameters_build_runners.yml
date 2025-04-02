@@ -28,3 +28,4 @@ cmd_line_calls:
 
 scenario_params:
   builder: TestScenarioBuilder
+  display_name: test

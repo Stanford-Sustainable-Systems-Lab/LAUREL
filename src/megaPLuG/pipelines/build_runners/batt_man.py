@@ -11,7 +11,6 @@ from megaPLuG.scenarios.read import ScenarioReader
 class BatteryManageScenarioBuilder(ScenarioBuilder):
     """Create scenarios which scan across battery sizes and management strategies."""
 
-    display_name = "batt_man"
     partition_level_names = ("run_name", "batt_kwh", "charge_management", "task_id")
 
     def _build_param_dicts(self) -> tuple[list[Path], list[dict]]:

@@ -23,6 +23,7 @@ cmd_line_calls:
 
 scenario_params:
   builder: CalifClass8ScenarioBuilder
+  display_name: ca_eight
   range_miles:
     - 300
     - 500

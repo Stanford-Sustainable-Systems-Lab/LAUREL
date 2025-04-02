@@ -23,6 +23,7 @@ cmd_line_calls:
 
 scenario_params:
   builder: CalifClass8AdoptionScenarioBuilder
+  display_name: ca_eight_adopt
   adopt_pcts:
     - 0.15
     - 1.0

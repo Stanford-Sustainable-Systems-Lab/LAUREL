@@ -12,7 +12,6 @@ from megaPLuG.scenarios.read import ScenarioReader
 class SenseScenarioBuilder(ScenarioBuilder):
     """Build scenarios for the sensitivity truck model."""
 
-    display_name = "sense"
     partition_level_names = (
         "run_name",
         "task_id",
