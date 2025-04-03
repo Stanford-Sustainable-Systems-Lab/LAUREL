@@ -36,18 +36,16 @@ scenario_params:
       params:
         - 750
         - 1250
-    charge_thresh_soc:
-      dist: Beta
-      params:
-        - 6.5
-        - 10
-        - 0
-        - 1
-    min_soc_thresh:
+    soc_buffer_low:
       dist: Uniform
       params:
-        - 0.0
-        - 0.5
+        - 0.05
+        - 0.50
+    soc_buffer_high:
+      dist: Uniform
+      params:
+        - 0.70
+        - 1.00
     charge_speed_kw_depot:
       dist: Beta
       params:
@@ -70,6 +68,11 @@ scenario_params:
       params:
         - 1
         - 0.75
+    delay_frac_max:
+      dist: Uniform
+      params:
+        - 0.0
+        - 0.2
   parameter_read_keys:
     consump_kwh_per_mile:
       - vehicles
@@ -83,12 +86,12 @@ scenario_params:
       - values
       - True
       - 8
-    charge_thresh_soc:
+    soc_buffer_low:
       - vehicles
-      - charge_soc_thresh
-    min_soc_thresh:
+      - soc_buffer_low
+    soc_buffer_high:
       - vehicles
-      - dwell_min_soc_boost_frac
+      - soc_buffer_high
     charge_speed_kw_depot:
       - locations
       - max_power_kw
@@ -106,3 +109,7 @@ scenario_params:
     charge_management:
       - manage_charging
       - charging_manager
+    delay_frac_max:
+      - summarize_vehicles
+      - thresholds
+      - delay_frac_max

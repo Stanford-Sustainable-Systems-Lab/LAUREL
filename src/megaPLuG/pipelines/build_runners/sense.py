@@ -40,16 +40,14 @@ class SenseScenarioBuilder(ScenarioBuilder):
             ]
             cur_vehs["battery_capacity_kwh"]["values"][True][8] = pars["batt_cap_kwh"]
             cur_vehs["battery_capacity_kwh"]["values"][False][8] = pars["batt_cap_kwh"]
-            cur_vehs["charge_soc_thresh"] = pars["charge_thresh_soc"]
-            cur_vehs["dwell_min_soc_boost_frac"] = pars["min_soc_thresh"]
             cur_vehs["minimum_times"]["plug_in_mins"] = pars["time_to_initiate_mins"]
             cur_vehs["minimum_times"]["plug_out_mins"] = pars["time_to_initiate_mins"]
+            cur_vehs["soc_buffer_low"] = pars["soc_buffer_low"]
+            cur_vehs["soc_buffer_high"] = pars["soc_buffer_high"]
 
-            cur_locs = deepcopy(self.params["locations"])
-            cur_locs["max_power_kw"]["values"]["depot"] = pars["charge_speed_kw_depot"]
-            cur_locs["max_power_kw"]["values"]["other"] = pars[
-                "charge_speed_kw_enroute"
-            ]
+            cur_modes = deepcopy(self.params["charging_modes"])
+            cur_modes["depot"]["max_power_kw"] = pars["charge_speed_kw_depot"]
+            cur_modes["enroute"]["max_power_kw"] = pars["charge_speed_kw_enroute"]
 
             cur_mngr = deepcopy(self.params["manage_charging"])
             num_mngr = pars["charge_management"]
@@ -60,10 +58,14 @@ class SenseScenarioBuilder(ScenarioBuilder):
             )
             cur_mngr["charging_manager"] = str_mngr
 
+            cur_summ = deepcopy(self.params["summarize_vehicles"])
+            cur_summ["thresholds"]["delay_frac_max"] = pars["delay_frac_max"]
+
             scn = {
                 "vehicles": cur_vehs,
-                "locations": cur_locs,
+                "charging_modes": cur_modes,
                 "manage_charging": cur_mngr,
+                "summarize_vehicles": cur_summ,
             }
 
             paths.append(Path(self.display_name))
