@@ -36,6 +36,16 @@ scenario_params:
       params:
         - 750
         - 1250
+    soc_buffer_low:
+      dist: Uniform
+      params:
+        - 0.05
+        - 0.50
+    soc_buffer_high:
+      dist: Uniform
+      params:
+        - 0.70
+        - 1.00
     charge_speed_kw_depot:
       dist: Beta
       params:
@@ -71,6 +81,12 @@ scenario_params:
       - values
       - True
       - 8
+    soc_buffer_low:
+      - vehicles
+      - soc_buffer_low
+    soc_buffer_high:
+      - vehicles
+      - soc_buffer_high
     charge_speed_kw_depot:
       - locations
       - max_power_kw
