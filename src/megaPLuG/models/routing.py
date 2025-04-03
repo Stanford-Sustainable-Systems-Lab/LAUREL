@@ -24,6 +24,8 @@ class GraphhopperContainerRouter(ABC):
         port: int = 8989,
         container_name: str = "graphhopper",
         startup_delay: int = 5,
+        mem_max_gb: int = 32,
+        mem_start_gb: int = 2,
         **cmd_kwargs,
     ):
         self.image = image
@@ -31,6 +33,8 @@ class GraphhopperContainerRouter(ABC):
         self.port = port
         self.graph_dir = graph_dir
         self.startup_delay = startup_delay
+        self.mem_max_gb = mem_max_gb
+        self.mem_start_gb = mem_start_gb
         self.cmd_kwargs = cmd_kwargs
         self.process = None
 
@@ -41,6 +45,7 @@ class GraphhopperContainerRouter(ABC):
             image=self.image,
             port_map={self.port: self.target_port},
             bind_map={self.graph_dir: self.target_graph_dir},
+            env_vars={"JAVA_OPTS": f"-Xmx{self.mem_max_gb}g -Xms{self.mem_start_gb}g"},
         )
         self.container.stop_existing()
         cmd_rout = self._build_router_command()
@@ -60,6 +65,7 @@ class GraphhopperContainerRouter(ABC):
             image=self.image,
             port_map={self.port: self.target_port},
             bind_map={self.graph_dir: self.target_graph_dir},
+            env_vars={"JAVA_OPTS": f"-Xmx{self.mem_max_gb}g -Xms{self.mem_start_gb}g"},
         )
         self.container.stop_existing()
         cmd_import = ["--import", "--url", url]
@@ -83,7 +89,12 @@ class AbstractContainerRunner(ABC):
     """
 
     def __init__(
-        self: Self, name: str, image: str, port_map: dict = None, bind_map: dict = None
+        self: Self,
+        name: str,
+        image: str,
+        port_map: dict = None,
+        bind_map: dict = None,
+        env_vars: dict = None,
     ) -> None:
         """Initialize the container runner, but do not start the container yet.
 
@@ -96,6 +107,7 @@ class AbstractContainerRunner(ABC):
         self.image = image
         self.port_map = port_map
         self.bind_map = bind_map
+        self.env_vars = env_vars
 
     @abstractmethod
     def build_command(self: Self, wait_for_completion: bool = False) -> list[str]:
@@ -122,6 +134,12 @@ class AbstractContainerRunner(ABC):
     @abstractmethod
     def _build_bind_map_str(local: str, cont: str) -> str:
         """Build the string version of a bind mount mapping."""
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def _build_env_var_str(local: str, cont: str) -> str:
+        """Build the string version of an environment variable mapping."""
         pass
 
     def start(
@@ -208,6 +226,7 @@ class DockerContainerRunner(AbstractContainerRunner):
         """Build the docker run command."""
         port_maps = self._build_map_str_list(self.port_map, self._build_port_map_str)
         bind_maps = self._build_map_str_list(self.bind_map, self._build_bind_map_str)
+        env_vars = self._build_map_str_list(self.env_vars, self._build_env_var_str)
 
         cmd = ["docker", "run"]
         if not wait_for_completion:
@@ -215,6 +234,7 @@ class DockerContainerRunner(AbstractContainerRunner):
         cmd.extend(["--name", self.name])
         cmd.extend(["--publish"] + port_maps)
         cmd.extend(["--mount"] + bind_maps)
+        cmd.extend(["--env"] + env_vars)
         cmd.extend([self.image])
         return cmd
 
@@ -225,6 +245,10 @@ class DockerContainerRunner(AbstractContainerRunner):
     @staticmethod
     def _build_bind_map_str(local, cont):
         return f"type=bind,src={local},dst={cont}"
+
+    @staticmethod
+    def _build_env_var_str(key, val):
+        return f"{key}={val}"
 
     def is_running(self: Self) -> bool:
         """Check if the docker container is running."""
@@ -261,12 +285,14 @@ class SingularityContainerRunner(AbstractContainerRunner):
         """Build the singularity run command."""
         port_maps = self._build_map_str_list(self.port_map, self._build_port_map_str)
         bind_maps = self._build_map_str_list(self.bind_map, self._build_bind_map_str)
+        # env_vars = self._build_map_str_list(self.env_vars, self._build_env_var_str)
 
         port_maps = "portmap=" + ",".join(port_maps)
 
         cmd = ["singularity", "instance", "run"]
         cmd.extend(["--net", "--network-args"] + port_maps)
         cmd.extend(["--bind"] + bind_maps)
+        # TODO: Learn how to set environment variables for Singularity
         cmd.extend([self.image])
         cmd.extend([self.name])
         return cmd
