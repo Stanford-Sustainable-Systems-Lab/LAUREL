@@ -58,10 +58,14 @@ class SenseScenarioBuilder(ScenarioBuilder):
             )
             cur_mngr["charging_manager"] = str_mngr
 
+            cur_summ = deepcopy(self.params["summarize_vehicles"])
+            cur_summ["thresholds"]["delay_frac_max"] = pars["delay_frac_max"]
+
             scn = {
                 "vehicles": cur_vehs,
                 "charging_modes": cur_modes,
                 "manage_charging": cur_mngr,
+                "summarize_vehicles": cur_summ,
             }
 
             paths.append(Path(self.display_name))

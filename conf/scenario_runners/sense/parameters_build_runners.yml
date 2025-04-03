@@ -68,6 +68,11 @@ scenario_params:
       params:
         - 1
         - 0.75
+    delay_frac_max:
+      dist: Uniform
+      params:
+        - 0.0
+        - 0.2
   parameter_read_keys:
     consump_kwh_per_mile:
       - vehicles
@@ -104,3 +109,7 @@ scenario_params:
     charge_management:
       - manage_charging
       - charging_manager
+    delay_frac_max:
+      - summarize_vehicles
+      - thresholds
+      - delay_frac_max
