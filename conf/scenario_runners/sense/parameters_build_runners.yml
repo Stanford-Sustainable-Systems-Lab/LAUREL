@@ -36,18 +36,6 @@ scenario_params:
       params:
         - 750
         - 1250
-    charge_thresh_soc:
-      dist: Beta
-      params:
-        - 6.5
-        - 10
-        - 0
-        - 1
-    min_soc_thresh:
-      dist: Uniform
-      params:
-        - 0.0
-        - 0.5
     charge_speed_kw_depot:
       dist: Beta
       params:
@@ -83,12 +71,6 @@ scenario_params:
       - values
       - True
       - 8
-    charge_thresh_soc:
-      - vehicles
-      - charge_soc_thresh
-    min_soc_thresh:
-      - vehicles
-      - dwell_min_soc_boost_frac
     charge_speed_kw_depot:
       - locations
       - max_power_kw

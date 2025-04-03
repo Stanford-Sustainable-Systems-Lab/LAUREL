@@ -102,11 +102,9 @@ vehicles:
   minimum_times:
     plug_in_mins: 5
     plug_out_mins: 5
-  dwell_min_soc_boost_frac: 0.1
   initial_soc:
     alpha: 5
     beta: 5
-  charge_soc_thresh: 0.5
   soc_buffer_low: 0.1
   soc_buffer_high: 0.8
   random_seed:

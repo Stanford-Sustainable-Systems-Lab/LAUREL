@@ -40,8 +40,6 @@ class SenseScenarioBuilder(ScenarioBuilder):
             ]
             cur_vehs["battery_capacity_kwh"]["values"][True][8] = pars["batt_cap_kwh"]
             cur_vehs["battery_capacity_kwh"]["values"][False][8] = pars["batt_cap_kwh"]
-            cur_vehs["charge_soc_thresh"] = pars["charge_thresh_soc"]
-            cur_vehs["dwell_min_soc_boost_frac"] = pars["min_soc_thresh"]
             cur_vehs["minimum_times"]["plug_in_mins"] = pars["time_to_initiate_mins"]
             cur_vehs["minimum_times"]["plug_out_mins"] = pars["time_to_initiate_mins"]
 
