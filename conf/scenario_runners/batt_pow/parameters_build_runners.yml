@@ -4,7 +4,7 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.5/configuration/parameters.html
 
-slurm_command: local # Valid values are "sbatch" and "salloc"
+slurm_command: sbatch # Valid values are "sbatch" and "salloc"
 
 slurm_resources:
   partition: serc
@@ -13,7 +13,7 @@ slurm_resources:
   mem-per-cpu: 32GB # Increasing memory, since I've had some memory errors
   gpus: 0
   time: 0-00:45 # Reducing time requirement, since with more processors we're going faster.
-  array: 0-3 # 2 at a time is enforced by Gurobi license
+  array: 0-7 # 2 at a time is enforced by Gurobi license
 
 cmd_line_calls:
   prefix: rye run
