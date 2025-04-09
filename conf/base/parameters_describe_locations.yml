@@ -24,12 +24,12 @@ urban_areas:
     - CA
 
 land_use:
-  crs: EPSG:32611
+  crs: EPSG:5070
   highway_buffer_miles: 5
   land_use_col: land_use
 
 analysis_areas:
-  crs: EPSG:32611
+  crs: EPSG:5070
 
 get_hexes_by_area:
   group_cols_renamer:
