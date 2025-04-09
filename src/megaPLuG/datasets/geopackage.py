@@ -91,8 +91,9 @@ class GeoPackageDataset(AbstractDataset[gpd.GeoDataFrame, gpd.GeoDataFrame]):
         save_args = deepcopy(self._save_args)
         layers = save_args.pop("layer")
         if isinstance(layers, str):  # Save out the GeoDataFrame using layer as the name
-            # TODO: This does not work saving to partitions yet. My hypothesis is that
-            # the folder is not created, and to_file doesn't do that automatically.
+            parent_dir = self._filepath.parent
+            if not self._fs.exists(parent_dir):
+                self._fs.makedirs(parent_dir, exist_ok=True)
             gdf.to_file(save_path, layer=layers, **save_args)
         elif isinstance(layers, dict):  # Save out different layers for each geometry
             geosers = {name: gdf[geom_col] for name, geom_col in layers.items()}
