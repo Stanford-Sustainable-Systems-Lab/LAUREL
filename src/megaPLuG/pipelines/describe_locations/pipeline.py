@@ -10,7 +10,7 @@ from megaPLuG.utils.time import get_timezones
 
 from .nodes import (
     build_analysis_areas_node,
-    build_land_use_areas,
+    # build_land_use_areas,
     build_substation_polygons,
     describe_substation_usage,
     format_govt_areas,
@@ -124,41 +124,41 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="states_select",
                 name="filter_by_vals_in_cols_govt",
             ),
-            node(
-                func=filter_by_vals_in_cols,
-                inputs=["highways_formatted", "params:filter_state_codes"],
-                outputs="highways_select",
-                name="filter_by_vals_in_cols_highway",
-            ),
-            node(
-                func=filter_by_vals_in_cols,
-                inputs=["urban_areas_formatted", "params:filter_state_codes"],
-                outputs="urban_areas_select",
-                name="filter_urban_areas",
-            ),
+            # node(
+            #     func=filter_by_vals_in_cols,
+            #     inputs=["highways_formatted", "params:filter_state_codes"],
+            #     outputs="highways_select",
+            #     name="filter_by_vals_in_cols_highway",
+            # ),
+            # node(
+            #     func=filter_by_vals_in_cols,
+            #     inputs=["urban_areas_formatted", "params:filter_state_codes"],
+            #     outputs="urban_areas_select",
+            #     name="filter_urban_areas",
+            # ),
             node(
                 func=filter_by_vals_in_cols,
                 inputs=["substations_standard", "params:filter_state_codes"],
                 outputs="substation_geographies_select",
                 name="filter_by_vals_in_cols_substations",
             ),
-            node(
-                func=build_land_use_areas,
-                inputs=[
-                    "states_select",
-                    "highways_select",
-                    "urban_areas_select",
-                    "params:land_use",
-                ],
-                outputs="land_use",
-                name="build_land_use_areas",
-            ),
+            # node(
+            #     func=build_land_use_areas,
+            #     inputs=[
+            #         "states_select",
+            #         "highways_select",
+            #         "urban_areas_select",
+            #         "params:land_use",
+            #     ],
+            #     outputs="land_use",
+            #     name="build_land_use_areas",
+            # ),
             node(
                 func=build_analysis_areas_node,
                 inputs=[
                     "states_select",
                     "substation_geographies_select",
-                    "land_use",
+                    # "land_use",
                     "params:analysis_areas",
                 ],
                 outputs="analysis_areas",
@@ -181,15 +181,15 @@ def create_pipeline(**kwargs) -> Pipeline:
     )
 
     geo_pipe_fixed_params = {
-        "params:land_use",
+        # "params:land_use",
         "params:analysis_areas",
         "params:get_hexes_by_area",
         "params:get_timezones",
     }
     geo_pipe_fixed_inputs = {
         "states_formatted",
-        "highways_formatted",
-        "urban_areas_formatted",
+        # "highways_formatted",
+        # "urban_areas_formatted",
     }
 
     geo_pipes = [

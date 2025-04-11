@@ -180,13 +180,12 @@ def build_land_use_areas(
 def build_analysis_areas_node(
     govt: gpd.GeoDataFrame,
     infra: gpd.GeoDataFrame,
-    land_use: gpd.GeoDataFrame,
     params: dict,
 ) -> gpd.GeoDataFrame:
     """Build the set of mutially-exclusive, collectively-exhaustive polygons which cover
     the study area.
     """
-    return build_analysis_areas(infra, land_use, extent=govt, crs=params["crs"])
+    return build_analysis_areas(infra, extent=govt, crs=params["crs"])
 
 
 def build_analysis_areas(

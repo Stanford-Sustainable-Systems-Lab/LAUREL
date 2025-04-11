@@ -149,10 +149,10 @@ format_highways:
     - road_num
 
 # For hexagon-region correspondence
-land_use:
-  crs: EPSG:5070
-  highway_buffer_miles: 5
-  land_use_col: land_use
+# land_use:
+#   crs: EPSG:5070
+#   highway_buffer_miles: 5
+#   land_use_col: land_use
 
 analysis_areas:
   crs: EPSG:5070
@@ -160,8 +160,8 @@ analysis_areas:
 get_hexes_by_area:
   group_cols_renamer:
     state: state_code_1 # Because state_code gets duplicated in the build_analysis_areas
-    substation_id: substationid
-    land_use: land_use
+    substation_id: substation_id
+    # land_use: land_use
   hex_col: hex_id
 
 get_timezones:
