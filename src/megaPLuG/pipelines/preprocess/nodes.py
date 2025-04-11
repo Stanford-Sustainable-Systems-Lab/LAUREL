@@ -8,7 +8,6 @@ import re
 from io import StringIO
 
 import dask.dataframe as dd
-import geopandas as gpd
 import numpy as np
 import pandas as pd
 import requests
@@ -205,55 +204,3 @@ def build_vius_scaling_totals(vius: pd.DataFrame, params: dict) -> pd.DataFrame:
     totals = scaler.groupby(id_cols)[params["totals_col"]].sum()
     totals = totals.reset_index()
     return totals
-
-
-def format_substation_profiles(profs: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Collapse profiles from hour-month combinations to a single characteristic day."""
-    pcols = params["columns"]
-    profs = profs.rename(columns={v: k for k, v in params["col_renamer"].items()})
-
-    split = profs[pcols["month_hour"]].str.split("_")
-    profs[pcols["month"]] = split.transform(lambda x: int(x[0]))
-    profs[pcols["hour"]] = split.transform(lambda x: int(x[1]))
-    profs = profs.drop(columns=[pcols["month_hour"]])
-
-    # Aggregate to a characteristic day
-    profs = profs.groupby([pcols["substation_id"], pcols["hour"]]).agg(
-        max_base_by_hour_kw=pd.NamedAgg(pcols["baseload"], "max"),
-    )
-    profs["max_base_by_hour_mw"] = profs["max_base_by_hour_kw"] / 1000
-    profs["max_base_mw"] = profs.groupby(pcols["substation_id"])[
-        "max_base_by_hour_mw"
-    ].transform(lambda s: s.max())
-    profs = profs.drop(columns=["max_base_by_hour_kw"])
-    profs = profs.reset_index(pcols["hour"])
-    return profs
-
-
-def format_substation_boundaries(infra: gpd.GeoDataFrame, params: dict) -> pd.DataFrame:
-    """Add up substation capacities from the capacities of transformer banks."""
-    infra = infra.rename(columns={v: k for k, v in params["col_renamer"].items()})
-    infra["substation_id"] = infra["substation_id"].astype(int)
-
-    subs = infra.dissolve(
-        by="substation_id",
-        aggfunc={
-            "substation_name": "first",
-            "rating_mw": "sum",
-        },
-    )
-    return subs
-
-
-def describe_substation_usage(
-    profs: pd.DataFrame, subs: gpd.GeoDataFrame, params: dict
-) -> pd.DataFrame:
-    """Combine baseload profiles and capacities to describe substation usage."""
-    pcols = params["columns"]
-    subs = subs.drop(columns=params["drop_substation_cols"])
-    subs = profs.merge(subs, how="inner", on=pcols["substation_id"])
-    subs = subs.reset_index()
-    subs = subs.sort_values([pcols["substation_id"], pcols["hour"]])
-    subs = subs.set_index(pcols["substation_id"])
-    subs[pcols["cap_avail_mw"]] = subs[pcols["rating_mw"]] - subs[pcols["baseload_mw"]]
-    return subs

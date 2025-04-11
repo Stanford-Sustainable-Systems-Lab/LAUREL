@@ -9,9 +9,6 @@ from .nodes import (
     build_vius_scaling_totals,
     calc_derived_trip_cols,
     create_dwells,
-    describe_substation_usage,
-    format_substation_boundaries,
-    format_substation_profiles,
     format_trips_columns,
     strip_vehicle_attrs,
 )
@@ -56,32 +53,4 @@ def create_pipeline(**kwargs) -> Pipeline:
         ],
     )
 
-    capacity_pipe = pipeline(
-        [
-            node(
-                func=format_substation_boundaries,
-                inputs=["substation_boundaries", "params:format_substation_capacities"],
-                outputs="substation_boundaries_formatted",
-                name="format_substation_boundaries",
-            ),
-            node(
-                func=format_substation_profiles,
-                inputs=["substation_profiles", "params:format_substation_profiles"],
-                outputs="substation_profiles_formatted",
-                name="format_substation_profiles",
-            ),
-            node(
-                func=describe_substation_usage,
-                inputs=[
-                    "substation_profiles_formatted",
-                    "substation_boundaries_formatted",
-                    "params:describe_substation_usage",
-                ],
-                outputs="substation.usage",
-                name="describe_substation_usage",
-            ),
-        ],
-        tags="substation_usage",
-    )
-
-    return pipe + capacity_pipe
+    return pipe

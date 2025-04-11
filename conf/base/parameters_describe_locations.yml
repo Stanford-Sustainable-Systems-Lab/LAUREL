@@ -4,25 +4,151 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.3/configuration/parameters.html
 
-govt_areas:
+# For California substations
+format_substations_pg_and_e:
+  col_renamer:
+    substation_id: substationid
+    substation_name: substationname
+    rating_mw: facilityratingmw
+  substation_id: substation_id
+  capacity: facilityratingmw
+  add_state_col:
+    name: state_code
+    value: CA
+
+format_substation_profiles:
+  col_renamer:
+    substation_id: SubID
+  columns:
+    substation_id: substation_id
+    month_hour: MonthHour
+    month: month
+    hour: time_local_hour
+    baseload: High
+
+describe_substation_usage:
+  drop_substation_cols:
+    - geometry
+  columns:
+    substation_id: substation_id
+    hour: time_local_hour
+    baseload_mw: max_base_by_hour_mw
+    rating_mw: rating_mw
+    cap_avail_mw: cap_avail_mw
+
+pg_and_e.filter_state_codes:
   filters:
-    STUSPS:
+    state_code:
       value_isin:
         - CA
-  keep_only_filter_cols: True
+      invert: False
+  keep_only_filter_cols: False
 
-highways:
+pg_and_e.geo_partition:
+  dir: pg_and_e
+
+# For continental substations
+format_substations_contin:
+  col_renamer:
+    substation_id: id
+    substation_name: name
+    state_code: state
+  substation_id: substation_id
+
+filter_contin_bounds:
   filters:
-    JURISNAME:
+    state_code:
       value_isin:
-        - California
+        - GU
+        - MP
+        - PR
+        - AK
+        - HI
+        - VI
+        - AS
+        - BC
+        - SK
+        - AB
+      invert: True
+    status:
+      value_isin:
+        - IN SERVICE
+        - NOT AVAILABLE
+        - UNDER CONSTRUCTION
+    type:
+      value_isin:
+        - SUBSTATION
+        - NOT AVAILABLE
+  keep_only_filter_cols: False
+
+govt_areas_contin:
+  filters:
+    state_code:
+      value_isin:
+        - GU
+        - MP
+        - PR
+        - AK
+        - HI
+        - VI
+        - AS
+        - BC
+        - SK
+        - AB
+      invert: True
   keep_only_filter_cols: True
+    
+build_substation_polygons:
+  proj_crs: EPSG:5070
+  n_partitions: 4
+  poly_col_out: voronoi_polygons
 
-urban_areas:
+continental.filter_state_codes:
+  filters:
+    state_code:
+      value_isin:
+        - GU
+        - MP
+        - PR
+        - AK
+        - HI
+        - VI
+        - AS
+        - BC
+        - SK
+        - AB
+      invert: True
+  keep_only_filter_cols: False
+
+continental.geo_partition:
+  dir: continental
+
+# For supporting datasets
+format_govt_areas:
+  col_renamer:
+    state_code: STUSPS
+    state_name: NAME
+  keep_cols:
+    - state_code
+    - state_name
+
+format_urban:
+  state_col: state_code
   area_name_col: NAME20
-  state_codes:
-    - CA
 
+format_highways:
+  state_cols:
+    name: state_name
+    code: state_code
+  highway_cols:
+    state: JURISNAME
+  col_renamer:
+    road_num: ROADNUM
+  keep_cols:
+    - state_code
+    - road_num
+
+# For hexagon-region correspondence
 land_use:
   crs: EPSG:5070
   highway_buffer_miles: 5
@@ -33,7 +159,7 @@ analysis_areas:
 
 get_hexes_by_area:
   group_cols_renamer:
-    state: STUSPS
+    state: state_code_1 # Because state_code gets duplicated in the build_analysis_areas
     substation_id: substationid
     land_use: land_use
   hex_col: hex_id
