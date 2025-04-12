@@ -131,8 +131,8 @@ def discretize_sparse_profiles(
     time_col: str,
     dur_col: str,
     prof_col: str,
-    tz_col: str,
     group_cols: list[str],
+    tz_col: str | None = None,
     freq: str = "1h",
 ) -> pd.DataFrame:
     """Discretize profiles by region and time grouping."""
@@ -144,18 +144,21 @@ def discretize_sparse_profiles(
     nonzero = nonzero.drop(index=drop_idx)
 
     logger.info("Expand events to cover all groups across their duration")
-    grp_tz_cols = group_cols + [tz_col]
+    if tz_col is not None:
+        grp_cols = group_cols + [tz_col]
+    else:
+        grp_cols = group_cols
     expander = EventExpander(
         time_col=time_col,
         dur_col=dur_col,
         value_col=prof_col,
-        group_cols=grp_tz_cols,
+        group_cols=grp_cols,
         freq=freq,
     )
     nonzero_exp = expander.expand_events(nonzero)
 
     logger.info("Group events")
-    grouper = grp_tz_cols + [pd.Grouper(key=time_col, freq=freq)]
+    grouper = grp_cols + [pd.Grouper(key=time_col, freq=freq)]
     grped_nonzero = nonzero_exp.groupby(grouper)[prof_col].max()
     grped_nonzero = grped_nonzero.reset_index()
     return grped_nonzero
@@ -566,7 +569,6 @@ def sample_vehicle_windows(
                 time_col=slice_time_col,
                 dur_col=pcols["duration_col"],
                 prof_col=pcols["profile_col"],
-                tz_col=pcols["timezone_col"],
                 group_cols=pcols["group_cols"],
                 freq=params_sample["discrete_freq"],
             )
@@ -594,7 +596,7 @@ def summarize_vehicle_window_quantiles(
         tz_col=pcols["timezone_col"],
         start_time=pd.Timestamp(0),
         end_time=pd.Timestamp(0) + pd.Timedelta(params_slice["slice_freq"]),
-        possible_tzs=params_summ["possible_tzs"],
+        possible_tzs=["no_time_zone"],
     )
     profs = grouper.add_group_classes(profs)
     grp_cnts_tz = grouper.get_possible_obs_counts()
@@ -602,7 +604,7 @@ def summarize_vehicle_window_quantiles(
     grp_cnts_tz = grp_cnts_tz * n_bootstraps
     grp_cnts_tz = grp_cnts_tz.reset_index()
     grp_cnts_tz[tcol] = grp_cnts_tz[tcol].dt.tz_localize(None)
-    grp_merge_cols = [pcols["timezone_col"]] + grouper.time_group_cols
+    grp_merge_cols = grouper.time_group_cols
     profs = profs.merge(grp_cnts_tz, how="left", on=grp_merge_cols)
 
     logger.info("Calculate quantiles")
