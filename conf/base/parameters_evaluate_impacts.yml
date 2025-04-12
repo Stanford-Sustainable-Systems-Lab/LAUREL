@@ -117,5 +117,3 @@ summarize_slices:
     - 0.60
     - 0.95
     - 1.00
-  possible_tzs:
-    - America/Los_Angeles
