@@ -53,6 +53,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="events_eval",
                 name="collate_partitions_events",
             ),
+            node(
+                func=read_scenario_partition,
+                inputs=["hex_region_corresp_partition", "params:geo_partition_eval"],
+                outputs="hex_region_corresp",
+                name="collate_partitions_hexes",
+            ),
         ],
         tags="scenario_run",
     )

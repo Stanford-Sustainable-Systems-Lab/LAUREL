@@ -4,6 +4,9 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.1/configuration/parameters.html
 
+geo_partition_eval:
+  dir: pg_and_e
+
 summarize_vehicles:
   dead_energy_col: dwell_init_kwh
   delay_hrs_col: dwell_init_delay_hrs
@@ -115,7 +118,7 @@ slice_events:
 
 sample_slices:
     seed_for_seeds: 1
-    n_bootstraps: 250
+    n_bootstraps: 5
     stratify_cols:
       - home_base_state
       - primary_op_dist
