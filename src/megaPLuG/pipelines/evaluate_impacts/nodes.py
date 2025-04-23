@@ -8,6 +8,7 @@ import logging
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import pyinstrument
 from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
@@ -572,6 +573,7 @@ class SliceWeightSampler:
         return sample_weights
 
 
+@pyinstrument.profile()
 def sample_vehicle_windows(
     windows: pd.DataFrame,
     frame: pd.DataFrame,
