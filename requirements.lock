@@ -542,6 +542,8 @@ pygments==2.17.2
     # via qtconsole
     # via rich
     # via sphinx
+pyinstrument==5.0.1
+    # via megaplug
 pyogrio==0.9.0
     # via geopandas
     # via megaplug
