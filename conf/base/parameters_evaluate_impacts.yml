@@ -5,7 +5,7 @@
 # Link: https://docs.kedro.org/en/0.19.1/configuration/parameters.html
 
 geo_partition_eval:
-  dir: pg_and_e
+  dir: continental
 
 summarize_vehicles:
   dead_energy_col: dwell_init_kwh
