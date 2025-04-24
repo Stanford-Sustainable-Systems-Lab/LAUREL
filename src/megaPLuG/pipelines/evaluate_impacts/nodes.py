@@ -43,43 +43,53 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     # Delay as fraction of shift duration for each vehicle
     dw.data["shift_id"] = dw.data.groupby(dw.veh)[params["shift_refresh_col"]].cumsum()
     dw.data["shift_id"] = dw.data.groupby(dw.veh)["shift_id"].shift(1, fill_value=0)
-    dw.data["trip_start_time"] = dw.data.groupby(dw.veh)[dw.end].shift(1)
 
     delays = dw.data.groupby([dw.veh, "shift_id"]).agg(
         max_delay_hrs=pd.NamedAgg(params["delay_hrs_col"], "max"),
-        shift_start=pd.NamedAgg("trip_start_time", "first"),
-        shift_end=pd.NamedAgg(dw.end, "last"),
+        final_delay_hrs=pd.NamedAgg(params["delay_hrs_col"], "last"),
+        trip_dur_sum=pd.NamedAgg(dw.trip_dur, "sum"),
+        dwell_dur_sum=pd.NamedAgg(params["dwell_dur_col"], "sum"),
+        dwell_dur_last=pd.NamedAgg(params["dwell_dur_col"], "last"),
     )
-    delays = delays.dropna(subset=["shift_start"])
 
-    dfcol = params["delay_frac_col"]
-    delays["shift_dur_hrs"] = total_hours(delays["shift_end"] - delays["shift_start"])
-    delays[dfcol] = delays["max_delay_hrs"] / delays["shift_dur_hrs"]
-    qtls = params["delay_frac_quantiles"]
+    scols = params["summary_cols"]
+    delays = delays.rename(columns={"final_delay_hrs": scols["shift_delay"]})
+    delays[scols["shift_dur"]] = (
+        delays["trip_dur_sum"] + delays["dwell_dur_sum"] - delays["dwell_dur_last"]
+    )
+    delays[scols["shift_dur_delayed"]] = (
+        delays[scols["shift_dur"]] + delays[scols["shift_delay"]]
+    )
+    delays[scols["delay_frac"]] = (
+        delays[scols["shift_delay"]] / delays[scols["shift_dur"]]
+    )
 
     delays_grp = delays.groupby(dw.veh)
-    veh_delays_rel = delays_grp[dfcol].quantile(list(qtls.values()))
+    veh_delays_rel = delays_grp[list(scols.values())].quantile(params["quantiles"])
     veh_delays_rel = veh_delays_rel.unstack(level=1)
-    pfx = params["delay_pct_prefix"]
-    qtl_cols = {key: f"{pfx}_{int(val * 100)}" for key, val in qtls.items()}
-    veh_delays_rel.columns = list(qtl_cols.values())
+
+    def build_col_name(val: str, pct: float) -> str:
+        return f"{val}_{int(pct * 100)}"
+
+    flat_cols = [build_col_name(name, pct) for name, pct in veh_delays_rel.columns]
+    veh_delays_rel.columns = flat_cols
     vehs = vehs.merge(veh_delays_rel, how="left", on=dw.veh)
 
-    veh_delays_abs = delays_grp["max_delay_hrs"].max()
-    vehs = vehs.merge(veh_delays_abs, how="left", on=dw.veh)
-
-    for cur_qtl in qtls.keys():
-        pctl = int(qtls[cur_qtl] * 100)
-        logger.info(
-            f"Delay as fraction of vehicle shift length per vehicle [{pctl}th percentile]:"
-        )
-        logger.info(veh_delays_rel[qtl_cols[cur_qtl]].describe())
+    thresh_qtl = params["delay_frac_thresh_quantile"]
+    report_pctl = int(thresh_qtl * 100)
+    logger.info(
+        f"Delay as fraction of vehicle shift length per vehicle [{report_pctl}th percentile]:"
+    )
+    report_col = build_col_name(scols["delay_frac"], thresh_qtl)
+    logger.info(vehs[report_col].describe())
 
     # Get boolean columns for which vehicles are included in load profiles
     thrs = params["thresholds"]
     vehs["dies_too_freq"] = vehs["n_deaths_per_week"] > thrs["n_deaths_per_week_max"]
-    vehs["delays_too_long_rel"] = vehs[qtl_cols["thresh"]] > thrs["delay_frac_max"]
-    vehs["delays_too_long_abs"] = vehs["max_delay_hrs"] > thrs["delay_hrs_max"]
+    dftcol = build_col_name(scols["delay_frac"], thresh_qtl)
+    vehs["delays_too_long_rel"] = vehs[dftcol] > thrs["delay_frac_max"]
+    abstcol = build_col_name(scols["shift_delay"], 1.00)
+    vehs["delays_too_long_abs"] = vehs[abstcol] > thrs["delay_hrs_max"]
     vehs[params["drop_events_col"]] = (
         vehs["dies_too_freq"]
         | vehs["delays_too_long_rel"]
