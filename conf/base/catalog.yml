@@ -391,6 +391,13 @@ peak_load_addition_by_substation:
     index: True
     layer: peak_load_addition_by_substation
 
+vehicle_peak_load_by_substation_diff:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/08_reporting/vehicle_peak_load_by_substation_diff.gpkg
+  save_args:
+    index: True
+    layer: vehicle_peak_load_by_substation_diff
+
 substation_overcapacity_by_scenario:
   type: matplotlib.MatplotlibWriter
   filepath: data/08_reporting/substation_overcapacity_by_scenario.png

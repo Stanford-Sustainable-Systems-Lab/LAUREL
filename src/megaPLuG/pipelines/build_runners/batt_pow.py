@@ -60,7 +60,9 @@ class BatteryPowerScenarioReader(ScenarioReader):
         meta = self.get_metadata_values(path=path)
         batt = int(re.search(r"(?<=batt_)(\d+)", meta["batt_kwh"]).group())
         dkw = int(re.search(r"(?<=depot_)(\d+)", meta["depot_kw"]).group())
-        mand = bool(re.search(r"(?<=mand_)(\d+)", meta["is_mandate_active"]).group())
+        mand = bool(
+            eval(re.search(r"(?<=mand_)(.+)", meta["is_mandate_active"]).group())
+        )
         return (batt, dkw, mand)
 
     def name_scenario(self: Self, path: Path) -> str:
@@ -68,7 +70,6 @@ class BatteryPowerScenarioReader(ScenarioReader):
         batt_kwh = re.search(r"(?<=batt_)(\d+)", meta["batt_kwh"]).group() + "kWh"
         dkw = re.search(r"(?<=depot_)(\d+)", meta["depot_kw"]).group() + "kW"
         mand = (
-            "mandate_"
-            + re.search(r"(?<=mand_)(\d+)", meta["is_mandate_active"]).group()
+            "mandate_" + re.search(r"(?<=mand_)(.+)", meta["is_mandate_active"]).group()
         )
-        return self.concat_name_components(batt_kwh, dkw, mand)
+        return self.concat_name_components(batt_kwh, dkw, mand, sep=",\n")
