@@ -35,13 +35,19 @@ state_boundaries:
   load_args:
     layer: cb_2023_us_state_500k
 
-substation_boundaries:
+substations_continent:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/01_raw/HIFLD/electric_substation_hifld_v4/electric_substation_hifld_v4.gpkg
+  load_args:
+    layer: electric_substation_hifld_v4
+
+substations_pg_and_e:
   type: megaPLuG.datasets.geodatabase.GeoDataBaseDataset
   filepath: data/01_raw/ICA_Maps/PGE/GRIP_FGDB/GNA.gdb
   load_args:
     layer: DFSubstationArea___PeakFacilityLoadingPercent
 
-substation_profiles:
+substation_profiles_pg_and_e:
   type: megaPLuG.datasets.geodatabase.GeoDataBaseDataset
   filepath: data/01_raw/ICA_Maps/PGE/GRIP_FGDB/ICA.gdb
   load_args:
@@ -96,9 +102,38 @@ vehicle_location_pairs_labelled:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vehicle_location_pairs_labelled.feather
 
-hex_region_corresp:
+continental.substations_standard:
+    type: megaPLuG.datasets.geopackage.GeoPackageDataset
+    filepath: data/02_intermediate/substation_geographies/continental.gpkg
+    save_args:
+      index: True
+      layer: substations
+    load_args:
+      layer: substations
+
+pg_and_e.substations_standard:
+    type: megaPLuG.datasets.geopackage.GeoPackageDataset
+    filepath: data/02_intermediate/substation_geographies/pg_and_e.gpkg
+    save_args:
+      index: True
+      layer: substations
+    load_args:
+      layer: substations
+
+continental.hex_region_corresp:
   type: pandas.FeatherDataset
-  filepath: data/02_intermediate/hex_region_corresp.feather
+  filepath: data/02_intermediate/hex_region_corresp/continental.feather
+
+pg_and_e.hex_region_corresp:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/hex_region_corresp/pg_and_e.feather
+
+hex_region_corresp_partition:
+  type: partitions.PartitionedDataset
+  path: data/02_intermediate/hex_region_corresp
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
 
 vius_home_base_state:
   type: pandas.FeatherDataset
@@ -119,15 +154,6 @@ adoption_scenarios:
 substation.usage:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/usage/substation.feather
-
-substation_boundaries_formatted:
-  type: megaPLuG.datasets.geopackage.GeoPackageDataset
-  filepath: data/02_intermediate/substations.gpkg
-  save_args:
-    index: True
-    layer: substations
-  load_args:
-    layer: substations
 
 # Ephemeral memory datasets (used to set copy_mode)
 dwell_obj:
@@ -390,6 +416,13 @@ peak_load_addition_by_substation:
   save_args:
     index: True
     layer: peak_load_addition_by_substation
+
+vehicle_peak_load_by_substation_diff:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/08_reporting/vehicle_peak_load_by_substation_diff.gpkg
+  save_args:
+    index: True
+    layer: vehicle_peak_load_by_substation_diff
 
 substation_overcapacity_by_scenario:
   type: matplotlib.MatplotlibWriter

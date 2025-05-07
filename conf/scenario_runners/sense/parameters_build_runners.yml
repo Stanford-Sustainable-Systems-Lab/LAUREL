@@ -93,15 +93,13 @@ scenario_params:
       - vehicles
       - soc_buffer_high
     charge_speed_kw_depot:
-      - locations
-      - max_power_kw
-      - values
+      - charging_modes
       - depot
-    charge_speed_kw_enroute:
-      - locations
       - max_power_kw
-      - values
-      - other
+    charge_speed_kw_enroute:
+      - charging_modes
+      - enroute
+      - max_power_kw
     time_to_initiate_mins:
       - vehicles
       - minimum_times

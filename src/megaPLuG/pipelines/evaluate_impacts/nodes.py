@@ -8,6 +8,7 @@ import logging
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import pyinstrument
 from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
@@ -42,43 +43,53 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     # Delay as fraction of shift duration for each vehicle
     dw.data["shift_id"] = dw.data.groupby(dw.veh)[params["shift_refresh_col"]].cumsum()
     dw.data["shift_id"] = dw.data.groupby(dw.veh)["shift_id"].shift(1, fill_value=0)
-    dw.data["trip_start_time"] = dw.data.groupby(dw.veh)[dw.end].shift(1)
 
     delays = dw.data.groupby([dw.veh, "shift_id"]).agg(
         max_delay_hrs=pd.NamedAgg(params["delay_hrs_col"], "max"),
-        shift_start=pd.NamedAgg("trip_start_time", "first"),
-        shift_end=pd.NamedAgg(dw.end, "last"),
+        final_delay_hrs=pd.NamedAgg(params["delay_hrs_col"], "last"),
+        trip_dur_sum=pd.NamedAgg(dw.trip_dur, "sum"),
+        dwell_dur_sum=pd.NamedAgg(params["dwell_dur_col"], "sum"),
+        dwell_dur_last=pd.NamedAgg(params["dwell_dur_col"], "last"),
     )
-    delays = delays.dropna(subset=["shift_start"])
 
-    dfcol = params["delay_frac_col"]
-    delays["shift_dur_hrs"] = total_hours(delays["shift_end"] - delays["shift_start"])
-    delays[dfcol] = delays["max_delay_hrs"] / delays["shift_dur_hrs"]
-    qtls = params["delay_frac_quantiles"]
+    scols = params["summary_cols"]
+    delays = delays.rename(columns={"final_delay_hrs": scols["shift_delay"]})
+    delays[scols["shift_dur"]] = (
+        delays["trip_dur_sum"] + delays["dwell_dur_sum"] - delays["dwell_dur_last"]
+    )
+    delays[scols["shift_dur_delayed"]] = (
+        delays[scols["shift_dur"]] + delays[scols["shift_delay"]]
+    )
+    delays[scols["delay_frac"]] = (
+        delays[scols["shift_delay"]] / delays[scols["shift_dur"]]
+    )
 
     delays_grp = delays.groupby(dw.veh)
-    veh_delays_rel = delays_grp[dfcol].quantile(list(qtls.values()))
+    veh_delays_rel = delays_grp[list(scols.values())].quantile(params["quantiles"])
     veh_delays_rel = veh_delays_rel.unstack(level=1)
-    pfx = params["delay_pct_prefix"]
-    qtl_cols = {key: f"{pfx}_{int(val * 100)}" for key, val in qtls.items()}
-    veh_delays_rel.columns = list(qtl_cols.values())
+
+    def build_col_name(val: str, pct: float) -> str:
+        return f"{val}_{int(pct * 100)}"
+
+    flat_cols = [build_col_name(name, pct) for name, pct in veh_delays_rel.columns]
+    veh_delays_rel.columns = flat_cols
     vehs = vehs.merge(veh_delays_rel, how="left", on=dw.veh)
 
-    veh_delays_abs = delays_grp["max_delay_hrs"].max()
-    vehs = vehs.merge(veh_delays_abs, how="left", on=dw.veh)
-
-    for cur_qtl in qtls.keys():
-        pctl = int(qtls[cur_qtl] * 100)
-        logger.info(
-            f"Delay as fraction of vehicle shift length per vehicle [{pctl}th percentile]:"
-        )
-        logger.info(veh_delays_rel[qtl_cols[cur_qtl]].describe())
+    thresh_qtl = params["delay_frac_thresh_quantile"]
+    report_pctl = int(thresh_qtl * 100)
+    logger.info(
+        f"Delay as fraction of vehicle shift length per vehicle [{report_pctl}th percentile]:"
+    )
+    report_col = build_col_name(scols["delay_frac"], thresh_qtl)
+    logger.info(vehs[report_col].describe())
 
     # Get boolean columns for which vehicles are included in load profiles
     thrs = params["thresholds"]
     vehs["dies_too_freq"] = vehs["n_deaths_per_week"] > thrs["n_deaths_per_week_max"]
-    vehs["delays_too_long_rel"] = vehs[qtl_cols["thresh"]] > thrs["delay_frac_max"]
-    vehs["delays_too_long_abs"] = vehs["max_delay_hrs"] > thrs["delay_hrs_max"]
+    dftcol = build_col_name(scols["delay_frac"], thresh_qtl)
+    vehs["delays_too_long_rel"] = vehs[dftcol] > thrs["delay_frac_max"]
+    abstcol = build_col_name(scols["shift_delay"], 1.00)
+    vehs["delays_too_long_abs"] = vehs[abstcol] > thrs["delay_hrs_max"]
     vehs[params["drop_events_col"]] = (
         vehs["dies_too_freq"]
         | vehs["delays_too_long_rel"]
@@ -200,8 +211,8 @@ def discretize_sparse_profiles(
     time_col: str,
     dur_col: str,
     prof_col: str,
-    tz_col: str,
     group_cols: list[str],
+    tz_col: str | None = None,
     freq: str = "1h",
 ) -> pd.DataFrame:
     """Discretize profiles by region and time grouping."""
@@ -213,18 +224,21 @@ def discretize_sparse_profiles(
     nonzero = nonzero.drop(index=drop_idx)
 
     logger.info("Expand events to cover all groups across their duration")
-    grp_tz_cols = group_cols + [tz_col]
+    if tz_col is not None:
+        grp_cols = group_cols + [tz_col]
+    else:
+        grp_cols = group_cols
     expander = EventExpander(
         time_col=time_col,
         dur_col=dur_col,
         value_col=prof_col,
-        group_cols=grp_tz_cols,
+        group_cols=grp_cols,
         freq=freq,
     )
     nonzero_exp = expander.expand_events(nonzero)
 
     logger.info("Group events")
-    grouper = grp_tz_cols + [pd.Grouper(key=time_col, freq=freq)]
+    grouper = grp_cols + [pd.Grouper(key=time_col, freq=freq)]
     grped_nonzero = nonzero_exp.groupby(grouper)[prof_col].max()
     grped_nonzero = grped_nonzero.reset_index()
     return grped_nonzero
@@ -569,6 +583,7 @@ class SliceWeightSampler:
         return sample_weights
 
 
+@pyinstrument.profile()
 def sample_vehicle_windows(
     windows: pd.DataFrame,
     frame: pd.DataFrame,
@@ -635,7 +650,6 @@ def sample_vehicle_windows(
                 time_col=slice_time_col,
                 dur_col=pcols["duration_col"],
                 prof_col=pcols["profile_col"],
-                tz_col=pcols["timezone_col"],
                 group_cols=pcols["group_cols"],
                 freq=params_sample["discrete_freq"],
             )
@@ -663,7 +677,7 @@ def summarize_vehicle_window_quantiles(
         tz_col=pcols["timezone_col"],
         start_time=pd.Timestamp(0),
         end_time=pd.Timestamp(0) + pd.Timedelta(params_slice["slice_freq"]),
-        possible_tzs=params_summ["possible_tzs"],
+        possible_tzs=["no_time_zone"],
     )
     profs = grouper.add_group_classes(profs)
     grp_cnts_tz = grouper.get_possible_obs_counts()
@@ -671,7 +685,7 @@ def summarize_vehicle_window_quantiles(
     grp_cnts_tz = grp_cnts_tz * n_bootstraps
     grp_cnts_tz = grp_cnts_tz.reset_index()
     grp_cnts_tz[tcol] = grp_cnts_tz[tcol].dt.tz_localize(None)
-    grp_merge_cols = [pcols["timezone_col"]] + grouper.time_group_cols
+    grp_merge_cols = grouper.time_group_cols
     profs = profs.merge(grp_cnts_tz, how="left", on=grp_merge_cols)
 
     logger.info("Calculate quantiles")

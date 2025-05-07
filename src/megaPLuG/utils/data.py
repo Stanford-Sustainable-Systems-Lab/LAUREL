@@ -148,6 +148,8 @@ def filter_by_vals_in_cols(
     keep_cols = []
     for col, filt in params["filters"].items():
         cur_ser = df[col].isin(filt["value_isin"])
+        if "invert" in filt and filt["invert"]:
+            cur_ser = ~cur_ser
         if "joining_bool" not in filt or filt["joining_bool"].upper() == "AND":
             filt_ser &= cur_ser
         elif filt["joining_bool"].upper() == "OR":
