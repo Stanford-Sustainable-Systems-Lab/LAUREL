@@ -28,7 +28,9 @@ async def get_routes_for_trips_wrapper(
                 tasks.append(cur_task)
             results = await tqdm_asyncio.gather(*tasks)
             with_routes = pd.concat(results, axis=0)
-            with_routes["route_geometry"] = gpd.GeoSeries(with_routes["route_geometry"], crs=dwells.crs)
+            with_routes["route_geometry"] = gpd.GeoSeries(
+                with_routes["route_geometry"], crs=dwells.crs
+            )
     return with_routes
 
 
