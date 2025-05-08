@@ -5,8 +5,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Self
 
-from routingpy import Graphhopper
-
 logger = logging.getLogger(__name__)
 
 
@@ -37,8 +35,9 @@ class GraphhopperContainerRouter(ABC):
         self.mem_start_gb = mem_start_gb
         self.cmd_kwargs = cmd_kwargs
         self.process = None
+        self.base_url = None
 
-    def __enter__(self: Self):
+    def __enter__(self: Self) -> Self:
         """Start the container and return a GraphHopper client."""
         self.container = DockerContainerRunner(
             name=self.container_name,
@@ -51,12 +50,14 @@ class GraphhopperContainerRouter(ABC):
         cmd_rout = self._build_router_command()
         logger.info("Starting GraphHopper routing server...")
         self.container.start(cmd=cmd_rout)
-        return Graphhopper(base_url=f"http://localhost:{self.port}")
+        self.base_url = f"http://localhost:{self.port}"
+        return self
 
     def __exit__(self: Self, exc_type, exc_val, exc_tb):
         """Stop the container when exiting the context."""
         logger.info("Stopping GraphHopper routing server...")
         self.container.stop_existing()
+        self.base_url = None
 
     def import_graph(self: Self, url: str) -> None:
         """Import the graph from the given URL and process it."""
