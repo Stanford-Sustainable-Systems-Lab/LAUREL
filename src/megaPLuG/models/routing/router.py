@@ -4,7 +4,7 @@ import geopandas as gpd
 import pandas as pd
 import shapely as shp
 from routingpy.exceptions import RouterApiError
-from tqdm.asyncio import tqdm_asyncio
+from tqdm.asyncio import trange
 
 from .parser import AsyncGraphhopper
 from .server import GraphhopperContainerRouter
@@ -15,31 +15,40 @@ ROUTE_COL = "trip_geom_route"
 
 
 async def get_routes_async(
-    dwells: gpd.GeoDataFrame,
-    group_cols: str | list[str],
+    trips: gpd.GeoDataFrame,
+    orig_col: str,
+    dest_col: str,
     server_params: dict,
+    conc_mult: int = 5,
     **kwargs,
 ) -> gpd.GeoDataFrame:
     """Set up the server and client for routing, then iterate through groups asynchronously."""
+    trips[DIST_COL] = pd.Series(data=pd.NA, dtype=pd.Float64Dtype())
+    trips[TIME_COL] = pd.Series(data=pd.NA, dtype=pd.Float64Dtype())
+    trips[ROUTE_COL] = gpd.GeoSeries(data=None, crs=trips.crs)
+
+    idx = {col_name: idx for idx, col_name in enumerate(trips.columns)}
+    conc_max = server_params["max_concurrent_requests"]
+
     with GraphhopperContainerRouter(
         image=server_params["image"], graph_dir=server_params["graph_dir"]
     ) as server:
         async with AsyncGraphhopper(
             base_url=server.base_url,
-            max_concurrent_requests=server_params["max_concurrent_requests"],
+            max_concurrent_requests=conc_max,
         ) as router:
-            tasks = []
-            for name, grp in dwells.groupby(group_cols):
-                cur_task = asyncio.create_task(
-                    _get_routes_async_core(grp, router, **kwargs)
-                )
-                tasks.append(cur_task)
-            results = await tqdm_asyncio.gather(*tasks)
-            with_routes = pd.concat(results, axis=0)
-            with_routes[ROUTE_COL] = gpd.GeoSeries(
-                with_routes[ROUTE_COL], crs=dwells.crs
-            )
-    return with_routes
+            async with asyncio.Semaphore(conc_max * conc_mult):
+                async for i in trange(len(trips)):
+                    res_dict = await _get_route_async(
+                        orig=trips.iat[i, idx[orig_col]],
+                        dest=trips.iat[i, idx[dest_col]],
+                        router=router,
+                        **kwargs,
+                    )
+                    trips.iat[i, idx[DIST_COL]] = res_dict[DIST_COL]
+                    trips.iat[i, idx[TIME_COL]] = res_dict[TIME_COL]
+                    trips.iat[i, idx[ROUTE_COL]] = res_dict[ROUTE_COL]
+    return trips
 
 
 async def _get_routes_async_core(
@@ -74,6 +83,8 @@ async def _get_route_async(
     """Get a single route asynchronously"""
     if orig == dest:
         return _report_route(0.0, 0.0, None)
+    if orig is None or dest is None:
+        return _report_route(pd.NA, pd.NA, None)
 
     try:
         coords = (tuple(orig.coords)[0], tuple(dest.coords)[0])
