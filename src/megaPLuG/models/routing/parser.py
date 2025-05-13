@@ -367,10 +367,9 @@ class AsyncGraphhopper:
 
         params.update(direction_kwargs)
 
-        async with self.client.request_semaphore:
-            response = await self.client._request(
-                "/route", get_params=get_params, post_params=params, dry_run=dry_run
-            )
+        response = await self.client._request(
+            "/route", get_params=get_params, post_params=params, dry_run=dry_run
+        )
 
         return self.parse_directions_json(
             response,

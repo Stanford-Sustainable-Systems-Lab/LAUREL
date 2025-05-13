@@ -174,14 +174,15 @@ class AsyncClient(BaseClient):
             )
             return
 
-        try:
-            response = await requests_method(
-                self.base_url + authed_url, **final_requests_kwargs
-            )
-            self._req = response.request_info
+        async with self.request_semaphore:
+            try:
+                response = await requests_method(
+                    self.base_url + authed_url, **final_requests_kwargs
+                )
+                self._req = response.request_info
 
-        except TimeoutError:
-            raise exceptions.Timeout()
+            except TimeoutError:
+                raise exceptions.Timeout()
 
         tried = retry_counter + 1
 
