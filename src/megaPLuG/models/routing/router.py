@@ -20,6 +20,7 @@ async def get_routes_async(
     dest_col: str,
     server_params: dict,
     batch_size: int = 100,
+    verbose: bool = False,
     **kwargs,
 ) -> gpd.GeoDataFrame:
     """Set up the server and client for routing, then iterate through groups asynchronously."""
@@ -68,17 +69,18 @@ async def get_routes_async(
                         trips.iat[i, idx[ROUTE_COL]] = res_dict[ROUTE_COL]
                         pbar.update(1)
 
-            # After completion, you can analyze the semaphore usage
-            sem = router.client.request_semaphore
-            max_concurrent = max(sem.usage_history) if sem.usage_history else 0
-            avg_concurrent = (
-                sum(sem.usage_history) / len(sem.usage_history)
-                if sem.usage_history
-                else 0
-            )
+            if verbose:
+                # After completion, you can analyze the semaphore usage
+                sem = router.client.request_semaphore
+                max_concurrent = max(sem.usage_history) if sem.usage_history else 0
+                avg_concurrent = (
+                    sum(sem.usage_history) / len(sem.usage_history)
+                    if sem.usage_history
+                    else 0
+                )
 
-            print(f"Max concurrent tasks: {max_concurrent}")
-            print(f"Avg concurrent tasks: {avg_concurrent:.2f}")
+                print(f"Max concurrent tasks: {max_concurrent}")
+                print(f"Avg concurrent tasks: {avg_concurrent:.2f}")
     return trips
 
 
