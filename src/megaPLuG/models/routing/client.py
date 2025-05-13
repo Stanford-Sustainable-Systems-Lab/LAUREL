@@ -79,7 +79,7 @@ class AsyncClient(BaseClient):
             skip_api_error=skip_api_error,
             **kwargs,
         )
-        self.request_semaphore = asyncio.Semaphore(max_concurrent_requests)
+        self.request_semaphore = TrackedSemaphore(max_concurrent_requests)
 
         self.kwargs = kwargs or {}
         try:
@@ -264,3 +264,26 @@ class AsyncClient(BaseClient):
         if status_code != 200:
             txt = await response.text()
             raise exceptions.RouterError(status_code, txt)
+
+
+class TrackedSemaphore(asyncio.Semaphore):
+    def __init__(self, value):
+        super().__init__(value)
+        self._bound = value
+        self.usage_history = []
+        self.current_usage = 0
+        
+    @property
+    def current_tasks(self):
+        return self._bound - self._value
+    
+    async def acquire(self):
+        result = await super().acquire()
+        self.current_usage = self.current_tasks
+        self.usage_history.append(self.current_usage)
+        return result
+    
+    def release(self):
+        super().release()
+        self.current_usage = self.current_tasks
+        self.usage_history.append(self.current_usage)

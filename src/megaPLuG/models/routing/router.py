@@ -37,17 +37,13 @@ async def get_routes_async(
             base_url=server.base_url,
             max_concurrent_requests=conc_max,
         ) as router:
-            async with asyncio.Semaphore(conc_max * conc_mult):
-                async for i in trange(len(trips)):
-                    res_dict = await _get_route_async(
-                        orig=trips.iat[i, idx[orig_col]],
-                        dest=trips.iat[i, idx[dest_col]],
-                        router=router,
-                        **kwargs,
-                    )
-                    trips.iat[i, idx[DIST_COL]] = res_dict[DIST_COL]
-                    trips.iat[i, idx[TIME_COL]] = res_dict[TIME_COL]
-                    trips.iat[i, idx[ROUTE_COL]] = res_dict[ROUTE_COL]
+            # After completion, you can analyze the semaphore usage
+            sem = router.client.request_semaphore
+            max_concurrent = max(sem.usage_history) if sem.usage_history else 0
+            avg_concurrent = sum(sem.usage_history) / len(sem.usage_history) if sem.usage_history else 0
+            
+            print(f"Max concurrent tasks: {max_concurrent}")
+            print(f"Avg concurrent tasks: {avg_concurrent:.2f}")
     return trips
 
 
