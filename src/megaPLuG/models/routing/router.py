@@ -19,7 +19,7 @@ async def get_routes_async(
     orig_col: str,
     dest_col: str,
     server_params: dict,
-    batch_size: int = 100,
+    batch_size: int = 5000,
     verbose: bool = False,
     **kwargs,
 ) -> gpd.GeoDataFrame:
