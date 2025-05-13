@@ -4,7 +4,7 @@ import geopandas as gpd
 import pandas as pd
 import shapely as shp
 from routingpy.exceptions import RouterApiError
-from tqdm.asyncio import trange
+from tqdm import tqdm
 
 from .parser import AsyncGraphhopper
 from .server import GraphhopperContainerRouter
@@ -19,7 +19,7 @@ async def get_routes_async(
     orig_col: str,
     dest_col: str,
     server_params: dict,
-    conc_mult: int = 5,
+    batch_size: int = 100,
     **kwargs,
 ) -> gpd.GeoDataFrame:
     """Set up the server and client for routing, then iterate through groups asynchronously."""
@@ -30,6 +30,16 @@ async def get_routes_async(
     idx = {col_name: idx for idx, col_name in enumerate(trips.columns)}
     conc_max = server_params["max_concurrent_requests"]
 
+    # This wrapper ensures the semaphore is properly used
+    async def process_route(i):
+        res_dict = await _get_route_async(
+            orig=trips.iat[i, idx[orig_col]],
+            dest=trips.iat[i, idx[dest_col]],
+            router=router,
+            **kwargs,
+        )
+        return i, res_dict
+
     with GraphhopperContainerRouter(
         image=server_params["image"], graph_dir=server_params["graph_dir"]
     ) as server:
@@ -37,11 +47,36 @@ async def get_routes_async(
             base_url=server.base_url,
             max_concurrent_requests=conc_max,
         ) as router:
+            # Process in batches
+            total_trips = len(trips)
+
+            # Create a progress bar for the entire process
+            with tqdm(total=total_trips, desc="Routing trips") as pbar:
+                for batch_start in range(0, total_trips, batch_size):
+                    batch_end = min(batch_start + batch_size, total_trips)
+
+                    # Create tasks for this batch and process them together
+                    batch_tasks = [
+                        process_route(i) for i in range(batch_start, batch_end)
+                    ]
+                    batch_results = await asyncio.gather(*batch_tasks)
+
+                    # Update the DataFrame with results
+                    for i, res_dict in batch_results:
+                        trips.iat[i, idx[DIST_COL]] = res_dict[DIST_COL]
+                        trips.iat[i, idx[TIME_COL]] = res_dict[TIME_COL]
+                        trips.iat[i, idx[ROUTE_COL]] = res_dict[ROUTE_COL]
+                        pbar.update(1)
+
             # After completion, you can analyze the semaphore usage
             sem = router.client.request_semaphore
             max_concurrent = max(sem.usage_history) if sem.usage_history else 0
-            avg_concurrent = sum(sem.usage_history) / len(sem.usage_history) if sem.usage_history else 0
-            
+            avg_concurrent = (
+                sum(sem.usage_history) / len(sem.usage_history)
+                if sem.usage_history
+                else 0
+            )
+
             print(f"Max concurrent tasks: {max_concurrent}")
             print(f"Avg concurrent tasks: {avg_concurrent:.2f}")
     return trips
