@@ -272,17 +272,17 @@ class TrackedSemaphore(asyncio.Semaphore):
         self._bound = value
         self.usage_history = []
         self.current_usage = 0
-        
+
     @property
     def current_tasks(self):
         return self._bound - self._value
-    
+
     async def acquire(self):
         result = await super().acquire()
         self.current_usage = self.current_tasks
         self.usage_history.append(self.current_usage)
         return result
-    
+
     def release(self):
         super().release()
         self.current_usage = self.current_tasks
