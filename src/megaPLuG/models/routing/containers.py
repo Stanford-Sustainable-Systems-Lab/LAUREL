@@ -212,7 +212,7 @@ class ApptainerContainerRunner(AbstractContainerRunner):
         bind_maps = self._build_map_str_list(self.bind_map, self._build_bind_map_str)
         # env_vars = self._build_map_str_list(self.env_vars, self._build_env_var_str)
 
-        port_maps = "portmap=" + ",".join(port_maps)
+        port_maps = '"portmap=' + ",".join(port_maps) + '"'
 
         cmd = ["apptainer", "instance", "run"]
         cmd.extend(["--compat", "--no-home"])
