@@ -215,7 +215,7 @@ class ApptainerContainerRunner(AbstractContainerRunner):
         port_maps = "portmap=" + ",".join(port_maps)
 
         cmd = ["apptainer", "instance", "run"]
-        cmd.extend(["--net", "--network-args"] + port_maps)
+        cmd.extend(["--compat", "--no-home"])
         cmd.extend(["--bind"] + bind_maps)
         # TODO: Learn how to set environment variables for Apptainer
         cmd.extend([self.image])
