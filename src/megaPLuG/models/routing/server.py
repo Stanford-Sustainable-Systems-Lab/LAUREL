@@ -279,21 +279,21 @@ class DockerContainerRunner(AbstractContainerRunner):
         )
 
 
-class SingularityContainerRunner(AbstractContainerRunner):
-    """Singularity implementation of container runner."""
+class ApptainerContainerRunner(AbstractContainerRunner):
+    """Apptainer implementation of container runner."""
 
     def build_command(self: Self, wait_for_completion: bool = False) -> list[str]:
-        """Build the singularity run command."""
+        """Build the Apptainer run command."""
         port_maps = self._build_map_str_list(self.port_map, self._build_port_map_str)
         bind_maps = self._build_map_str_list(self.bind_map, self._build_bind_map_str)
         # env_vars = self._build_map_str_list(self.env_vars, self._build_env_var_str)
 
         port_maps = "portmap=" + ",".join(port_maps)
 
-        cmd = ["singularity", "instance", "run"]
+        cmd = ["apptainer", "instance", "run"]
         cmd.extend(["--net", "--network-args"] + port_maps)
         cmd.extend(["--bind"] + bind_maps)
-        # TODO: Learn how to set environment variables for Singularity
+        # TODO: Learn how to set environment variables for apptainer
         cmd.extend([self.image])
         cmd.extend([self.name])
         return cmd
@@ -307,16 +307,16 @@ class SingularityContainerRunner(AbstractContainerRunner):
         return f"{local}:{cont}"
 
     def is_running(self: Self) -> bool:
-        """Check if the singularity container is running."""
+        """Check if the Apptainer container is running."""
         result = subprocess.run(
             ["ps", "aux"], capture_output=True, text=True, check=False
         )
         return self.name in result.stdout
 
     def stop_existing(self: Self) -> None:
-        """Stop the singularity container if it's running."""
+        """Stop the Apptainer container if it's running."""
         if self.is_running():
             subprocess.run(
-                ["singularity", "instance", "stop", self.name],
+                ["apptainer", "instance", "stop", self.name],
                 check=False,
             )
