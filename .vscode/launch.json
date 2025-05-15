@@ -31,6 +31,16 @@
             "args": ["run", "--async", "--pipeline=preprocess", "--env=scenarios/test/task_0"]
             // Any other arguments should be passed as a comma-seperated-list
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
+        },        
+        {
+            "name": "Kedro: Compute Routes",
+            "type": "debugpy",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "module": "kedro",
+            "args": ["run", "--async", "--pipeline=compute_routes", "--env=scenarios/test/task_0"]
+            // Any other arguments should be passed as a comma-seperated-list
+            // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
         {
             "name": "Kedro: Prepare Totals",
