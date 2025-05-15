@@ -233,7 +233,10 @@ class ApptainerContainerRunner(AbstractContainerRunner):
     def is_running(self: Self) -> bool:
         """Check if the Apptainer container is running."""
         result = subprocess.run(
-            ["ps", "aux"], capture_output=True, text=True, check=False
+            ["apptainer", "instance", "list"],
+            capture_output=True,
+            text=True,
+            check=False,
         )
         return self.name in result.stdout
 
