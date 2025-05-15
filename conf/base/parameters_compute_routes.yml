@@ -3,3 +3,9 @@
 #
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.3/configuration/parameters.html
+
+manage_container:
+    image : israelhikingmap/graphhopper:10.0
+    graph_dir : ./data/02_intermediate/osm_graph/andorra
+    graph_url: https://download.geofabrik.de/europe/andorra-latest.osm.pbf
+    max_concurrent_requests: 200
