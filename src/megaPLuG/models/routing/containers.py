@@ -230,6 +230,10 @@ class ApptainerContainerRunner(AbstractContainerRunner):
     def _build_bind_map_str(local, cont):
         return f"{local}:{cont}"
 
+    @staticmethod
+    def _build_env_var_str(key, val):
+        return f"{key}={val}"
+
     def is_running(self: Self) -> bool:
         """Check if the Apptainer container is running."""
         result = subprocess.run(
