@@ -5,7 +5,7 @@
 # Link: https://docs.kedro.org/en/0.19.3/configuration/parameters.html
 
 graphhopper:
-    image: containers/graphhopper_10.0.sif
+    image: containers/graphhopper_10.2.sif
     map_path: $SCRATCH/andorra-latest.osm.pbf
     graph_dir: $SCRATCH/graphhopper_cache/andorra/
     config_path: ./conf/base/parameters_graphhopper.yml
