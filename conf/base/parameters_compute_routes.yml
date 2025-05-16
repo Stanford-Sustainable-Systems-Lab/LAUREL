@@ -4,8 +4,15 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.3/configuration/parameters.html
 
-manage_container:
-    image : israelhikingmap/graphhopper:10.0
-    graph_dir : ./data/02_intermediate/osm_graph/andorra
-    graph_url: https://download.geofabrik.de/europe/andorra-latest.osm.pbf
+graphhopper:
+    image: containers/graphhopper_10.0.sif
+    map_path: $SCRATCH/andorra-latest.osm.pbf
+    graph_dir: $SCRATCH/graphhopper_cache/andorra/
+    config_path: ./conf/base/parameters_graphhopper.yml
+    resources:
+        mem_max_gb: 2
+        mem_start_gb: 1
+
+get_routes:
+    profile: car
     max_concurrent_requests: 200
