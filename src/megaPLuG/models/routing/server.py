@@ -63,8 +63,8 @@ class GraphhopperContainerRouter(ABC):
         self.container.stop_existing()
         self.base_url = None
 
-    def import_graph(self: Self, url: str) -> None:
-        """Import the graph from the given URL and process it."""
+    def import_graph(self: Self, input_file: str) -> None:
+        """Import the graph from the given input file (.pbf) and process it."""
         self.container = self.runner_class(
             name=self.container_name,
             image=self.image,
@@ -73,7 +73,7 @@ class GraphhopperContainerRouter(ABC):
             env_vars={"JAVA_OPTS": f"-Xmx{self.mem_max_gb}g -Xms{self.mem_start_gb}g"},
         )
         self.container.stop_existing()
-        cmd_import = ["--import", "--url", url]
+        cmd_import = ["--import", "--input", input_file]
         logger.info("Starting GraphHopper graph import...")
         self.container.start(cmd_import, wait_for_completion=True)
         self.container.stop_existing()
