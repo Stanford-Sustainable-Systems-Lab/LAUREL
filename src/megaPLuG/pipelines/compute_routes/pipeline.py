@@ -9,7 +9,7 @@ from .nodes import import_graph, get_routes
 
 
 def create_pipeline(**kwargs) -> Pipeline:
-    pipe = pipeline(
+    import_pipe = pipeline(
         [
             node(
                 func=import_graph,
@@ -17,6 +17,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs=None,
                 name="import_graph",
             ),
+        ],
+        tags="import"
+    )
+
+    route_pipe = pipeline(
+        [
             node(
                 func=get_routes,
                 inputs=["params:get_routes", "params:graphhopper"],
@@ -24,5 +30,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="get_routes",
             ),
         ],
+        tags="route"
     )
-    return pipe
+
+    return import_pipe + route_pipe

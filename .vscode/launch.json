@@ -38,7 +38,7 @@
             "request": "launch",
             "console": "integratedTerminal",
             "module": "kedro",
-            "args": ["run", "--async", "--pipeline=compute_routes", "--env=scenarios/test/task_0"]
+            "args": ["run", "--async", "--pipeline=compute_routes", "--tags=import", "--env=scenarios/test/task_0"]
             // Any other arguments should be passed as a comma-seperated-list
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
