@@ -167,3 +167,7 @@ src/runners/*
 # Slurm files
 slurm_logs/*
 !slurm_logs/.gitkeep
+
+# Container files
+containers/*
+!containers/.gitkeep
