@@ -171,3 +171,4 @@ slurm_logs/*
 # Container files
 containers/*
 !containers/.gitkeep
+!containers/README.md
