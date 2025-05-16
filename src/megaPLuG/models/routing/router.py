@@ -42,7 +42,9 @@ async def get_routes_async(
         return i, res_dict
 
     with GraphhopperContainerRouter(
-        image=server_params["image"], graph_dir=server_params["graph_dir"]
+        image=server_params["image"],
+        graph_dir=server_params["graph_dir"],
+        config_path=server_params["config_path"],
     ) as server:
         async with AsyncGraphhopper(
             base_url=server.base_url,

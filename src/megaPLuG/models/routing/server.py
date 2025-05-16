@@ -5,6 +5,7 @@ from typing import Self
 from megaPLuG.models.routing.containers import (
     AbstractContainerRunner,
     DockerContainerRunner,
+    ApptainerContainerRunner,
 )
 
 logger = logging.getLogger(__name__)
@@ -21,18 +22,20 @@ class GraphhopperContainerRouter(ABC):
         self: Self,
         image: str,
         graph_dir: str,
+        config_path: str,
         port: int = 8989,
         container_name: str = "graphhopper",
         startup_delay: int = 5,
         mem_max_gb: int = 32,
         mem_start_gb: int = 2,
-        runner_class: AbstractContainerRunner = DockerContainerRunner,
+        runner_class: AbstractContainerRunner = ApptainerContainerRunner,
         **cmd_kwargs,
     ):
         self.image = image
         self.container_name = container_name
         self.port = port
         self.graph_dir = graph_dir
+        self.config_path = config_path
         self.startup_delay = startup_delay
         self.mem_max_gb = mem_max_gb
         self.mem_start_gb = mem_start_gb
@@ -51,7 +54,17 @@ class GraphhopperContainerRouter(ABC):
             env_vars={"JAVA_OPTS": f"-Xmx{self.mem_max_gb}g -Xms{self.mem_start_gb}g"},
         )
         self.container.stop_existing()
-        cmd_rout = self._build_router_command()
+        if isinstance(self.container, ApptainerContainerRunner):
+            cmd_dict = {
+                "--config": self.config_path,
+                "--graph-cache": self.graph_dir,
+            }
+        elif isinstance(self.container, DockerContainerRunner):
+            logger.warning("Passed config will be overridden by the container's internal config.")
+        else:
+            raise RuntimeError("Unsupported AbstractContainerRunner class passed.")
+
+        cmd_rout = self._build_router_command(cmd_dict=cmd_dict)
         logger.info("Starting GraphHopper routing server...")
         self.container.start(cmd=cmd_rout)
         self.base_url = f"http://localhost:{self.port}"
@@ -73,16 +86,28 @@ class GraphhopperContainerRouter(ABC):
             env_vars={"JAVA_OPTS": f"-Xmx{self.mem_max_gb}g -Xms{self.mem_start_gb}g"},
         )
         self.container.stop_existing()
-        cmd_import = ["--import", "--input", input_file]
+        if isinstance(self.container, ApptainerContainerRunner):
+            cmd_dict = {
+                "--input": input_file,
+                "--config": self.config_path,
+                "--graph-cache": self.graph_dir,
+            }
+        elif isinstance(self.container, DockerContainerRunner):
+            logger.warning("Passed config will be overridden by the container's internal config.")
+        else:
+            raise RuntimeError("Unsupported AbstractContainerRunner class passed.")
+
+        cmd_rout = self._build_router_command(cmd_dict=cmd_dict)
+        cmd_import = ["--import"] + cmd_rout
         logger.info("Starting GraphHopper graph import...")
         self.container.start(cmd_import, wait_for_completion=True)
         self.container.stop_existing()
 
-    def _build_router_command(self: Self) -> list[str]:
+    def _build_router_command(self: Self, cmd_dict: dict) -> list[str]:
         """Build the command args that go to the routing container itself."""
         # Add command arguments for within the container itself
         cmd = []
-        if len(self.cmd_kwargs) > 0:
-            cmd_ls = [item for pair in self.cmd_kwargs.items() for item in pair]
+        if len(cmd_dict) > 0:
+            cmd_ls = [item for pair in cmd_dict.items() for item in pair]
             cmd.extend(cmd_ls)
         return cmd
