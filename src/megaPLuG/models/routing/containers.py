@@ -208,18 +208,15 @@ class ApptainerContainerRunner(AbstractContainerRunner):
 
     def build_command(self: Self, wait_for_completion: bool = False) -> list[str]:
         """Build the Apptainer run command."""
-        port_maps = self._build_map_str_list(self.port_map, self._build_port_map_str)
-        bind_maps = self._build_map_str_list(self.bind_map, self._build_bind_map_str)
-        # env_vars = self._build_map_str_list(self.env_vars, self._build_env_var_str)
-
-        port_maps = '"portmap=' + ",".join(port_maps) + '"'
-
-        cmd = ["apptainer", "instance", "run"]
-        cmd.extend(["--compat", "--no-home"])
-        cmd.extend(["--bind"] + bind_maps)
-        # TODO: Learn how to set environment variables for Apptainer
+        env_vars = self._build_map_str_list(self.env_vars, self._build_env_var_str)
+        cmd = ["apptainer"]
+        if not wait_for_completion:
+            cmd.extend(["instance"])
+        cmd.extend(["run"])
+        cmd.extend(["--env"] + env_vars)
         cmd.extend([self.image])
-        cmd.extend([self.name])
+        if not wait_for_completion:
+            cmd.extend([self.name])
         return cmd
 
     @staticmethod
