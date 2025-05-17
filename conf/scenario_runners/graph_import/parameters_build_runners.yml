@@ -8,11 +8,11 @@ slurm_reporting:
 slurm_resources:
   partition: serc
   ntasks: 2 # I believe that this is what we need for SequentialRunner, while ParallelRunner needs n_examples + 1
-  ntasks-per-node: 2 # Keeps all of the tasks and CPUs on the same node, thus accessible by Gurobi
-  cpus-per-task: 8 # Each Gurobi thread needs one CPU to execute
-  mem: 128GB # Increasing memory, since I've had some memory errors
+  ntasks-per-node: 2 # Keeps all of the tasks and CPUs on the same node
+  cpus-per-task: 2
+  mem: 96GB
   gpus: 0
-  time: 2-00:00 # Reducing time requirement, since with more processors we're going faster.
+  time: 0-04:00
 
 cmd_line_calls:
   prefix: rye run

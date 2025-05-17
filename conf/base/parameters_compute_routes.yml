@@ -10,7 +10,7 @@ graphhopper:
     graph_dir: $SCRATCH/graphhopper_cache/us/
     config_path: ./conf/base/parameters_graphhopper.yml
     resources:
-        mem_max_gb: 120
+        mem_max_gb: 96
         mem_start_gb: 32
 
 get_routes:
