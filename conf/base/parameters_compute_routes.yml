@@ -6,12 +6,12 @@
 
 graphhopper:
     image: containers/graphhopper_10.2.sif
-    map_path: $SCRATCH/andorra-latest.osm.pbf
-    graph_dir: $SCRATCH/graphhopper_cache/andorra/
+    map_path: $SCRATCH/us-latest.osm.pbf
+    graph_dir: $SCRATCH/graphhopper_cache/us/
     config_path: ./conf/base/parameters_graphhopper.yml
     resources:
-        mem_max_gb: 2
-        mem_start_gb: 1
+        mem_max_gb: 120
+        mem_start_gb: 32
 
 get_routes:
     profile: car
