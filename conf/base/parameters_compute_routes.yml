@@ -15,9 +15,9 @@ graphhopper:
             mem_start_gb: 32
             startup_delay_secs: 5
         server:
-            mem_max_gb: 16
-            mem_start_gb: 8
-            startup_delay_secs: 30
+            mem_max_gb: 14 # 8 is not enough to load the US, but 10 is
+            mem_start_gb: 10
+            startup_delay_secs: 15 # This is quite close to the shortest possible
 
 get_routes:
     profile: car
