@@ -3,10 +3,11 @@ This is a boilerplate pipeline 'compute_routes'
 generated using Kedro 0.19.3
 """
 
-from megaPLuG.models.routing.router import GraphhopperContainerRouter
+import logging
+
 from routingpy import Graphhopper
 
-import logging
+from megaPLuG.models.routing.router import GraphhopperContainerRouter
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ def import_graph(server_params: dict) -> None:
         config_path=server_params["config_path"],
         mem_max_gb=resource["mem_max_gb"],
         mem_start_gb=resource["mem_start_gb"],
+        startup_delay=resource["startup_delay_secs"],
     )
     server.import_graph(input_file=server_params["map_path"])
     logger.info("Import completed")
@@ -27,7 +29,7 @@ def import_graph(server_params: dict) -> None:
 
 def get_routes(route_params: dict, server_params: dict) -> None:
     """Get routes using Graphhopper."""
-    coords = [(-72.21865, 43.73610), (-122.15615, 37.42383)] # A cross-US route
+    coords = [(-72.21865, 43.73610), (-122.15615, 37.42383)]  # A cross-US route
     resource = server_params["resources"]["server"]
     with GraphhopperContainerRouter(
         image=server_params["image"],
