@@ -35,6 +35,7 @@ def get_routes(route_params: dict, server_params: dict) -> None:
         config_path=server_params["config_path"],
         mem_max_gb=resource["mem_max_gb"],
         mem_start_gb=resource["mem_start_gb"],
+        startup_delay=resource["startup_delay_secs"],
     ) as server:
         router = Graphhopper(base_url=server.base_url)
         route = router.directions(locations=coords, profile=route_params["profile"])

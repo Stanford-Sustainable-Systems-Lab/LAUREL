@@ -13,9 +13,11 @@ graphhopper:
         import:
             mem_max_gb: 96
             mem_start_gb: 32
+            startup_delay_secs: 5
         server:
-            mem_max_gb: 32
-            mem_start_gb: 16
+            mem_max_gb: 16
+            mem_start_gb: 8
+            startup_delay_secs: 30
 
 get_routes:
     profile: car

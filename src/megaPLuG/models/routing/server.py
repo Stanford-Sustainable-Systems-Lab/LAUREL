@@ -66,7 +66,10 @@ class GraphhopperContainerRouter(ABC):
 
         cmd_rout = self._build_router_command(cmd_dict=cmd_dict)
         logger.info("Starting GraphHopper routing server...")
-        self.container.start(cmd=cmd_rout)
+        self.container.start(
+            cmd=cmd_rout,
+            startup_delay_secs=self.startup_delay,
+        )
         self.base_url = f"http://localhost:{self.port}"
         return self
 
@@ -100,7 +103,11 @@ class GraphhopperContainerRouter(ABC):
         cmd_rout = self._build_router_command(cmd_dict=cmd_dict)
         cmd_import = ["--import"] + cmd_rout
         logger.info("Starting GraphHopper graph import...")
-        self.container.start(cmd_import, wait_for_completion=True)
+        self.container.start(
+            cmd=cmd_import,
+            wait_for_completion=True,
+            startup_delay_secs=self.startup_delay,
+        )
         self.container.stop_existing()
 
     def _build_router_command(self: Self, cmd_dict: dict) -> list[str]:
