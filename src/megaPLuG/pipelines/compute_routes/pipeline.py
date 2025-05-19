@@ -5,7 +5,7 @@ generated using Kedro 0.19.3
 
 from kedro.pipeline import Pipeline, node, pipeline
 
-from .nodes import import_graph, get_routes
+from .nodes import get_routes, import_graph
 
 
 def create_pipeline(**kwargs) -> Pipeline:
@@ -18,7 +18,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="import_graph",
             ),
         ],
-        tags="import"
+        tags="import",
     )
 
     route_pipe = pipeline(
@@ -30,7 +30,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="get_routes",
             ),
         ],
-        tags="route"
+        tags="route",
     )
 
     return import_pipe + route_pipe

@@ -4,8 +4,8 @@ from typing import Self
 
 from megaPLuG.models.routing.containers import (
     AbstractContainerRunner,
-    DockerContainerRunner,
     ApptainerContainerRunner,
+    DockerContainerRunner,
 )
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,9 @@ class GraphhopperContainerRouter(ABC):
                 "--graph-cache": self.graph_dir,
             }
         elif isinstance(self.container, DockerContainerRunner):
-            logger.warning("Passed config will be overridden by the container's internal config.")
+            logger.warning(
+                "Passed config will be overridden by the container's internal config."
+            )
         else:
             raise RuntimeError("Unsupported AbstractContainerRunner class passed.")
 
@@ -96,7 +98,9 @@ class GraphhopperContainerRouter(ABC):
                 "--graph-cache": self.graph_dir,
             }
         elif isinstance(self.container, DockerContainerRunner):
-            logger.warning("Passed config will be overridden by the container's internal config.")
+            logger.warning(
+                "Passed config will be overridden by the container's internal config."
+            )
         else:
             raise RuntimeError("Unsupported AbstractContainerRunner class passed.")
 
