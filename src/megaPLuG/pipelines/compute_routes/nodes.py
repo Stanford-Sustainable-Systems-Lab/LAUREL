@@ -3,11 +3,23 @@ This is a boilerplate pipeline 'compute_routes'
 generated using Kedro 0.19.3
 """
 
+import asyncio
 import logging
 
+import geopandas as gpd
+import pandas as pd
 from routingpy import Graphhopper
 
-from megaPLuG.models.routing.router import GraphhopperContainerRouter
+from megaPLuG.models.routing.router import (
+    DIST_COL,
+    ROUTE_COL,
+    TIME_COL,
+    get_routes_async,
+)
+from megaPLuG.models.routing.server import GraphhopperContainerRouter
+from megaPLuG.utils.geo import METERS_PER_MILE
+from megaPLuG.utils.h3 import add_geometries
+from megaPLuG.utils.time import SECS_PER_HOUR
 
 logger = logging.getLogger(__name__)
 
@@ -42,3 +54,65 @@ def get_routes(route_params: dict, server_params: dict) -> None:
         router = Graphhopper(base_url=server.base_url)
         route = router.directions(locations=coords, profile=route_params["profile"])
         logger.info(f"Route distance: {route.distance} meters")
+
+
+def build_dwell_id(dwells: pd.DataFrame, params: dict) -> pd.DataFrame:
+    dwells[params["col_name"]] = pd.RangeIndex(stop=dwells.shape[0])
+    return dwells
+
+
+def filter_routable_dwells_before_geoms(
+    dwells: pd.DataFrame, params: dict
+) -> pd.DataFrame:
+    """Filter down routable dwells without using geometries (to speed geometry creation)."""
+    if params["apply_filter"]:
+        vehs_sel = dwells.index.unique()[: params["n_vehs"]]
+        dwells_filt = dwells.loc[vehs_sel]
+        return dwells_filt
+    else:
+        return dwells
+
+
+def get_trip_origs_and_dests(dwells: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
+    """Get origins and destinations for each dwell, and format for routing."""
+    pcols = params["columns"]
+    trips = add_geometries(data=dwells, hex_col=pcols["hex"])
+    trips = trips.rename_geometry(pcols["dest"])
+    trips[pcols["orig"]] = trips.groupby(pcols["veh"])[pcols["dest"]].shift(1)
+    return trips
+
+
+def filter_routable_trips(dwells: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
+    """Filter down routable dwells using the geometries."""
+    dwells_filt = dwells.loc[dwells[params["dist_col"]] >= params["min_dist_miles"]]
+    return dwells_filt
+
+
+def get_routes_node(
+    dwells: gpd.GeoDataFrame, params: dict, server_params: dict
+) -> gpd.GeoDataFrame:
+    """Compute routes for each dwell and then format results."""
+    logger.info("Starting routing")
+    icols = params["input_cols"]
+    routed = asyncio.run(
+        get_routes_async(
+            dwells,
+            orig_col=icols["orig"],
+            dest_col=icols["dest"],
+            max_concurrent_requests=params["client"]["max_concurrent_requests"],
+            batch_size=params["client"]["batch_size"],
+            server_params=server_params,
+            profile=params["profile"],
+        )
+    )
+    logger.info("Finished routing")
+
+    logger.info("Interpreting routes")
+    tcols = params["output_trip_cols"]
+    float_type = pd.Float64Dtype()
+    routed[tcols["dist"]] = (routed[DIST_COL] / METERS_PER_MILE).astype(float_type)
+    routed[tcols["dur"]] = (routed[TIME_COL] / SECS_PER_HOUR).astype(float_type)
+    routed[tcols["speed"]] = routed[tcols["dist"]] / routed[tcols["dur"]]
+    routed = routed.drop(columns=[DIST_COL, TIME_COL])
+    routed = routed.set_geometry(ROUTE_COL)
+    return routed
