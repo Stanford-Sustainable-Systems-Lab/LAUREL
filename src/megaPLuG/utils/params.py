@@ -1,3 +1,5 @@
+import importlib
+
 import numpy as np
 import pandas as pd
 
@@ -103,3 +105,18 @@ def extract_params(params: dict, key_map: dict) -> dict:
 
     res = {k: get_value_from_dict(params, v) for k, v in key_map.items()}
     return res
+
+
+def import_from_config(import_path: str):
+    """
+    Import a class defined in a YAML configuration file.
+
+    Args:
+        class_path (str): import-able path to the class
+
+    Returns:
+        The imported class
+    """
+    module_path, obj_name = import_path.rsplit(".", 1)
+    module = importlib.import_module(module_path)
+    return getattr(module, obj_name)

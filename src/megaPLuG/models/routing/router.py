@@ -6,6 +6,8 @@ import shapely as shp
 from routingpy.exceptions import RouterApiError
 from tqdm import tqdm
 
+from megaPLuG.utils.params import import_from_config
+
 from .parser import AsyncGraphhopper
 from .server import GraphhopperContainerRouter
 
@@ -43,6 +45,7 @@ async def get_routes_async(
 
     with GraphhopperContainerRouter(
         image=server_params["image"],
+        runner_class=import_from_config(server_params["container_class"]),
         graph_dir=server_params["graph_dir"],
         config_path=server_params["config_path"],
     ) as server:
