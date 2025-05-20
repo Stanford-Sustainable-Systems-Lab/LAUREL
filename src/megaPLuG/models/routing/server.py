@@ -60,6 +60,7 @@ class GraphhopperContainerRouter(ABC):
                 "--graph-cache": self.graph_dir,
             }
         elif isinstance(self.container, DockerContainerRunner):
+            cmd_dict = {}
             logger.warning(
                 "Passed config will be overridden by the container's internal config."
             )
@@ -98,6 +99,9 @@ class GraphhopperContainerRouter(ABC):
                 "--graph-cache": self.graph_dir,
             }
         elif isinstance(self.container, DockerContainerRunner):
+            cmd_dict = {
+                "--input": input_file,
+            }
             logger.warning(
                 "Passed config will be overridden by the container's internal config."
             )
