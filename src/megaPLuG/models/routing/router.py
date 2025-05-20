@@ -21,6 +21,7 @@ async def get_routes_async(
     orig_col: str,
     dest_col: str,
     server_params: dict,
+    max_concurrent_requests: int = 200,
     batch_size: int = 5000,
     verbose: bool = False,
     **kwargs,
@@ -31,7 +32,6 @@ async def get_routes_async(
     trips[ROUTE_COL] = gpd.GeoSeries(data=None, crs=trips.crs)
 
     idx = {col_name: idx for idx, col_name in enumerate(trips.columns)}
-    conc_max = server_params["max_concurrent_requests"]
 
     # This wrapper ensures the semaphore is properly used
     async def process_route(i):
@@ -43,15 +43,19 @@ async def get_routes_async(
         )
         return i, res_dict
 
+    resource = server_params["resources"]["server"]
     with GraphhopperContainerRouter(
         image=server_params["image"],
         runner_class=import_from_config(server_params["container_class"]),
         graph_dir=server_params["graph_dir"],
         config_path=server_params["config_path"],
+        mem_max_gb=resource["mem_max_gb"],
+        mem_start_gb=resource["mem_start_gb"],
+        startup_delay=resource["startup_delay_secs"],
     ) as server:
         async with AsyncGraphhopper(
             base_url=server.base_url,
-            max_concurrent_requests=conc_max,
+            max_concurrent_requests=max_concurrent_requests,
         ) as router:
             # Process in batches
             total_trips = len(trips)
