@@ -21,7 +21,7 @@ slurm_resources:
   array: 1-60%2 # 2 at a time is enforced by Gurobi license
 
 cmd_line_calls:
-  prefix: rye run
+  prefix: uv run
   kedro:
     # pipeline: simulate
     # params: Use this for command line parameters

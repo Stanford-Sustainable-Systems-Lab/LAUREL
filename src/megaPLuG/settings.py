@@ -13,14 +13,6 @@ HOOKS = ()  # (SparkHooks(),)
 
 from pathlib import Path  # noqa: E402
 
-from kedro_viz.integrations.kedro.sqlite_store import SQLiteStore  # noqa: E402
-
-# Class that manages storing KedroSession data.
-
-SESSION_STORE_CLASS = SQLiteStore
-# Keyword arguments to pass to the `SESSION_STORE_CLASS` constructor.
-SESSION_STORE_ARGS = {"path": str(Path(__file__).parents[2])}
-
 # Directory that holds configuration.
 # CONF_SOURCE = "conf"
 
