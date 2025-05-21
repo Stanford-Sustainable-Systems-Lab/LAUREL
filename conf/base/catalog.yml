@@ -388,61 +388,61 @@ peak_load_addition_by_substation:
     layer: peak_load_addition_by_substation
 
 substation_overcapacity_by_scenario:
-  type: matplotlib.MatplotlibWriter
+  type: matplotlib.MatplotlibDataset
   filepath: data/08_reporting/substation_overcapacity_by_scenario.png
   save_args:
     bbox_inches: tight
 
 profiles_by_location_and_segment_no_map:
-  type: matplotlib.MatplotlibWriter
+  type: matplotlib.MatplotlibDataset
   filepath: data/08_reporting/profiles_by_location_and_segment_no_map.png
   save_args:
     bbox_inches: tight
 
 profile_examples_with_uncertainty:
-  type: matplotlib.MatplotlibWriter
+  type: matplotlib.MatplotlibDataset
   filepath: data/08_reporting/profile_examples_with_uncertainty.png
   save_args:
     bbox_inches: tight
 
 profile_examples_with_capacity:
-  type: matplotlib.MatplotlibWriter
+  type: matplotlib.MatplotlibDataset
   filepath: data/08_reporting/profile_examples_with_capacity.png
   save_args:
     bbox_inches: tight
 
 profiles_by_sensitivity:
-  type: matplotlib.MatplotlibWriter
+  type: matplotlib.MatplotlibDataset
   filepath: data/08_reporting/profiles_by_sensitivity.png
   save_args:
     bbox_inches: tight
 
 feasibility_by_range_and_segment:
-  type: matplotlib.MatplotlibWriter
+  type: matplotlib.MatplotlibDataset
   filepath: data/08_reporting/feasibility_by_range_and_segment.png
   save_args:
     bbox_inches: tight
 
 substation_strategic_uncertainty:
-  type: matplotlib.MatplotlibWriter
+  type: matplotlib.MatplotlibDataset
   filepath: data/08_reporting/substation_strategic_uncertainty.png
   save_args:
     bbox_inches: tight
 
 sensitivity_single_substation:
-  type: matplotlib.MatplotlibWriter
+  type: matplotlib.MatplotlibDataset
   filepath: data/08_reporting/sensitivity_single_substation.png
   save_args:
     bbox_inches: tight
 
 sensitivity_sum_of_capacity_consumed:
-  type: matplotlib.MatplotlibWriter
+  type: matplotlib.MatplotlibDataset
   filepath: data/08_reporting/sensitivity_sum_of_capacity_consumed.png
   save_args:
     bbox_inches: tight
 
 primary_operating_distance_distribution:
-  type: matplotlib.MatplotlibWriter
+  type: matplotlib.MatplotlibDataset
   filepath: data/08_reporting/primary_operating_distance_distribution.png
   save_args:
     bbox_inches: tight
