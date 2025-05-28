@@ -18,10 +18,11 @@ from typing import Self  # noqa: F401
 
 from aiohttp import ClientSession
 from routingpy import utils
-from routingpy.client_base import DEFAULT
 from routingpy.direction import Direction, Directions
 
 from .client import AsyncClient
+
+DEFAULT_TIMEOUT = 10  # seconds
 
 
 class AsyncGraphhopper:
@@ -34,7 +35,7 @@ class AsyncGraphhopper:
         api_key: str | None = None,
         base_url: str | None = _DEFAULT_BASE_URL,
         user_agent: str | None = None,
-        timeout: int | None = DEFAULT,
+        timeout: int | None = DEFAULT_TIMEOUT,
         retry_timeout: int | None = None,
         retry_over_query_limit: bool | None = False,
         skip_api_error: bool | None = None,
