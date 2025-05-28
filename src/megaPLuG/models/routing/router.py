@@ -25,6 +25,7 @@ async def _get_routes_async(
     server_url: str,
     max_concurrent_requests: int = 200,
     batch_size: int = 5000,
+    timeout: int = 10,
     verbose: bool = False,
     **kwargs,
 ) -> gpd.GeoDataFrame:
@@ -47,6 +48,7 @@ async def _get_routes_async(
 
     async with AsyncGraphhopper(
         base_url=server_url,
+        timeout=timeout,
         max_concurrent_requests=max_concurrent_requests,
     ) as router:
         # Process in batches

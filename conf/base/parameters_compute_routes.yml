@@ -48,6 +48,7 @@ get_routes:
     client:
         max_concurrent_requests: 200
         batch_size: 5000
+        timeout_secs: 30
     input_cols:
         orig: orig_point
         dest: dest_point

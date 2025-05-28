@@ -153,6 +153,7 @@ def get_routes_node(
         dest_col=icols["dest"],
         max_concurrent_requests=params["client"]["max_concurrent_requests"],
         batch_size=params["client"]["batch_size"],
+        timeout=params["client"]["timeout_secs"],
         server_url=server.base_url,
         profile=params["profile"],
     )
