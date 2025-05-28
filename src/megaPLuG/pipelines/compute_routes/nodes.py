@@ -3,7 +3,6 @@ This is a boilerplate pipeline 'compute_routes'
 generated using Kedro 0.19.3
 """
 
-import asyncio
 import logging
 
 import geopandas as gpd
@@ -14,11 +13,12 @@ from megaPLuG.models.routing.router import (
     DIST_COL,
     ROUTE_COL,
     TIME_COL,
-    get_routes_async,
+    get_routes,
 )
 from megaPLuG.models.routing.server import GraphhopperContainerRouter
 from megaPLuG.utils.geo import METERS_PER_MILE
 from megaPLuG.utils.h3 import add_geometries
+from megaPLuG.utils.params import import_from_config
 from megaPLuG.utils.time import SECS_PER_HOUR
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ def import_graph(server_params: dict) -> None:
     logger.info("Import completed")
 
 
-def get_routes(route_params: dict, server_params: dict) -> None:
+def test_get_routes(route_params: dict, server_params: dict) -> None:
     """Get routes using Graphhopper."""
     coords = [(-72.21865, 43.73610), (-122.15615, 37.42383)]  # A cross-US route
     resource = server_params["resources"]["server"]
@@ -93,18 +93,28 @@ def get_routes_node(
 ) -> gpd.GeoDataFrame:
     """Compute routes for each dwell and then format results."""
     logger.info("Starting routing")
-    icols = params["input_cols"]
-    routed = asyncio.run(
-        get_routes_async(
-            dwells,
+    resource = server_params["resources"]["server"]
+    with GraphhopperContainerRouter(
+        image=server_params["image"],
+        runner_class=import_from_config(
+            server_params["container_class"]
+        ),  # TODO: Something about this doesn't work with import_from_config
+        graph_dir=server_params["graph_dir"],
+        config_path=server_params["config_path"],
+        mem_max_gb=resource["mem_max_gb"],
+        mem_start_gb=resource["mem_start_gb"],
+        startup_delay=resource["startup_delay_secs"],
+    ) as server:
+        icols = params["input_cols"]
+        routed = get_routes(
+            gdf=dwells,
             orig_col=icols["orig"],
             dest_col=icols["dest"],
             max_concurrent_requests=params["client"]["max_concurrent_requests"],
             batch_size=params["client"]["batch_size"],
-            server_params=server_params,
+            server_url=server.base_url,
             profile=params["profile"],
         )
-    )
     logger.info("Finished routing")
 
     logger.info("Interpreting routes")

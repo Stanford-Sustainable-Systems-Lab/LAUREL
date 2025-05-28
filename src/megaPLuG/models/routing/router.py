@@ -4,23 +4,25 @@ import geopandas as gpd
 import pandas as pd
 import shapely as shp
 from routingpy.exceptions import RouterApiError
-from tqdm import tqdm
-
-from megaPLuG.utils.params import import_from_config
 
 from .parser import AsyncGraphhopper
-from .server import GraphhopperContainerRouter
 
 DIST_COL = "trip_meters_route"
 TIME_COL = "trip_seconds_route"
 ROUTE_COL = "trip_geom_route"
 
 
-async def get_routes_async(
+def get_routes(gdf: gpd.GeoDataFrame, **kwargs) -> gpd.GeoDataFrame:
+    """Get routes for an individual GeoPandas dataframe."""
+    res = asyncio.run(_get_routes_async(trips=gdf, **kwargs))
+    return res
+
+
+async def _get_routes_async(
     trips: gpd.GeoDataFrame,
     orig_col: str,
     dest_col: str,
-    server_params: dict,
+    server_url: str,
     max_concurrent_requests: int = 200,
     batch_size: int = 5000,
     verbose: bool = False,
@@ -43,80 +45,39 @@ async def get_routes_async(
         )
         return i, res_dict
 
-    resource = server_params["resources"]["server"]
-    with GraphhopperContainerRouter(
-        image=server_params["image"],
-        runner_class=import_from_config(server_params["container_class"]),
-        graph_dir=server_params["graph_dir"],
-        config_path=server_params["config_path"],
-        mem_max_gb=resource["mem_max_gb"],
-        mem_start_gb=resource["mem_start_gb"],
-        startup_delay=resource["startup_delay_secs"],
-    ) as server:
-        async with AsyncGraphhopper(
-            base_url=server.base_url,
-            max_concurrent_requests=max_concurrent_requests,
-        ) as router:
-            # Process in batches
-            total_trips = len(trips)
+    async with AsyncGraphhopper(
+        base_url=server_url,
+        max_concurrent_requests=max_concurrent_requests,
+    ) as router:
+        # Process in batches
+        total_trips = len(trips)
 
-            # Create a progress bar for the entire process
-            with tqdm(total=total_trips, desc="Routing trips") as pbar:
-                for batch_start in range(0, total_trips, batch_size):
-                    batch_end = min(batch_start + batch_size, total_trips)
+        for batch_start in range(0, total_trips, batch_size):
+            batch_end = min(batch_start + batch_size, total_trips)
 
-                    # Create tasks for this batch and process them together
-                    batch_tasks = [
-                        process_route(i) for i in range(batch_start, batch_end)
-                    ]
-                    batch_results = await asyncio.gather(*batch_tasks)
+            # Create tasks for this batch and process them together
+            batch_tasks = [process_route(i) for i in range(batch_start, batch_end)]
+            batch_results = await asyncio.gather(*batch_tasks)
 
-                    # Update the DataFrame with results
-                    for i, res_dict in batch_results:
-                        trips.iat[i, idx[DIST_COL]] = res_dict[DIST_COL]
-                        trips.iat[i, idx[TIME_COL]] = res_dict[TIME_COL]
-                        trips.iat[i, idx[ROUTE_COL]] = res_dict[ROUTE_COL]
-                        pbar.update(1)
+            # Update the DataFrame with results
+            for i, res_dict in batch_results:
+                trips.iat[i, idx[DIST_COL]] = res_dict[DIST_COL]
+                trips.iat[i, idx[TIME_COL]] = res_dict[TIME_COL]
+                trips.iat[i, idx[ROUTE_COL]] = res_dict[ROUTE_COL]
 
-            if verbose:
-                # After completion, you can analyze the semaphore usage
-                sem = router.client.request_semaphore
-                max_concurrent = max(sem.usage_history) if sem.usage_history else 0
-                avg_concurrent = (
-                    sum(sem.usage_history) / len(sem.usage_history)
-                    if sem.usage_history
-                    else 0
-                )
-
-                print(f"Max concurrent tasks: {max_concurrent}")
-                print(f"Avg concurrent tasks: {avg_concurrent:.2f}")
-    return trips
-
-
-async def _get_routes_async_core(
-    dwells: gpd.GeoDataFrame, router: AsyncGraphhopper, **kwargs
-) -> gpd.GeoDataFrame:
-    """Get all routes for an individual vehicle asynchronously."""
-    geos = dwells.geometry
-    directs = [
-        _report_route(pd.NA, pd.NA, None)
-    ]  # Initial location has no prior location
-
-    if len(geos) > 1:  # So we have at least two geos to compare
-        tasks = []
-        for i in range(1, len(geos)):
-            orig = geos.iloc[i - 1]
-            dest = geos.iloc[i]
-            cur_task = asyncio.create_task(
-                _get_route_async(orig=orig, dest=dest, router=router, **kwargs)
+        if verbose:
+            # After completion, you can analyze the semaphore usage
+            sem = router.client.request_semaphore
+            max_concurrent = max(sem.usage_history) if sem.usage_history else 0
+            avg_concurrent = (
+                sum(sem.usage_history) / len(sem.usage_history)
+                if sem.usage_history
+                else 0
             )
-            tasks.append(cur_task)
 
-        results = await asyncio.gather(*tasks)
-        directs.extend(results)
-
-    routes = pd.DataFrame.from_records(directs, index=dwells.index)
-    return pd.concat([dwells, routes], axis=1)
+            print(f"Max concurrent tasks: {max_concurrent}")
+            print(f"Avg concurrent tasks: {avg_concurrent:.2f}")
+    return trips
 
 
 async def _get_route_async(
