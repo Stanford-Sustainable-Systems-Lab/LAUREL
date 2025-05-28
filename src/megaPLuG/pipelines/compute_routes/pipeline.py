@@ -12,6 +12,10 @@ from .nodes import (
     get_routes_node,
     get_trip_origs_and_dests,
     import_graph,
+    start_dask_node,
+    start_routing_server_node,
+    stop_dask_node,
+    stop_routing_server_node,
 )
 
 
@@ -30,6 +34,12 @@ def create_pipeline(**kwargs) -> Pipeline:
 
     route_pipe = pipeline(
         [
+            node(
+                func=start_dask_node,
+                inputs="params:dask",
+                outputs=["dask_cluster", "dask_client"],
+                name="start_dask",
+            ),
             node(
                 func=build_dwell_id,
                 inputs=["dwells_with_locations", "params:build_dwell_id"],
@@ -55,14 +65,34 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="filter_routable_trips",
             ),
             node(
+                func=start_routing_server_node,
+                inputs=[
+                    "params:graphhopper",
+                ],
+                outputs="routing_server",
+                name="start_routing_server",
+            ),
+            node(
                 func=get_routes_node,
                 inputs=[
                     "dwells_orig_dest_filtered",
+                    "routing_server",
                     "params:get_routes",
-                    "params:graphhopper",
                 ],
                 outputs="dwells_with_routes",
                 name="get_routes",
+            ),
+            node(
+                func=stop_routing_server_node,
+                inputs=["routing_server", "dwells_with_routes"],
+                outputs=None,
+                name="stop_routing_server",
+            ),
+            node(
+                func=stop_dask_node,
+                inputs=["dask_cluster", "dask_client", "dwells_with_routes"],
+                outputs=None,
+                name="stop_dask",
             ),
         ],
         tags="route",

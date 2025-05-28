@@ -82,6 +82,12 @@ dwells_with_locations:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/dwells_with_locations.feather
 
+dwells_with_routes:
+  type: megaPLuG.datasets.geoparquet.GeoParquetDataset
+  filepath: "${runtime_params:partition_data_dir, 'data/02_intermediate'}/dwells_with_routes"
+  save_args:
+    write_index: True
+
 vehicles_raw:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vehicles_raw.feather
@@ -217,6 +223,18 @@ dwell_obj_locs_desc_vehs:
   copy_mode: assign
 
 dwell_obj_with_locations:
+  type: MemoryDataset
+  copy_mode: assign
+
+routing_server:
+  type: MemoryDataset
+  copy_mode: assign
+
+dask_cluster:
+  type: MemoryDataset
+  copy_mode: assign
+
+dask_client:
   type: MemoryDataset
   copy_mode: assign
 
