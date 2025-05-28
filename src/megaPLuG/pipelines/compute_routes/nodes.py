@@ -7,6 +7,7 @@ import logging
 
 import geopandas as gpd
 import pandas as pd
+from dask.distributed import Client, LocalCluster
 from routingpy import Graphhopper
 
 from megaPLuG.models.routing.router import (
@@ -106,9 +107,32 @@ def start_routing_server_node(params: dict) -> GraphhopperContainerRouter:
     return server
 
 
-def stop_routing_server_node(server: GraphhopperContainerRouter) -> None:
-    """Stop the routing server."""
+def stop_routing_server_node(
+    server: GraphhopperContainerRouter, result: object
+) -> None:
+    """Stop the routing server.
+
+    result is used to ensure that this node runs last, after all desired results have
+    been computed. Pass the final dataset which requires the routing server to this node.
+    """
     server.__exit__(None, None, None)
+
+
+def start_dask_node(params: dict) -> tuple[LocalCluster, Client]:
+    """Start a Dask LocalCluster and client."""
+    cluster = LocalCluster(**params["cluster"])
+    client = Client(cluster)
+    return cluster, client
+
+
+def stop_dask_node(cluster: LocalCluster, client: Client, result: object) -> None:
+    """Stop a Dask LocalCluster and client.
+
+    result is used to ensure that this node runs last, after all desired results have
+    been computed. Pass the final dataset which requires Dask to this node.
+    """
+    cluster.close()
+    client.close()
 
 
 def get_routes_node(
@@ -142,4 +166,4 @@ def get_routes_node(
     routed[tcols["speed"]] = routed[tcols["dist"]] / routed[tcols["dur"]]
     routed = routed.drop(columns=[DIST_COL, TIME_COL])
     routed = routed.set_geometry(ROUTE_COL)
-    return (routed, server)
+    return routed

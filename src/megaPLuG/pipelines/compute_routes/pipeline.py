@@ -12,7 +12,9 @@ from .nodes import (
     get_routes_node,
     get_trip_origs_and_dests,
     import_graph,
+    start_dask_node,
     start_routing_server_node,
+    stop_dask_node,
     stop_routing_server_node,
 )
 
@@ -32,6 +34,12 @@ def create_pipeline(**kwargs) -> Pipeline:
 
     route_pipe = pipeline(
         [
+            node(
+                func=start_dask_node,
+                inputs="params:dask",
+                outputs=["dask_cluster", "dask_client"],
+                name="start_dask",
+            ),
             node(
                 func=build_dwell_id,
                 inputs=["dwells_with_locations", "params:build_dwell_id"],
@@ -71,14 +79,20 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "routing_server",
                     "params:get_routes",
                 ],
-                outputs=["dwells_with_routes", "routing_server_used"],
+                outputs="dwells_with_routes",
                 name="get_routes",
             ),
             node(
                 func=stop_routing_server_node,
-                inputs=["routing_server_used"],
+                inputs=["routing_server", "dwells_with_routes"],
                 outputs=None,
                 name="stop_routing_server",
+            ),
+            node(
+                func=stop_dask_node,
+                inputs=["dask_cluster", "dask_client", "dwells_with_routes"],
+                outputs=None,
+                name="stop_dask",
             ),
         ],
         tags="route",

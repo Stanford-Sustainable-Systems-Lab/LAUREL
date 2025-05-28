@@ -4,6 +4,11 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.3/configuration/parameters.html
 
+dask:
+    cluster:
+        n_workers: 4
+        memory_limit: 2GiB
+
 graphhopper:
     image: containers/graphhopper_10.2.sif
     container_class: megaPLuG.models.routing.server.ApptainerContainerRunner

@@ -224,7 +224,11 @@ routing_server:
   type: MemoryDataset
   copy_mode: assign
 
-routing_server_used:
+dask_cluster:
+  type: MemoryDataset
+  copy_mode: assign
+
+dask_client:
   type: MemoryDataset
   copy_mode: assign
 
