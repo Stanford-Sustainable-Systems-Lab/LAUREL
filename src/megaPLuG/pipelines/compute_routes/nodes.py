@@ -5,6 +5,7 @@ generated using Kedro 0.19.3
 
 import logging
 
+import dask_geopandas as dgpd
 import geopandas as gpd
 import pandas as pd
 from dask.distributed import Client, LocalCluster
@@ -147,8 +148,10 @@ def get_routes_node(
     """
     logger.info("Starting routing")
     icols = params["input_cols"]
-    routed = get_routes(
-        gdf=dwells,
+
+    dwells_part = dgpd.from_geopandas(dwells, npartitions=4)
+    dwells_part = dwells_part.map_partitions(
+        get_routes,
         orig_col=icols["orig"],
         dest_col=icols["dest"],
         max_concurrent_requests=params["client"]["max_concurrent_requests"],
@@ -157,6 +160,7 @@ def get_routes_node(
         server_url=server.base_url,
         profile=params["profile"],
     )
+    routed = dwells_part.compute()
     logger.info("Finished routing")
 
     logger.info("Interpreting routes")
