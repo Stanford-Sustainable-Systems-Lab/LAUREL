@@ -39,6 +39,13 @@ class GraphhopperContainerRouter(ABC):
         self.startup_delay = startup_delay
         self.mem_max_gb = mem_max_gb
         self.mem_start_gb = mem_start_gb
+
+        if not issubclass(runner_class, AbstractContainerRunner):
+            # Note: This check does not work properly with import_from_config when
+            # used within an IPython notebook. In those cases, pass a class imported
+            # directly within the notebook.
+            raise RuntimeError("Unsupported AbstractContainerRunner class passed.")
+
         self.runner_class = runner_class
         self.cmd_kwargs = cmd_kwargs
         self.process = None
@@ -64,8 +71,6 @@ class GraphhopperContainerRouter(ABC):
             logger.warning(
                 "Passed config will be overridden by the container's internal config."
             )
-        else:
-            raise RuntimeError("Unsupported AbstractContainerRunner class passed.")
 
         cmd_rout = self._build_router_command(cmd_dict=cmd_dict)
         logger.info("Starting GraphHopper routing server...")
