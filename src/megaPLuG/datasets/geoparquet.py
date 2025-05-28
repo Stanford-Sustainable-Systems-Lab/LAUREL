@@ -6,13 +6,13 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-import dask.dataframe as dd
+import dask_geopandas as dgpd
 import fsspec
 import triad
 from kedro.io.core import AbstractDataset, get_protocol_and_path
 
 
-class ParquetDataset(AbstractDataset[dd.DataFrame, dd.DataFrame]):
+class GeoParquetDataset(AbstractDataset[dgpd.GeoDataFrame, dgpd.GeoDataFrame]):
     """``ParquetDataset`` loads and saves data to parquet file(s). It uses Dask
     remote data services to handle the corresponding load and save operations:
     https://docs.dask.org/en/stable/how-to/connect-to-remote-data.html
@@ -135,12 +135,12 @@ class ParquetDataset(AbstractDataset[dd.DataFrame, dd.DataFrame]):
             "save_args": self._save_args,
         }
 
-    def load(self) -> dd.DataFrame:
-        return dd.read_parquet(
+    def load(self) -> dgpd.GeoDataFrame:
+        return dgpd.read_parquet(
             self._filepath, storage_options=self.fs_args, **self._load_args
         )
 
-    def save(self, data: dd.DataFrame) -> None:
+    def save(self, data: dgpd.GeoDataFrame) -> None:
         self._process_schema()
         data.to_parquet(
             path=self._filepath, storage_options=self.fs_args, **self._save_args
