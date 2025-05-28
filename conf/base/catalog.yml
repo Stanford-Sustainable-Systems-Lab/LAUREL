@@ -220,6 +220,14 @@ dwell_obj_with_locations:
   type: MemoryDataset
   copy_mode: assign
 
+routing_server:
+  type: MemoryDataset
+  copy_mode: assign
+
+routing_server_used:
+  type: MemoryDataset
+  copy_mode: assign
+
 # Electrification simulation datasets
 dwells_with_charging_partition:
   type: partitions.PartitionedDataset

@@ -88,33 +88,50 @@ def filter_routable_trips(dwells: pd.DataFrame, params: dict) -> gpd.GeoDataFram
     return dwells_filt
 
 
-def get_routes_node(
-    dwells: gpd.GeoDataFrame, params: dict, server_params: dict
-) -> gpd.GeoDataFrame:
-    """Compute routes for each dwell and then format results."""
-    logger.info("Starting routing")
-    resource = server_params["resources"]["server"]
-    with GraphhopperContainerRouter(
-        image=server_params["image"],
+def start_routing_server_node(params: dict) -> GraphhopperContainerRouter:
+    """Start the routing server and return the server object."""
+    resource = params["resources"]["server"]
+    server = GraphhopperContainerRouter(
+        image=params["image"],
         runner_class=import_from_config(
-            server_params["container_class"]
+            params["container_class"]
         ),  # TODO: Something about this doesn't work with import_from_config
-        graph_dir=server_params["graph_dir"],
-        config_path=server_params["config_path"],
+        graph_dir=params["graph_dir"],
+        config_path=params["config_path"],
         mem_max_gb=resource["mem_max_gb"],
         mem_start_gb=resource["mem_start_gb"],
         startup_delay=resource["startup_delay_secs"],
-    ) as server:
-        icols = params["input_cols"]
-        routed = get_routes(
-            gdf=dwells,
-            orig_col=icols["orig"],
-            dest_col=icols["dest"],
-            max_concurrent_requests=params["client"]["max_concurrent_requests"],
-            batch_size=params["client"]["batch_size"],
-            server_url=server.base_url,
-            profile=params["profile"],
-        )
+    )
+    server = server.__enter__()
+    return server
+
+
+def stop_routing_server_node(server: GraphhopperContainerRouter) -> None:
+    """Stop the routing server."""
+    server.__exit__(None, None, None)
+
+
+def get_routes_node(
+    dwells: gpd.GeoDataFrame,
+    server: GraphhopperContainerRouter,
+    params: dict,
+) -> gpd.GeoDataFrame:
+    """Compute routes for each dwell and then format results.
+
+    Also returns the server so that it can be stopped afterward. This is essential for
+    Kedro to manage the server nodes in order.
+    """
+    logger.info("Starting routing")
+    icols = params["input_cols"]
+    routed = get_routes(
+        gdf=dwells,
+        orig_col=icols["orig"],
+        dest_col=icols["dest"],
+        max_concurrent_requests=params["client"]["max_concurrent_requests"],
+        batch_size=params["client"]["batch_size"],
+        server_url=server.base_url,
+        profile=params["profile"],
+    )
     logger.info("Finished routing")
 
     logger.info("Interpreting routes")
@@ -125,4 +142,4 @@ def get_routes_node(
     routed[tcols["speed"]] = routed[tcols["dist"]] / routed[tcols["dur"]]
     routed = routed.drop(columns=[DIST_COL, TIME_COL])
     routed = routed.set_geometry(ROUTE_COL)
-    return routed
+    return (routed, server)

@@ -12,6 +12,8 @@ from .nodes import (
     get_routes_node,
     get_trip_origs_and_dests,
     import_graph,
+    start_routing_server_node,
+    stop_routing_server_node,
 )
 
 
@@ -55,14 +57,28 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="filter_routable_trips",
             ),
             node(
+                func=start_routing_server_node,
+                inputs=[
+                    "params:graphhopper",
+                ],
+                outputs="routing_server",
+                name="start_routing_server",
+            ),
+            node(
                 func=get_routes_node,
                 inputs=[
                     "dwells_orig_dest_filtered",
+                    "routing_server",
                     "params:get_routes",
-                    "params:graphhopper",
                 ],
-                outputs="dwells_with_routes",
+                outputs=["dwells_with_routes", "routing_server_used"],
                 name="get_routes",
+            ),
+            node(
+                func=stop_routing_server_node,
+                inputs=["routing_server_used"],
+                outputs=None,
+                name="stop_routing_server",
             ),
         ],
         tags="route",
