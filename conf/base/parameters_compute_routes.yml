@@ -45,6 +45,7 @@ filter_routable_trips:
 
 get_routes:
     profile: car
+    n_data_partitions: 4
     client:
         max_concurrent_requests: 200
         batch_size: 5000

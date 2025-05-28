@@ -149,7 +149,7 @@ def get_routes_node(
     logger.info("Starting routing")
     icols = params["input_cols"]
 
-    routed = dgpd.from_geopandas(dwells, npartitions=4)
+    routed = dgpd.from_geopandas(dwells, npartitions=params["n_data_partitions"])
     routed = routed.map_partitions(
         get_routes,
         orig_col=icols["orig"],
