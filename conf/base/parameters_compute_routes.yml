@@ -49,7 +49,7 @@ get_routes:
     profile: car
     n_trips_per_partition: 5000
     client:
-        max_concurrent_requests: 200
+        max_concurrent_requests: 20
         batch_size: 5000
         timeout_secs: 30
     input_cols:
