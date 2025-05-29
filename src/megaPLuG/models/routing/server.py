@@ -58,7 +58,9 @@ class GraphhopperContainerRouter(ABC):
             image=self.image,
             port_map={self.port: self.target_port},
             bind_map={self.graph_dir: self.target_graph_dir},
-            env_vars={"JAVA_OPTS": f"-Xmx{self.mem_max_gb}g -Xms{self.mem_start_gb}g"},
+            env_vars={
+                "JAVA_OPTS": f"-Xmx{self.mem_max_gb}g -Xms{self.mem_start_gb}g -XX:+UseZGC"
+            },
         )
         self.container.stop_existing()
         if isinstance(self.container, ApptainerContainerRunner):
