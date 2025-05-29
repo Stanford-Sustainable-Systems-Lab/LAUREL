@@ -44,7 +44,9 @@ async def _get_routes_async(
             router=router,
             **kwargs,
         )
-        return i, res_dict
+        trips.iat[i, idx[DIST_COL]] = res_dict[DIST_COL]
+        trips.iat[i, idx[TIME_COL]] = res_dict[TIME_COL]
+        trips.iat[i, idx[ROUTE_COL]] = res_dict[ROUTE_COL]
 
     async with AsyncGraphhopper(
         base_url=server_url,
@@ -59,13 +61,7 @@ async def _get_routes_async(
 
             # Create tasks for this batch and process them together
             batch_tasks = [process_route(i) for i in range(batch_start, batch_end)]
-            batch_results = await asyncio.gather(*batch_tasks)
-
-            # Update the DataFrame with results
-            for i, res_dict in batch_results:
-                trips.iat[i, idx[DIST_COL]] = res_dict[DIST_COL]
-                trips.iat[i, idx[TIME_COL]] = res_dict[TIME_COL]
-                trips.iat[i, idx[ROUTE_COL]] = res_dict[ROUTE_COL]
+            await asyncio.gather(*batch_tasks)
 
         if verbose:
             # After completion, you can analyze the semaphore usage
