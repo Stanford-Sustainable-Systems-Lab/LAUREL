@@ -7,7 +7,7 @@
 dask:
     cluster:
         n_workers: 4
-        memory_limit: 2GiB
+        memory_limit: 4GiB
 
 graphhopper:
     image: containers/graphhopper_10.2.sif
@@ -21,7 +21,7 @@ graphhopper:
             mem_start_gb: 32
             startup_delay_secs: 5
         server:
-            mem_max_gb: 14 # 8 is not enough to load the US, but 10 is
+            mem_max_gb: 48 # 8 is not enough to load the US, but 10 is
             mem_start_gb: 10
             startup_delay_secs: 15 # This is quite close to the shortest possible
 
@@ -30,7 +30,7 @@ build_dwell_id:
 
 filter_routable_dwells:
     apply_filter: True
-    n_vehs: 40
+    n_vehs: 1000
 
 get_trip_origs_and_dests:
     columns:
@@ -45,10 +45,10 @@ filter_routable_trips:
 
 get_routes:
     profile: car
-    n_data_partitions: 4
+    n_data_partitions: 100
     client:
-        max_concurrent_requests: 200
-        batch_size: 5000
+        max_concurrent_requests: 10
+        batch_size: 100
         timeout_secs: 30
     input_cols:
         orig: orig_point
