@@ -15,7 +15,7 @@ slurm_resources:
   time: 0-04:00
 
 cmd_line_calls:
-  prefix: rye run
+  prefix: uv run
   kedro:
     pipeline: compute_routes
     tags: import
