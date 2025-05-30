@@ -8,7 +8,6 @@ import logging
 import dask_geopandas as dgpd
 import geopandas as gpd
 import pandas as pd
-from dask.distributed import Client, LocalCluster
 from routingpy import Graphhopper
 
 from megaPLuG.models.routing.router import (
@@ -20,7 +19,6 @@ from megaPLuG.models.routing.router import (
 from megaPLuG.models.routing.server import GraphhopperContainerRouter
 from megaPLuG.utils.geo import METERS_PER_MILE
 from megaPLuG.utils.h3 import add_geometries
-from megaPLuG.utils.params import import_from_config
 from megaPLuG.utils.time import SECS_PER_HOUR
 
 logger = logging.getLogger(__name__)
@@ -88,52 +86,6 @@ def filter_routable_trips(dwells: pd.DataFrame, params: dict) -> gpd.GeoDataFram
     """Filter down routable dwells using the geometries."""
     dwells_filt = dwells.loc[dwells[params["dist_col"]] >= params["min_dist_miles"]]
     return dwells_filt
-
-
-def start_routing_server_node(params: dict) -> GraphhopperContainerRouter:
-    """Start the routing server and return the server object."""
-    resource = params["resources"]["server"]
-    server = GraphhopperContainerRouter(
-        image=params["image"],
-        runner_class=import_from_config(
-            params["container_class"]
-        ),  # TODO: Something about this doesn't work with import_from_config
-        graph_dir=params["graph_dir"],
-        config_path=params["config_path"],
-        mem_max_gb=resource["mem_max_gb"],
-        mem_start_gb=resource["mem_start_gb"],
-        startup_delay=resource["startup_delay_secs"],
-    )
-    server = server.__enter__()
-    return server
-
-
-def stop_routing_server_node(
-    server: GraphhopperContainerRouter, result: object
-) -> None:
-    """Stop the routing server.
-
-    result is used to ensure that this node runs last, after all desired results have
-    been computed. Pass the final dataset which requires the routing server to this node.
-    """
-    server.__exit__(None, None, None)
-
-
-def start_dask_node(params: dict) -> tuple[LocalCluster, Client]:
-    """Start a Dask LocalCluster and client."""
-    cluster = LocalCluster(**params["cluster"])
-    client = Client(cluster)
-    return cluster, client
-
-
-def stop_dask_node(cluster: LocalCluster, client: Client, result: object) -> None:
-    """Stop a Dask LocalCluster and client.
-
-    result is used to ensure that this node runs last, after all desired results have
-    been computed. Pass the final dataset which requires Dask to this node.
-    """
-    cluster.close()
-    client.close()
 
 
 def partition_trips(trips: gpd.GeoDataFrame, params: dict) -> dgpd.GeoDataFrame:
