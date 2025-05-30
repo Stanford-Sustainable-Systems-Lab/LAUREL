@@ -45,9 +45,11 @@ filter_routable_trips:
     dist_col: trip_miles
     min_dist_miles: 50
 
+partition_trips:
+    n_trips_per_partition: 5000
+
 get_routes:
     profile: car
-    n_trips_per_partition: 5000
     client:
         max_concurrent_requests: 20
         batch_size: 5000

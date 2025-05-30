@@ -136,8 +136,14 @@ def stop_dask_node(cluster: LocalCluster, client: Client, result: object) -> Non
     client.close()
 
 
+def partition_trips(trips: gpd.GeoDataFrame, params: dict) -> dgpd.GeoDataFrame:
+    """Partition the trips to save to disk, in preparation for routing."""
+    parts = dgpd.from_geopandas(trips, chunksize=params["n_trips_per_partition"])
+    return parts
+
+
 def get_routes_node(
-    dwells: gpd.GeoDataFrame,
+    trips: gpd.GeoDataFrame,
     server: GraphhopperContainerRouter,
     params: dict,
 ) -> gpd.GeoDataFrame:
@@ -149,8 +155,7 @@ def get_routes_node(
     logger.info("Starting routing")
     icols = params["input_cols"]
 
-    routed = dgpd.from_geopandas(dwells, chunksize=params["n_trips_per_partition"])
-    routed = routed.map_partitions(
+    routed = trips.map_partitions(
         get_routes,
         orig_col=icols["orig"],
         dest_col=icols["dest"],

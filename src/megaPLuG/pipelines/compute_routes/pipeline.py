@@ -12,6 +12,7 @@ from .nodes import (
     get_routes_node,
     get_trip_origs_and_dests,
     import_graph,
+    partition_trips,
     start_dask_node,
     start_routing_server_node,
     stop_dask_node,
@@ -73,9 +74,15 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="start_routing_server",
             ),
             node(
+                func=partition_trips,
+                inputs=["dwells_orig_dest_filtered", "params:partition_trips"],
+                outputs="dwells_partitioned",
+                name="partition_trips",
+            ),
+            node(
                 func=get_routes_node,
                 inputs=[
-                    "dwells_orig_dest_filtered",
+                    "dwells_partitioned",
                     "routing_server",
                     "params:get_routes",
                 ],
