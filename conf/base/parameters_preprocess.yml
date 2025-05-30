@@ -9,17 +9,16 @@ format_columns:
     - start_timestamp_utc
     - end_timestamp_utc
   category_columns:
+    - vehicle_id
     - veh_type
     - vin_gvw
   h3_columns:
     - starting_h3_8
     - ending_h3_8
-  persist: True
-
-strip_vehicle_attrs:
   col_renamer:
     veh_id: vehicle_id
   veh_id_col: veh_id
+  persist: False
   veh_attr_cols:
     - veh_type
     - vin_gvw

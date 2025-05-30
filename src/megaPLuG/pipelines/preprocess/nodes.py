@@ -21,15 +21,20 @@ from megaPLuG.utils.time import total_hours
 logger = logging.getLogger(__name__)
 
 
-def format_trips_columns(trips, params):
+def format_trips_columns(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
     """Preprocess trips data columns."""
     trips = trips.categorize(params["category_columns"])
 
     for col in params["time_columns"]:
+        # WARNING: This line somehow converts vehicle_id to a float64 from an int64,
+        # to fix this, I'm categorizing the vehicle_id column first.
         trips[col] = dd.to_datetime(trips[col], utc=True)
 
     for col in params["h3_columns"]:
         trips[col] = trips[col].map_partitions(str_to_h3, meta=(col, "int"))
+
+    trips = trips.rename(columns={v: k for k, v in params["col_renamer"].items()})
+    trips[params["veh_id_col"]] = trips[params["veh_id_col"]].cat.codes.astype(np.int64)
 
     if params["persist"]:
         trips = trips.persist()
