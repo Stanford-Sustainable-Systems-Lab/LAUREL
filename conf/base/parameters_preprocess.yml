@@ -19,11 +19,14 @@ format_columns:
     veh_id: vehicle_id
   veh_id_col: veh_id
   persist: False
+
+strip_vehicle_attrs:
+  veh_id_col: veh_id
   veh_attr_cols:
     - veh_type
     - vin_gvw
   min_trips_per_veh: 2
-  persist: True
+
 
 trip_derived_cols:
   time_cols:
@@ -37,6 +40,8 @@ create_dwells:
     n: 1000
   drop_cols:
     - starting_h3_8
+    - veh_type
+    - vin_gvw
   col_renamer:
     hex_id: ending_h3_8
   from_trips_cols:

@@ -46,8 +46,6 @@ def strip_vehicle_attrs(
     trips: dd.DataFrame, params: dict
 ) -> tuple[dd.DataFrame, pd.DataFrame]:
     """Get vehicle-specific attributes which stay constant."""
-    trips = trips.rename(columns={v: k for k, v in params["col_renamer"].items()})
-
     n_trips_by_veh = trips[params["veh_id_col"]].value_counts().compute()
     drop_idx = n_trips_by_veh.loc[n_trips_by_veh < params["min_trips_per_veh"]].index
 
@@ -55,12 +53,7 @@ def strip_vehicle_attrs(
     vehs = trips.loc[:, veh_cols].drop_duplicates().compute()
     vehs = vehs.set_index(params["veh_id_col"]).sort_index()
     vehs = vehs.drop(index=drop_idx)
-
-    trips = trips.drop(columns=params["veh_attr_cols"])
-    if params["persist"]:
-        trips = trips.persist()
-
-    return (trips, vehs)
+    return vehs
 
 
 def calc_derived_trip_cols(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
