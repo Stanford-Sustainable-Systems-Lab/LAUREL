@@ -74,6 +74,10 @@ parking:
   filepath: data/01_raw/Truck_Parking/jlaw_data_shapefile_2019/Final Public Truck Parking Locations-2019.shp
 
 # Preprocessed datasets
+trips_formatted:
+  type: dask.ParquetDataset
+  filepath: data/02_intermediate/trips_formatted/
+
 dwells:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/dwells.feather
