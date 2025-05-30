@@ -6,9 +6,9 @@
 
 dask:
     cluster:
-        n_workers: 4
+        n_workers: 2
         processes: True
-        threads_per_worker: 4
+        threads_per_worker: 1
         memory_limit: 2GiB
 
 graphhopper:
@@ -32,7 +32,7 @@ build_dwell_id:
 
 filter_routable_dwells:
     apply_filter: True
-    n_vehs: 1000
+    n_vehs: 5000
 
 get_trip_origs_and_dests:
     columns:
