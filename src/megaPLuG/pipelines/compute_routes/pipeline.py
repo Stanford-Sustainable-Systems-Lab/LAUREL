@@ -5,6 +5,12 @@ generated using Kedro 0.19.3
 
 from kedro.pipeline import Pipeline, node, pipeline
 
+from megaPLuG.models.routing.nodes import (
+    start_routing_server_node,
+    stop_routing_server_node,
+)
+from megaPLuG.utils.distributed import start_dask_node, stop_dask_node
+
 from .nodes import (
     build_dwell_id,
     filter_routable_dwells_before_geoms,
@@ -13,10 +19,6 @@ from .nodes import (
     get_trip_origs_and_dests,
     import_graph,
     partition_trips,
-    start_dask_node,
-    start_routing_server_node,
-    stop_dask_node,
-    stop_routing_server_node,
 )
 
 
