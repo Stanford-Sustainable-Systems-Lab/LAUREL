@@ -27,6 +27,65 @@ strip_vehicle_attrs:
     - vin_gvw
   min_trips_per_veh: 2
 
+filter_routable_trips:
+  drop_cols:
+    - end_timestamp_utc
+    - veh_type
+    - vin_gvw
+  dist_col: trip_miles
+  min_dist_miles: 50
+  debug_subsample:
+    active: True
+    frac: 0.01
+
+get_trip_orig_dest_points:
+  hex_geo_cols: # Format is target_col: source_col
+    orig_point: starting_h3_8
+    dest_point: ending_h3_8
+  output_geom_col: orig_point
+
+partition_trips:
+  n_partitions: 16 # Care must be taken to tune this to match the routing system memory
+  # Currently, 250 partitions yields about 32000 rows per partition
+
+dask_routing:
+    cluster:
+        n_workers: 4
+        processes: True
+        threads_per_worker: 1
+        memory_limit: 2GiB
+
+graphhopper:
+    image: containers/graphhopper_10.2.sif
+    container_class: megaPLuG.models.routing.server.ApptainerContainerRunner
+    map_path: $SCRATCH/us-latest.osm.pbf
+    graph_dir: $SCRATCH/graphhopper_cache/us/
+    config_path: ./conf/base/parameters_graphhopper.yml
+    resources:
+        import:
+            mem_max_gb: 96
+            mem_start_gb: 96
+            startup_delay_secs: 5
+        server:
+            mem_max_gb: 48 # 8 is not enough to load the US, but 10 is
+            mem_start_gb: 48 # I learned from the following link that setting memory to be the same is important: https://www.graphhopper.com/blog/2022/06/27/host-your-own-worldwide-route-calculator-with-graphhopper/
+            startup_delay_secs: 15 # This is quite close to the shortest possible
+
+get_routes:
+    profile: car
+    client:
+        max_concurrent_requests: 20
+        batch_size: 5000
+        timeout_secs: 60
+        verbose: True
+    input_cols:
+        orig: orig_point
+        dest: dest_point
+    output_trip_cols:
+        dist: trip_miles_route
+        dur: trip_hrs_route
+        speed: trip_speed_route_mph
+
 
 trip_derived_cols:
   time_cols:
