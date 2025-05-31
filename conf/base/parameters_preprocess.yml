@@ -45,7 +45,7 @@ get_trip_orig_dest_points:
   output_geom_col: orig_point
 
 partition_trips:
-  n_partitions: 16 # Care must be taken to tune this to match the routing system memory
+  n_partitions: 1500 # Care must be taken to tune this to match the routing system memory
   # Currently, 250 partitions yields about 32000 rows per partition
 
 dask_routing:
