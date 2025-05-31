@@ -99,11 +99,7 @@ def get_routes_node(
     server: GraphhopperContainerRouter,
     params: dict,
 ) -> gpd.GeoDataFrame:
-    """Compute routes for each dwell and then format results.
-
-    Also returns the server so that it can be stopped afterward. This is essential for
-    Kedro to manage the server nodes in order.
-    """
+    """Compute routes for each dwell and then format results."""
     logger.info("Starting routing")
     icols = params["input_cols"]
 
