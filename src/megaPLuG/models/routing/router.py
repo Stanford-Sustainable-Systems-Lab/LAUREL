@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 import geopandas as gpd
 import pandas as pd
@@ -6,6 +7,8 @@ import shapely as shp
 from routingpy.exceptions import RouterApiError
 
 from .parser import AsyncGraphhopper
+
+logger = logging.getLogger(__name__)
 
 DIST_COL = "trip_meters_route"
 TIME_COL = "trip_seconds_route"
@@ -90,8 +93,12 @@ async def _get_route_async(
     try:
         coords = (tuple(orig.coords)[0], tuple(dest.coords)[0])
         rte = await router.directions(locations=coords, **kwargs)
-        return _report_route(rte.distance, rte.duration, shp.LineString(rte.geometry))
+        linestring = shp.LineString(rte.geometry)
+        return _report_route(rte.distance, rte.duration, linestring)
     except RouterApiError:
+        return _report_route(pd.NA, pd.NA, None)
+    except shp.lib.GEOSException:
+        logger.warning(f"Interpretation of route caused GEOSException: {rte.geometry}")
         return _report_route(pd.NA, pd.NA, None)
 
 
