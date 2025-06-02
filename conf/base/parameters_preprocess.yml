@@ -53,7 +53,7 @@ dask_routing:
         n_workers: 4
         processes: True
         threads_per_worker: 1
-        memory_limit: 2GiB
+        memory_limit: 4GiB
 
 graphhopper:
     image: containers/graphhopper_10.2.sif
