@@ -18,6 +18,7 @@ ROUTE_COL = "trip_geom_route"
 def get_routes(gdf: gpd.GeoDataFrame, **kwargs) -> gpd.GeoDataFrame:
     """Get routes for an individual GeoPandas dataframe."""
     res = asyncio.run(_get_routes_async(trips=gdf, **kwargs))
+    logger.info("Completed a routing partition.")
     return res
 
 
@@ -76,8 +77,8 @@ async def _get_routes_async(
                 else 0
             )
 
-            print(f"Max concurrent tasks: {max_concurrent}")
-            print(f"Avg concurrent tasks: {avg_concurrent:.2f}")
+            logger.debug(f"Max concurrent tasks: {max_concurrent}")
+            logger.debug(f"Avg concurrent tasks: {avg_concurrent:.2f}")
     return trips
 
 
