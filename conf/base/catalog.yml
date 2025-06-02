@@ -83,6 +83,8 @@ trips_to_route:
   filepath: "${runtime_params:partition_data_dir, 'data/02_intermediate'}/trips_to_route"
   save_args:
     write_index: False
+  load_args:
+    split_row_groups: False
 
 trips_routed:
   type: megaPLuG.datasets.geoparquet.GeoParquetDataset
