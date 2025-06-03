@@ -243,6 +243,7 @@ server:
     # bind_host: localhost
 # See https://www.dropwizard.io/en/latest/manual/core.html#logging
 logging:
+  level: WARN
   appenders:
     - type: file
       time_zone: UTC
