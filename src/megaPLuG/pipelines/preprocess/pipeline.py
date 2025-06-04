@@ -15,11 +15,14 @@ from .nodes import (
     build_vius_scaling_totals,
     calc_derived_trip_cols,
     create_dwells,
+    describe_optional_stop_trips,
     filter_routable_trips,
     format_trips_columns,
+    get_optional_stop_trips,
     get_routes_node,
     get_trip_orig_dest_points,
     partition_trips,
+    prepare_stop_locations,
     strip_vehicle_attrs,
 )
 
@@ -121,6 +124,37 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="routing",
     )
 
+    opt_stops_pipe = pipeline(
+        [
+            node(
+                func=prepare_stop_locations,
+                inputs=["parking", "params:prepare_stop_locations"],
+                outputs="parking_formatted",
+                name="prepare_stop_locations",
+            ),
+            node(
+                func=get_optional_stop_trips,
+                inputs=[
+                    "trips_routed",
+                    "parking_formatted",
+                    "params:get_optional_stop_trips",
+                ],
+                outputs="optional_stop_trips_raw",
+                name="get_optional_stop_trips",
+            ),
+            node(
+                func=describe_optional_stop_trips,
+                inputs=[
+                    "optional_stop_trips_raw",
+                    "params:describe_optional_stop_trips",
+                ],
+                outputs="optional_stop_trips",
+                name="describe_optional_stop_trips",
+            ),
+        ],
+        tags="optional_stops",
+    )
+
     dwell_pipe = pipeline(
         [
             node(
@@ -149,5 +183,11 @@ def create_pipeline(**kwargs) -> Pipeline:
     )
 
     return (
-        format_pipe + veh_pipe + dwell_pipe + scale_pipe + pre_route_pipe + route_pipe
+        format_pipe
+        + veh_pipe
+        + dwell_pipe
+        + scale_pipe
+        + pre_route_pipe
+        + route_pipe
+        + opt_stops_pipe
     )
