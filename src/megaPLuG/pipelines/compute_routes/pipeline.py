@@ -12,11 +12,9 @@ from megaPLuG.models.routing.nodes import (
 from megaPLuG.utils.distributed import start_dask_node, stop_dask_node
 
 from .nodes import (
-    build_dwell_id,
-    filter_routable_dwells_before_geoms,
     filter_routable_trips,
     get_routes_node,
-    get_trip_origs_and_dests,
+    get_trip_orig_dest_points,
     import_graph,
     partition_trips,
 )
@@ -35,37 +33,37 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="import",
     )
 
+    pre_route_pipe = pipeline(
+        [
+            node(
+                func=filter_routable_trips,
+                inputs=["trips_formatted", "params:filter_routable_trips"],
+                outputs="trips_routable_filtered",
+                name="filter_routable_trips",
+            ),
+            node(
+                func=get_trip_orig_dest_points,
+                inputs=["trips_routable_filtered", "params:get_trip_orig_dest_points"],
+                outputs="trips_to_route_big_partitions",
+                name="get_trip_orig_dest_points",
+            ),
+            node(
+                func=partition_trips,
+                inputs=["trips_to_route_big_partitions", "params:partition_trips"],
+                outputs="trips_to_route",
+                name="partition_trips",
+            ),
+        ],
+        tags="pre_routing",
+    )
+
     route_pipe = pipeline(
         [
             node(
                 func=start_dask_node,
-                inputs="params:dask",
-                outputs=["dask_cluster", "dask_client"],
-                name="start_dask",
-            ),
-            node(
-                func=build_dwell_id,
-                inputs=["dwells_with_locations", "params:build_dwell_id"],
-                outputs="dwells_with_ids",
-                name="build_dwell_id",
-            ),
-            node(
-                func=filter_routable_dwells_before_geoms,
-                inputs=["dwells_with_ids", "params:filter_routable_dwells"],
-                outputs="dwells_prefiltered",
-                name="filter_routable_dwells_before_geoms",
-            ),
-            node(
-                func=get_trip_origs_and_dests,
-                inputs=["dwells_prefiltered", "params:get_trip_origs_and_dests"],
-                outputs="dwells_orig_dest",
-                name="get_trip_origs_and_dests",
-            ),
-            node(
-                func=filter_routable_trips,
-                inputs=["dwells_orig_dest", "params:filter_routable_trips"],
-                outputs="dwells_orig_dest_filtered",
-                name="filter_routable_trips",
+                inputs="params:dask_routing",
+                outputs=["dask_cluster_routing", "dask_client_routing"],
+                name="start_dask_routing",
             ),
             node(
                 func=start_routing_server_node,
@@ -76,35 +74,29 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="start_routing_server",
             ),
             node(
-                func=partition_trips,
-                inputs=["dwells_orig_dest_filtered", "params:partition_trips"],
-                outputs="dwells_partitioned",
-                name="partition_trips",
-            ),
-            node(
                 func=get_routes_node,
                 inputs=[
-                    "dwells_partitioned",
+                    "trips_to_route",
                     "routing_server",
                     "params:get_routes",
                 ],
-                outputs="dwells_with_routes",
+                outputs="trips_routed",
                 name="get_routes",
             ),
             node(
                 func=stop_routing_server_node,
-                inputs=["routing_server", "dwells_with_routes"],
+                inputs=["routing_server", "trips_routed"],
                 outputs=None,
                 name="stop_routing_server",
             ),
             node(
                 func=stop_dask_node,
-                inputs=["dask_cluster", "dask_client", "dwells_with_routes"],
+                inputs=["dask_cluster_routing", "dask_client_routing", "trips_routed"],
                 outputs=None,
-                name="stop_dask",
+                name="stop_dask_routing",
             ),
         ],
-        tags="route",
+        tags="routing",
     )
 
-    return import_pipe + route_pipe
+    return import_pipe + pre_route_pipe + route_pipe

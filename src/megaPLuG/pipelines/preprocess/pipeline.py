@@ -5,24 +5,14 @@ generated using Kedro 0.19.1
 
 from kedro.pipeline import Pipeline, node, pipeline
 
-from megaPLuG.models.routing.nodes import (
-    start_routing_server_node,
-    stop_routing_server_node,
-)
-from megaPLuG.utils.distributed import start_dask_node, stop_dask_node
-
 from .nodes import (
     build_vius_scaling_totals,
     calc_derived_trip_cols,
     concat_optional_stops,
     create_dwells,
     describe_optional_stop_trips,
-    filter_routable_trips,
     format_trips_columns,
     get_optional_stop_trips,
-    get_routes_node,
-    get_trip_orig_dest_points,
-    partition_trips,
     prepare_stop_locations,
     strip_vehicle_attrs,
 )
@@ -57,72 +47,6 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
         ],
         tags="strip_vehicles",
-    )
-
-    pre_route_pipe = pipeline(
-        [
-            node(
-                func=filter_routable_trips,
-                inputs=["trips_formatted", "params:filter_routable_trips"],
-                outputs="trips_routable_filtered",
-                name="filter_routable_trips_preprocess",
-            ),
-            node(
-                func=get_trip_orig_dest_points,
-                inputs=["trips_routable_filtered", "params:get_trip_orig_dest_points"],
-                outputs="trips_to_route_big_partitions",
-                name="get_trip_orig_dest_points",
-            ),
-            node(
-                func=partition_trips,
-                inputs=["trips_to_route_big_partitions", "params:partition_trips"],
-                outputs="trips_to_route",
-                name="partition_trips_preprocess",
-            ),
-        ],
-        tags="pre_routing",
-    )
-
-    route_pipe = pipeline(
-        [
-            node(
-                func=start_dask_node,
-                inputs="params:dask_routing",
-                outputs=["dask_cluster_routing", "dask_client_routing"],
-                name="start_dask_routing",
-            ),
-            node(
-                func=start_routing_server_node,
-                inputs=[
-                    "params:graphhopper",
-                ],
-                outputs="routing_server",
-                name="start_routing_server",
-            ),
-            node(
-                func=get_routes_node,
-                inputs=[
-                    "trips_to_route",
-                    "routing_server",
-                    "params:get_routes",
-                ],
-                outputs="trips_routed",
-                name="get_routes_preprocess",
-            ),
-            node(
-                func=stop_routing_server_node,
-                inputs=["routing_server", "trips_routed"],
-                outputs=None,
-                name="stop_routing_server_preprocess",
-            ),
-            node(
-                func=stop_dask_node,
-                inputs=["dask_cluster_routing", "dask_client_routing", "trips_routed"],
-                outputs=None,
-                name="stop_dask_routing",
-            ),
-        ],
-        tags="routing",
     )
 
     opt_stops_pipe = pipeline(
@@ -196,12 +120,4 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="vius_scaling",
     )
 
-    return (
-        format_pipe
-        + veh_pipe
-        + dwell_pipe
-        + scale_pipe
-        + pre_route_pipe
-        + route_pipe
-        + opt_stops_pipe
-    )
+    return format_pipe + veh_pipe + opt_stops_pipe + dwell_pipe + scale_pipe

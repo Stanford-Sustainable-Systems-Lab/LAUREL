@@ -5,6 +5,7 @@ generated using Kedro 0.19.3
 
 import logging
 
+import dask.dataframe as dd
 import dask_geopandas as dgpd
 import geopandas as gpd
 import pandas as pd
@@ -18,7 +19,7 @@ from megaPLuG.models.routing.router import (
 )
 from megaPLuG.models.routing.server import GraphhopperContainerRouter
 from megaPLuG.utils.geo import METERS_PER_MILE
-from megaPLuG.utils.h3 import add_geometries
+from megaPLuG.utils.h3 import cells_to_points
 from megaPLuG.utils.time import SECS_PER_HOUR
 
 logger = logging.getLogger(__name__)
@@ -56,49 +57,36 @@ def test_get_routes(route_params: dict, server_params: dict) -> None:
         logger.info(f"Route distance: {route.distance} meters")
 
 
-def build_dwell_id(dwells: pd.DataFrame, params: dict) -> pd.DataFrame:
-    dwells[params["col_name"]] = pd.RangeIndex(stop=dwells.shape[0])
-    return dwells
-
-
-def filter_routable_dwells_before_geoms(
-    dwells: pd.DataFrame, params: dict
-) -> pd.DataFrame:
-    """Filter down routable dwells without using geometries (to speed geometry creation)."""
-    if params["apply_filter"]:
-        vehs_sel = dwells.index.unique()[: params["n_vehs"]]
-        dwells_filt = dwells.loc[vehs_sel]
-        return dwells_filt
-    else:
-        return dwells
-
-
-def get_trip_origs_and_dests(dwells: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
-    """Get origins and destinations for each dwell, and format for routing."""
-    pcols = params["columns"]
-    trips = add_geometries(data=dwells, hex_col=pcols["hex"])
-    trips = trips.rename_geometry(pcols["dest"])
-    trips[pcols["orig"]] = trips.groupby(pcols["veh"])[pcols["dest"]].shift(1)
+def filter_routable_trips(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
+    """Filter down routable trips using the geometries."""
+    trips = trips.drop(columns=params["drop_cols"])
+    long_enough_trip = trips[params["dist_col"]] >= params["min_dist_miles"]
+    trips = trips.loc[long_enough_trip]
+    if params["debug_subsample"]["active"]:
+        trips = trips.sample(frac=params["debug_subsample"]["frac"])
     return trips
 
 
-def filter_routable_trips(dwells: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
-    """Filter down routable dwells using the geometries."""
-    dwells_filt = dwells.loc[dwells[params["dist_col"]] >= params["min_dist_miles"]]
-    return dwells_filt
+def get_trip_orig_dest_points(trips: dd.DataFrame, params: dict) -> dgpd.GeoDataFrame:
+    """Get origin and destination points for each trip."""
+    trips = dgpd.from_dask_dataframe(trips, geometry=None)
+    for tgt, src in params["hex_geo_cols"].items():
+        trips[tgt] = trips[src].map_partitions(cells_to_points, meta=gpd.GeoSeries())
+    trips = trips.set_geometry(params["output_geom_col"])
+    return trips
 
 
-def partition_trips(trips: gpd.GeoDataFrame, params: dict) -> dgpd.GeoDataFrame:
-    """Partition the trips to save to disk, in preparation for routing."""
-    parts = dgpd.from_geopandas(trips, chunksize=params["n_trips_per_partition"])
+def partition_trips(trips: dgpd.GeoDataFrame, params: dict) -> dgpd.GeoDataFrame:
+    """Re-partition the trips to save to disk, in preparation for routing."""
+    parts = trips.repartition(npartitions=params["n_partitions"])
     return parts
 
 
 def get_routes_node(
-    trips: gpd.GeoDataFrame,
+    trips: dgpd.GeoDataFrame,
     server: GraphhopperContainerRouter,
     params: dict,
-) -> gpd.GeoDataFrame:
+) -> dgpd.GeoDataFrame:
     """Compute routes for each dwell and then format results."""
     logger.info("Starting routing")
     icols = params["input_cols"]
@@ -110,6 +98,7 @@ def get_routes_node(
         max_concurrent_requests=params["client"]["max_concurrent_requests"],
         batch_size=params["client"]["batch_size"],
         timeout=params["client"]["timeout_secs"],
+        verbose=params["client"]["verbose"],
         server_url=server.base_url,
         profile=params["profile"],
     )
