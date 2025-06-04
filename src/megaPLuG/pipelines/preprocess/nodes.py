@@ -248,6 +248,28 @@ def describe_optional_stop_trips(trips: pd.DataFrame, params: dict) -> pd.DataFr
     return trips_out
 
 
+def concat_optional_stops(
+    trips_orig: dd.DataFrame, trips_opt: pd.DataFrame, params: dict
+) -> pd.DataFrame:
+    """Concatenate new optional trips onto original trips."""
+    logger.info("Computing original trips into memory.")
+    trips_orig = trips_orig.drop(columns=params["drop_cols"])
+    trips_orig = trips_orig.compute()
+
+    logger.info("Concatenating and sorting trips.")
+    concatter = {True: trips_orig, False: trips_opt}
+    trips = pd.concat(concatter, axis=0, names=["is_original"])
+    trips = trips.reset_index("is_original")
+
+    # Drop the original versions of trips which have been split
+    sort_cols = params["trip_id_cols"] + [params["dist_col"]]
+    trips = trips.sort_values(sort_cols, ascending=True)
+    # We keep the first trip because the split, optional trips are guaranteed to be shorter than the original trips
+    trips = trips.drop_duplicates(subset=params["trip_id_cols"], keep="first")
+    trips = trips.drop(columns=["is_original"])
+    return trips
+
+
 def strip_vehicle_attrs(
     trips: dd.DataFrame, params: dict
 ) -> tuple[dd.DataFrame, pd.DataFrame]:

@@ -142,6 +142,14 @@ describe_optional_stop_trips:
     - trip_miles
     - trip_hrs
 
+concat_optional_stops:
+  drop_cols:
+    - veh_type
+    - vin_gvw
+  trip_id_cols:
+    - veh_id
+    - start_timestamp_utc
+  dist_col: trip_miles
 
 create_dwells:
   debug_subsample:

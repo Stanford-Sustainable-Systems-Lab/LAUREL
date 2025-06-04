@@ -14,6 +14,7 @@ from megaPLuG.utils.distributed import start_dask_node, stop_dask_node
 from .nodes import (
     build_vius_scaling_totals,
     calc_derived_trip_cols,
+    concat_optional_stops,
     create_dwells,
     describe_optional_stop_trips,
     filter_routable_trips,
@@ -150,6 +151,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="optional_stop_trips",
                 name="describe_optional_stop_trips",
+            ),
+            node(
+                func=concat_optional_stops,
+                inputs=[
+                    "trips_formatted",
+                    "optional_stop_trips",
+                    "params:concat_optional_stops",
+                ],
+                outputs="trips_with_optional",
+                name="concat_optional_stops",
             ),
         ],
         tags="optional_stops",
