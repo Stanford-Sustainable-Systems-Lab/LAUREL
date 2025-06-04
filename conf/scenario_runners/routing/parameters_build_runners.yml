@@ -17,7 +17,7 @@ slurm_resources:
 cmd_line_calls:
   prefix: uv run
   kedro:
-    pipeline: preprocess
+    pipeline: compute_routes
     tags: routing
     params: partition_data_dir=$SCRATCH/passow/megaPLuG
 
