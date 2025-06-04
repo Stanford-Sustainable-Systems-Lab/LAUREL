@@ -163,11 +163,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="concat_optional_stops",
             ),
         ],
-        tags="optional_stops",
+        tags="create_dwells_optional_stops",
     )
 
     dwell_pipe = pipeline(
         [
+            # If you want optional stops, then use "trips_with_optional" as the input.
+            # Otherwise, use "trips_formatted". Also, if you want optional stops, run
+            # the `optional_stops` and this `create_dwells` pipeline together.
             node(
                 func=create_dwells,
                 inputs=["trips_with_optional", "params:create_dwells"],
@@ -175,7 +178,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="create_dwells",
             ),
         ],
-        tags="create_dwells",
+        tags=["create_dwells", "create_dwells_optional_stops"],
     )
 
     scale_pipe = pipeline(
