@@ -102,7 +102,6 @@ def get_routes_node(
         server_url=server.base_url,
         profile=params["profile"],
     )
-    # routed = routed.compute()
     logger.info("Finished routing")
 
     logger.info("Interpreting routes")
