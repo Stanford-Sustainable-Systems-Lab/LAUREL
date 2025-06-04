@@ -94,7 +94,8 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             # If you want optional stops, then use "trips_with_optional" as the input.
             # Otherwise, use "trips_formatted". Also, if you want optional stops, run
-            # the `optional_stops` and this `create_dwells` pipeline together.
+            # the `optional_stops` and this `create_dwells` pipeline together, using the
+            # "create_dwells_optional_stops" tag for convenience.
             node(
                 func=create_dwells,
                 inputs=["trips_with_optional", "params:create_dwells"],
