@@ -30,8 +30,14 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=format_trips_columns,
                 inputs=["navistar", "params:format_columns"],
-                outputs="trips_formatted",
+                outputs="trips_formatted_no_derived",
                 name="format_trips_columns",
+            ),
+            node(
+                func=calc_derived_trip_cols,
+                inputs=["trips_formatted_no_derived", "params:trip_derived_cols"],
+                outputs="trips_formatted",
+                name="calc_derived_trip_cols",
             ),
         ],
         tags="format_trips",
@@ -117,12 +123,6 @@ def create_pipeline(**kwargs) -> Pipeline:
 
     dwell_pipe = pipeline(
         [
-            node(
-                func=calc_derived_trip_cols,
-                inputs=["trips_formatted", "params:trip_derived_cols"],
-                outputs="trips_derived",
-                name="calc_derived_trip_cols",
-            ),
             node(
                 func=create_dwells,
                 inputs=["trips_derived", "params:create_dwells"],

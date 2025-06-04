@@ -52,6 +52,18 @@ def format_trips_columns(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
     return trips
 
 
+def calc_derived_trip_cols(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
+    """Calculate derived variables which are needed for events."""
+    trips["trip_hrs"] = total_hours(
+        trips[params["time_cols"]["trip_end"]]
+        - trips[params["time_cols"]["trip_start"]]
+    )
+
+    if params["persist"]:
+        trips = trips.persist()
+    return trips
+
+
 def filter_routable_trips(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
     """Filter down routable trips using the geometries."""
     trips = trips.drop(columns=params["drop_cols"])
@@ -123,18 +135,6 @@ def strip_vehicle_attrs(
     vehs = vehs.set_index(params["veh_id_col"]).sort_index()
     vehs = vehs.drop(index=drop_idx)
     return vehs
-
-
-def calc_derived_trip_cols(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
-    """Calculate derived variables which are needed for events."""
-    trips["trip_hrs"] = total_hours(
-        trips[params["time_cols"]["trip_end"]]
-        - trips[params["time_cols"]["trip_start"]]
-    )
-
-    if params["persist"]:
-        trips = trips.persist()
-    return trips
 
 
 def create_dwells(trips: dd.DataFrame, params: dict) -> dd.DataFrame | pd.DataFrame:

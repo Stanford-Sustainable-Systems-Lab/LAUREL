@@ -20,6 +20,12 @@ format_columns:
   veh_id_col: veh_id
   persist: False
 
+trip_derived_cols:
+  time_cols:
+    trip_start: start_timestamp_utc
+    trip_end: end_timestamp_utc
+  persist: False
+
 strip_vehicle_attrs:
   veh_id_col: veh_id
   veh_attr_cols:
@@ -84,13 +90,6 @@ get_routes:
         dist: trip_miles_route
         dur: trip_hrs_route
         speed: trip_speed_route_mph
-
-
-trip_derived_cols:
-  time_cols:
-    trip_start: start_timestamp_utc
-    trip_end: end_timestamp_utc
-  persist: True
 
 create_dwells:
   debug_subsample:
