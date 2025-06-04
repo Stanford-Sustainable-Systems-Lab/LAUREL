@@ -189,7 +189,6 @@ def get_optional_stop_trips(
     trips_short, trips_orig = dd.compute(trips_short, trips_orig)
 
     # Concatenate and format original and new short trips
-    trips_short = trips_short.convert_dtypes()
     concatter = {False: trips_orig, True: trips_short}
     trips_mod = pd.concat(concatter, axis=0, names=[pcols["is_optional"]])
     trips_mod = trips_mod.reset_index(pcols["is_optional"])
