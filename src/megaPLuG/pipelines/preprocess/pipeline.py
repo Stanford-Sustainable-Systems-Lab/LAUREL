@@ -170,7 +170,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             node(
                 func=create_dwells,
-                inputs=["trips_derived", "params:create_dwells"],
+                inputs=["trips_with_optional", "params:create_dwells"],
                 outputs="dwells",
                 name="create_dwells",
             ),
