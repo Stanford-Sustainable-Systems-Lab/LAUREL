@@ -157,8 +157,6 @@ create_dwells:
     n: 1000
   drop_cols:
     - starting_h3_8
-    - veh_type
-    - vin_gvw
   col_renamer:
     hex_id: ending_h3_8
   from_trips_cols:
@@ -168,7 +166,7 @@ create_dwells:
     end_trip: end_timestamp_utc
     trip_dist: trip_miles
     trip_dur: trip_hrs
-  load_into_memory: True
+  load_into_memory: False
 
 get_vius_by_home_base_state:
   col_renamer:
