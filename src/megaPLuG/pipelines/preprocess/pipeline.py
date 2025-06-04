@@ -136,7 +136,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=get_optional_stop_trips,
                 inputs=[
-                    "trips_routed",
+                    "trips_routed",  # Use the `compute_routes` pipeline to get this
                     "parking_formatted",
                     "params:get_optional_stop_trips",
                 ],
