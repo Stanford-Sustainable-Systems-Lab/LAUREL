@@ -284,10 +284,6 @@ def create_dwells(trips: dd.DataFrame, params: dict) -> dd.DataFrame | pd.DataFr
         trip_dist=colnames["trip_dist"],
         trip_dur=colnames["trip_dur"],
     )
-
-    if not params["load_into_memory"]:
-        dw.data = dw.data.persist()
-
     return dw.data
 
 
