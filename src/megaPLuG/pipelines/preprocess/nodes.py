@@ -115,19 +115,19 @@ def get_optional_stop_trips(
     trips_short = trips_short.drop(
         columns=[pcols["route_geom"], pcols["park_point"], pcols["hex_park"]]
     )
+    trips_short["is_optional"] = True
 
     # Prepare the original trips for concatenation
     trips_source["dist_along_miles"] = trips_source["trip_miles_route"]
     trips_orig = trips_source.drop(columns=pcols["route_geom"])
+    trips_orig["is_optional"] = False
 
     logger.info("Computing the optional stop trips by spatial joining and projecting.")
     with ProgressBar(dt=params["progress_report_interval_secs"]):
         trips_short, trips_orig = dd.compute(trips_short, trips_orig)
 
     # Concatenate and format original and new short trips
-    concatter = {False: trips_orig, True: trips_short}
-    trips_mod = pd.concat(concatter, axis=0, names=[pcols["is_optional"]])
-    trips_mod = trips_mod.reset_index(pcols["is_optional"])
+    trips_mod = pd.concat([trips_orig, trips_short], axis=0)
     return trips_mod
 
 
@@ -195,9 +195,9 @@ def concat_optional_stops(
     trips_orig = trips_orig.compute()
 
     logger.info("Concatenating and sorting trips.")
-    concatter = {True: trips_orig, False: trips_opt}
-    trips = pd.concat(concatter, axis=0, names=["is_original"])
-    trips = trips.reset_index("is_original")
+    trips_orig["is_original"] = True
+    trips_opt["is_original"] = False
+    trips = pd.concat([trips_orig, trips_opt], axis=0)
 
     # Drop the original versions of trips which have been split
     sort_cols = params["trip_id_cols"] + [params["dist_col"]]
