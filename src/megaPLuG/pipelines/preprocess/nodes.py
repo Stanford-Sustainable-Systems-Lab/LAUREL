@@ -14,6 +14,7 @@ import h3.api.numpy_int as h3
 import numpy as np
 import pandas as pd
 import requests
+from dask.diagnostics import ProgressBar
 from sklearn.preprocessing import OneHotEncoder
 
 from megaPLuG.models.dwell_sets import DwellSet
@@ -120,7 +121,8 @@ def get_optional_stop_trips(
     trips_orig = trips_source.drop(columns=pcols["route_geom"])
 
     logger.info("Computing the optional stop trips by spatial joining and projecting.")
-    trips_short, trips_orig = dd.compute(trips_short, trips_orig)
+    with ProgressBar():
+        trips_short, trips_orig = dd.compute(trips_short, trips_orig)
 
     # Concatenate and format original and new short trips
     concatter = {False: trips_orig, True: trips_short}
