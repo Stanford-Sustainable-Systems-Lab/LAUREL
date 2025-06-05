@@ -176,7 +176,9 @@ def describe_optional_stop_trips(trips: pd.DataFrame, params: dict) -> pd.DataFr
     trips["new_start"] = trips["new_start"].fillna(trips[pcols["start_time"]])
 
     # Format to match original trips dataset
-    trips = trips.drop(columns=[pcols["start_time"], pcols["miles_orig"]])
+    drop_col_set = set(params["rename_cols_final"].keys())
+    drop_col_set = drop_col_set.intersection(trips.columns)
+    trips = trips.drop(columns=drop_col_set)
     trips_out = trips.rename(
         columns={v: k for k, v in params["rename_cols_final"].items()}
     )
