@@ -67,6 +67,7 @@ describe_optional_stop_trips:
     speed_route: trip_speed_route_mph
     is_optional: is_optional
     start_time: start_timestamp_utc
+    end_time: end_timestamp_utc
   trip_id_cols:
     - veh_id
     - start_timestamp_utc
