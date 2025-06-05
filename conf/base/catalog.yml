@@ -100,18 +100,6 @@ dwells_with_locations:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/dwells_with_locations.feather
 
-dwells_partitioned:
-  type: megaPLuG.datasets.geoparquet.GeoParquetDataset
-  filepath: "${runtime_params:partition_data_dir, 'data/02_intermediate'}/dwells_partitioned"
-  save_args:
-    write_index: True
-
-dwells_with_routes:
-  type: megaPLuG.datasets.geoparquet.GeoParquetDataset
-  filepath: "${runtime_params:partition_data_dir, 'data/02_intermediate'}/dwells_with_routes"
-  save_args:
-    write_index: True
-
 vehicles_raw:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vehicles_raw.feather
