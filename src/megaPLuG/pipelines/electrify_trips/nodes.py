@@ -45,8 +45,11 @@ def calc_dwell_durations(dw: DwellSet, params: dict) -> DwellSet:
         dw.data[col] = pd.to_timedelta(dw.data[col], unit=params["in_out_time_unit"])
 
     # Adjust dwell start and end times to allow time for vehicle to plug in and out
-    dw.data[dw.end] -= dw.data[iocols["plug_out"]]
-    dw.data[dw.start] += dw.data[iocols["plug_in"]]
+    # If the stop is optional (proxied by identical start and end times), then leave
+    # its duration as zero.
+    is_optional = dw.data[dw.start] == dw.data[dw.end]
+    dw.data[dw.end] -= ~is_optional * dw.data[iocols["plug_out"]]
+    dw.data[dw.start] += ~is_optional * dw.data[iocols["plug_in"]]
 
     dwell_time_col = params["dwell_time_col"]
     dw.data[dwell_time_col] = total_hours(dw.data[dw.end] - dw.data[dw.start])
