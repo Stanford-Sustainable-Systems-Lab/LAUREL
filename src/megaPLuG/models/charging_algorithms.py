@@ -359,13 +359,25 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         # And we only charge to 100% when needed for the next trip
         buff = veh["soc_buffer_low"] * veh["batt_cap"]
         nrg_needed_trip = np.maximum(dwl["consumed_kwh_next"] + buff - cur_energy, 0)
-        nrg_needed_shift = np.maximum(dwl["consumed_kwh_shift"] + buff - cur_energy, 0)
 
-        nrg_max_soft_cap_soc = veh["soc_buffer_high"] * veh["batt_cap"] - cur_energy
-        nrg_needed_norm = np.minimum(
-            nrg_needed_shift * (nrg_needed_trip > 0), nrg_max_soft_cap_soc
-        )
-        nrg_needed_extr = np.maximum(nrg_needed_trip, nrg_needed_norm)
+        if nrg_needed_trip > 0:
+            # Energy needed to get to the end of the current shift
+            nrg_needed_shift = np.maximum(
+                dwl["consumed_kwh_shift"] + buff - cur_energy, 0
+            )
+
+            # Maximum energy that can be charged while staying at or below the SoC soft cap
+            nrg_max_soft_cap_soc = veh["soc_buffer_high"] * veh["batt_cap"] - cur_energy
+
+            # Charge at least enough for the next trip, and if more energy is needed to
+            # finish the shift, then charge up to either the shift need or the soft cap,
+            # whichever is lower.
+            nrg_needed_final = np.maximum(
+                nrg_needed_trip,
+                np.minimum(nrg_needed_shift, nrg_max_soft_cap_soc),
+            )
+        else:
+            nrg_needed_final = 0
 
         # Structure this array so that options up and to the left (smaller indices in the
         # flattened array) are more attractive given a tie. For example, lower power and
@@ -383,7 +395,7 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         e[n_powers : 2 * n_powers] = powers * avail_hrs
 
         # Option 3: Charge to meet needs
-        e[2 * n_powers :] = nrg_needed_extr
+        e[2 * n_powers :] = nrg_needed_final
 
         # Calculate outcomes
         e_cap = np.minimum(e, veh["batt_cap"] - cur_energy)
