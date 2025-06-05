@@ -122,12 +122,12 @@ def get_optional_stop_trips(
     trips_orig = trips_source.drop(columns=pcols["route_geom"])
     trips_orig["is_optional"] = False
 
+    # Concatenate trips
+    trips_mod = dd.concat([trips_orig, trips_short], axis=0)
+
     logger.info("Computing the optional stop trips by spatial joining and projecting.")
     with ProgressBar(dt=params["progress_report_interval_secs"]):
-        trips_short, trips_orig = dd.compute(trips_short, trips_orig)
-
-    # Concatenate and format original and new short trips
-    trips_mod = pd.concat([trips_orig, trips_short], axis=0)
+        trips_mod = trips_mod.compute()
     return trips_mod
 
 
