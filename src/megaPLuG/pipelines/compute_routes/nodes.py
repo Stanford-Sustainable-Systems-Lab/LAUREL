@@ -8,7 +8,6 @@ import logging
 import dask.dataframe as dd
 import dask_geopandas as dgpd
 import geopandas as gpd
-import pandas as pd
 from routingpy import Graphhopper
 
 from megaPLuG.models.routing.router import (
@@ -106,9 +105,8 @@ def get_routes_node(
 
     logger.info("Interpreting routes")
     tcols = params["output_trip_cols"]
-    float_type = pd.Float64Dtype()
-    routed[tcols["dist"]] = (routed[DIST_COL] / METERS_PER_MILE).astype(float_type)
-    routed[tcols["dur"]] = (routed[TIME_COL] / SECS_PER_HOUR).astype(float_type)
+    routed[tcols["dist"]] = routed[DIST_COL] / METERS_PER_MILE
+    routed[tcols["dur"]] = routed[TIME_COL] / SECS_PER_HOUR
     routed[tcols["speed"]] = routed[tcols["dist"]] / routed[tcols["dur"]]
     routed = routed.drop(columns=[DIST_COL, TIME_COL])
     routed = routed.set_geometry(ROUTE_COL)

@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 import geopandas as gpd
-import pandas as pd
+import numpy as np
 import shapely as shp
 from routingpy.exceptions import RouterApiError
 
@@ -34,8 +34,8 @@ async def _get_routes_async(
     **kwargs,
 ) -> gpd.GeoDataFrame:
     """Set up the server and client for routing, then iterate through groups asynchronously."""
-    trips[DIST_COL] = pd.Series(data=pd.NA, dtype=pd.Float64Dtype())
-    trips[TIME_COL] = pd.Series(data=pd.NA, dtype=pd.Float64Dtype())
+    trips[DIST_COL] = np.nan
+    trips[TIME_COL] = np.nan
     trips[ROUTE_COL] = gpd.GeoSeries(data=None, crs=trips.crs)
 
     idx = {col_name: idx for idx, col_name in enumerate(trips.columns)}
@@ -89,7 +89,7 @@ async def _get_route_async(
     if orig == dest:
         return _report_route(0.0, 0.0, None)
     if orig is None or dest is None:
-        return _report_route(pd.NA, pd.NA, None)
+        return _report_route(np.nan, np.nan, None)
 
     try:
         coords = (tuple(orig.coords)[0], tuple(dest.coords)[0])
@@ -97,10 +97,10 @@ async def _get_route_async(
         linestring = shp.LineString(rte.geometry)
         return _report_route(rte.distance, rte.duration, linestring)
     except RouterApiError:
-        return _report_route(pd.NA, pd.NA, None)
+        return _report_route(np.nan, np.nan, None)
     except shp.lib.GEOSException:
         logger.warning(f"Interpretation of route caused GEOSException: {rte.geometry}")
-        return _report_route(pd.NA, pd.NA, None)
+        return _report_route(np.nan, np.nan, None)
 
 
 def _report_route(meters: float, seconds: float, geom: shp.Geometry) -> dict:
