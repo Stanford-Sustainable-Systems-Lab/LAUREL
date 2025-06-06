@@ -214,6 +214,22 @@ dwell_obj_eval:
   type: MemoryDataset
   copy_mode: assign
 
+dwell_obj_desc_veh_locs:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_filtered_desc_veh_locs:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_inter_visit_desc_veh_locs:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_roll_desc_veh_locs:
+  type: MemoryDataset
+  copy_mode: assign
+
 dwell_obj_desc_vehs:
   type: MemoryDataset
   copy_mode: assign
@@ -222,15 +238,7 @@ dwell_obj_filtered_desc_vehs:
   type: MemoryDataset
   copy_mode: assign
 
-dwell_obj_inter_visit_desc_vehs:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_roll_desc_vehs:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_locs_desc_vehs:
+dwell_obj_desc_dwells:
   type: MemoryDataset
   copy_mode: assign
 
