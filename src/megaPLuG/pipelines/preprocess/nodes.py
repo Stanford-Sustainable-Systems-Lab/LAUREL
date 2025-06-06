@@ -66,6 +66,9 @@ def prepare_stop_locations(parks: gpd.GeoDataFrame, params: dict) -> gpd.GeoData
         lambda pt: h3.latlng_to_cell(pt.y, pt.x, res=H3_DEFAULT_RESOLUTION)
     )
     parks = parks.rename_geometry(pcols["park_point"])
+    # Some sets of parking locations are so close together, that they fall within the
+    # same hex. The grid results will not differ if we only use one of these.
+    parks = parks.drop_duplicates(subset=pcols["hex"], keep="first")
     parks[pcols["park_id"]] = pd.RangeIndex(stop=parks.shape[0])
     parks = parks.loc[:, params["keep_cols"]]
     return parks
