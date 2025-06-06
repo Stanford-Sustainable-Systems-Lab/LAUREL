@@ -66,6 +66,9 @@ def prepare_stop_locations(parks: gpd.GeoDataFrame, params: dict) -> gpd.GeoData
         lambda pt: h3.latlng_to_cell(pt.y, pt.x, res=H3_DEFAULT_RESOLUTION)
     )
     parks = parks.rename_geometry(pcols["park_point"])
+    # Some sets of parking locations are so close together, that they fall within the
+    # same hex. The grid results will not differ if we only use one of these.
+    parks = parks.drop_duplicates(subset=pcols["hex"], keep="first")
     parks[pcols["park_id"]] = pd.RangeIndex(stop=parks.shape[0])
     parks = parks.loc[:, params["keep_cols"]]
     return parks
@@ -115,19 +118,19 @@ def get_optional_stop_trips(
     trips_short = trips_short.drop(
         columns=[pcols["route_geom"], pcols["park_point"], pcols["hex_park"]]
     )
+    trips_short["is_optional"] = True
 
     # Prepare the original trips for concatenation
     trips_source["dist_along_miles"] = trips_source["trip_miles_route"]
     trips_orig = trips_source.drop(columns=pcols["route_geom"])
+    trips_orig["is_optional"] = False
+
+    # Concatenate trips
+    trips_mod = dd.concat([trips_orig, trips_short], axis=0)
 
     logger.info("Computing the optional stop trips by spatial joining and projecting.")
-    with ProgressBar():
-        trips_short, trips_orig = dd.compute(trips_short, trips_orig)
-
-    # Concatenate and format original and new short trips
-    concatter = {False: trips_orig, True: trips_short}
-    trips_mod = pd.concat(concatter, axis=0, names=[pcols["is_optional"]])
-    trips_mod = trips_mod.reset_index(pcols["is_optional"])
+    with ProgressBar(dt=params["progress_report_interval_secs"]):
+        trips_mod = trips_mod.compute()
     return trips_mod
 
 
@@ -162,9 +165,8 @@ def describe_optional_stop_trips(trips: pd.DataFrame, params: dict) -> pd.DataFr
     trips["trip_hrs_route_seg"] = (
         trips["trip_miles_route_seg"] / trips[pcols["speed_route"]]
     )
-    # TODO: Uncomment these lines once we pass `trip_hrs` through the routing
-    # time_scaler = trips[pcols["hours_orig"]] / trips[pcols["hours_route"]]
-    # trips["trip_hrs_route_seg"] = trips["trip_hrs_route_seg"] * time_scaler
+    time_scaler = trips[pcols["hours_orig"]] / trips[pcols["hours_route"]]
+    trips["trip_hrs_route_seg"] = trips["trip_hrs_route_seg"] * time_scaler
     trips["trip_time_route_seg"] = pd.to_timedelta(
         trips["trip_hrs_route_seg"], unit="h"
     )
@@ -195,14 +197,14 @@ def concat_optional_stops(
     trips_orig = trips_orig.compute()
 
     logger.info("Concatenating and sorting trips.")
-    concatter = {True: trips_orig, False: trips_opt}
-    trips = pd.concat(concatter, axis=0, names=["is_original"])
-    trips = trips.reset_index("is_original")
+    trips_orig["is_original"] = True
+    trips_opt["is_original"] = False
+    trips = pd.concat([trips_orig, trips_opt], axis=0)
 
     # Drop the original versions of trips which have been split
-    sort_cols = params["trip_id_cols"] + [params["dist_col"]]
+    sort_cols = params["trip_id_cols"] + ["is_original"]
     trips = trips.sort_values(sort_cols, ascending=True)
-    # We keep the first trip because the split, optional trips are guaranteed to be shorter than the original trips
+    # We keep the first trip because we want to replace original with modified trips
     trips = trips.drop_duplicates(subset=params["trip_id_cols"], keep="first")
     trips = trips.drop(columns=["is_original"])
     return trips

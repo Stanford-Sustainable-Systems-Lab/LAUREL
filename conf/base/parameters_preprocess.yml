@@ -55,6 +55,7 @@ get_optional_stop_trips:
   drop_cols_initial:
     - orig_point
     - dest_point
+  progress_report_interval_secs: 10
 
 describe_optional_stop_trips:
   park_buffer_miles: 1.0
@@ -70,7 +71,7 @@ describe_optional_stop_trips:
     end_time: end_timestamp_utc
   trip_id_cols:
     - veh_id
-    - start_timestamp_utc
+    - end_timestamp_utc
   rename_cols_final: # Values here are the names of internal columns
     start_timestamp_utc: new_start
     end_timestamp_utc: new_end
@@ -91,7 +92,7 @@ concat_optional_stops:
     - vin_gvw
   trip_id_cols:
     - veh_id
-    - start_timestamp_utc
+    - end_timestamp_utc
   dist_col: trip_miles
 
 create_dwells:
