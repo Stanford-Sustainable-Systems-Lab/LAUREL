@@ -165,9 +165,8 @@ def describe_optional_stop_trips(trips: pd.DataFrame, params: dict) -> pd.DataFr
     trips["trip_hrs_route_seg"] = (
         trips["trip_miles_route_seg"] / trips[pcols["speed_route"]]
     )
-    # TODO: Uncomment these lines once we pass `trip_hrs` through the routing
-    # time_scaler = trips[pcols["hours_orig"]] / trips[pcols["hours_route"]]
-    # trips["trip_hrs_route_seg"] = trips["trip_hrs_route_seg"] * time_scaler
+    time_scaler = trips[pcols["hours_orig"]] / trips[pcols["hours_route"]]
+    trips["trip_hrs_route_seg"] = trips["trip_hrs_route_seg"] * time_scaler
     trips["trip_time_route_seg"] = pd.to_timedelta(
         trips["trip_hrs_route_seg"], unit="h"
     )
