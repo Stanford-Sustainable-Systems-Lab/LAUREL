@@ -203,9 +203,9 @@ def concat_optional_stops(
     trips = pd.concat([trips_orig, trips_opt], axis=0)
 
     # Drop the original versions of trips which have been split
-    sort_cols = params["trip_id_cols"] + [params["dist_col"]]
+    sort_cols = params["trip_id_cols"] + ["is_original"]
     trips = trips.sort_values(sort_cols, ascending=True)
-    # We keep the first trip because the split, optional trips are guaranteed to be shorter than the original trips
+    # We keep the first trip because we want to replace original with modified trips
     trips = trips.drop_duplicates(subset=params["trip_id_cols"], keep="first")
     trips = trips.drop(columns=["is_original"])
     return trips
