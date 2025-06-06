@@ -266,6 +266,13 @@ def mark_vehicle_centers(
     return vehs
 
 
+def filter_dwells_for_op_segment(dw: DwellSet) -> DwellSet:
+    """Filter down the dwells in preparation for computing the operating segment."""
+    # Filter out all optional stops, which have the same start and end time (zero duration)
+    dw.data = dw.data.loc[dw.data[dw.end] != dw.data[dw.start]]
+    return dw
+
+
 def get_operating_segment(
     vehs: pd.DataFrame, dw: DwellSet, params: dict
 ) -> pd.DataFrame:

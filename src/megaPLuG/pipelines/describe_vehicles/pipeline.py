@@ -12,6 +12,7 @@ from .nodes import (
     calc_rolling_dwell_ratios,
     classify_vehicles,
     describe_veh_loc_pairs,
+    filter_dwells_for_op_segment,
     filter_substantial_dwells,
     get_operating_segment,
     get_vehicle_observation_frames,
@@ -105,10 +106,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="mark_vehicle_centers",
             ),
             node(
+                func=filter_dwells_for_op_segment,
+                inputs="dwell_obj_desc_vehs",
+                outputs="dwell_obj_filtered_desc_vehs",
+                name="filter_dwells_for_op_segment",
+            ),
+            node(
                 func=get_operating_segment,
                 inputs=[
                     "vehicles_with_centers",
-                    "dwell_obj_desc_vehs",
+                    "dwell_obj_filtered_desc_vehs",
                     "params:operating_segment",
                 ],
                 outputs="vehicles_with_segment",
@@ -128,7 +135,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=get_vehicle_observation_frames,
                 inputs=[
                     "vehicles_with_class",
-                    "dwell_obj_desc_vehs",
+                    "dwell_obj_filtered_desc_vehs",
                     "params:observation_frames",
                 ],
                 outputs="vehicles_with_obs",
