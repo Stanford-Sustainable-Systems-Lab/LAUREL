@@ -66,6 +66,9 @@ def prepare_stop_locations(parks: gpd.GeoDataFrame, params: dict) -> gpd.GeoData
         lambda pt: h3.latlng_to_cell(pt.y, pt.x, res=H3_DEFAULT_RESOLUTION)
     )
     parks = parks.rename_geometry(pcols["park_point"])
+    # Some sets of parking locations are so close together, that they fall within the
+    # same hex. The grid results will not differ if we only use one of these.
+    parks = parks.drop_duplicates(subset=pcols["hex"], keep="first")
     parks[pcols["park_id"]] = pd.RangeIndex(stop=parks.shape[0])
     parks = parks.loc[:, params["keep_cols"]]
     return parks
@@ -162,9 +165,8 @@ def describe_optional_stop_trips(trips: pd.DataFrame, params: dict) -> pd.DataFr
     trips["trip_hrs_route_seg"] = (
         trips["trip_miles_route_seg"] / trips[pcols["speed_route"]]
     )
-    # TODO: Uncomment these lines once we pass `trip_hrs` through the routing
-    # time_scaler = trips[pcols["hours_orig"]] / trips[pcols["hours_route"]]
-    # trips["trip_hrs_route_seg"] = trips["trip_hrs_route_seg"] * time_scaler
+    time_scaler = trips[pcols["hours_orig"]] / trips[pcols["hours_route"]]
+    trips["trip_hrs_route_seg"] = trips["trip_hrs_route_seg"] * time_scaler
     trips["trip_time_route_seg"] = pd.to_timedelta(
         trips["trip_hrs_route_seg"], unit="h"
     )
@@ -200,9 +202,9 @@ def concat_optional_stops(
     trips = pd.concat([trips_orig, trips_opt], axis=0)
 
     # Drop the original versions of trips which have been split
-    sort_cols = params["trip_id_cols"] + [params["dist_col"]]
+    sort_cols = params["trip_id_cols"] + ["is_original"]
     trips = trips.sort_values(sort_cols, ascending=True)
-    # We keep the first trip because the split, optional trips are guaranteed to be shorter than the original trips
+    # We keep the first trip because we want to replace original with modified trips
     trips = trips.drop_duplicates(subset=params["trip_id_cols"], keep="first")
     trips = trips.drop(columns=["is_original"])
     return trips
