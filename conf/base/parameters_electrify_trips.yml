@@ -102,6 +102,7 @@ vehicles:
   minimum_times:
     plug_in_mins: 5
     plug_out_mins: 5
+    plug_io_hrs: 0.1667
   initial_soc:
     alpha: 5
     beta: 5
@@ -160,6 +161,7 @@ simulate_charging_choice:
     rng_beta: initial_soc_beta
     soc_buffer_low: soc_buffer_low
     soc_buffer_high: soc_buffer_high
+    plug_in_and_out_delay_hrs: minimum_times_plug_io_hrs
 
 assign_scale_up_factor:
   apply_scaling: False

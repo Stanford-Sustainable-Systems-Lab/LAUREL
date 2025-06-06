@@ -324,6 +324,7 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
 
     soc_buffer_low: str
     soc_buffer_high: str
+    plug_in_and_out_delay_hrs: str
     consumed_kwh_next: str
     consumed_kwh_shift: str
 
@@ -331,12 +332,14 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         self,
         soc_buffer_low: str,
         soc_buffer_high: str,
+        plug_in_and_out_delay_hrs: str,
         consumed_kwh_next: str,
         consumed_kwh_shift: str,
         **kwargs,
     ) -> None:
         self.soc_buffer_low = soc_buffer_low
         self.soc_buffer_high = soc_buffer_high
+        self.plug_in_and_out_delay_hrs = plug_in_and_out_delay_hrs
         self.consumed_kwh_next = consumed_kwh_next
         self.consumed_kwh_shift = consumed_kwh_shift
         super().__init__(**kwargs)
@@ -404,7 +407,8 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         )  # TODO: Consider pre-computing this and passing in for speed
         div = np.where(powers_flat == 0.0, EXTREME / BETA_DELAY, e_cap / powers_flat)
         div = np.where(e_cap == 0.0, 0.0, div)
-        # TODO: Set an adder here (or after the fact) for fixed delay due to charging at an optional stop
+        if not avail_hrs > 0:  # If this is a zero-duration optional stop
+            div = np.where(e_cap == 0, div, div + veh["plug_in_and_out_delay_hrs"])
         delta = np.maximum(div - avail_hrs, 0)
         soc_next = (cur_energy + e_cap - dwl["consumed_kwh_next"]) / veh["batt_cap"]
 
