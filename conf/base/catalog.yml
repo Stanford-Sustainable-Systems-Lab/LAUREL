@@ -182,15 +182,15 @@ dwell_obj_filtered_vehs:
   type: MemoryDataset
   copy_mode: assign
 
-dwell_obj_w_avail:
+dwell_obj_w_veh_params:
   type: MemoryDataset
   copy_mode: assign
 
-dwell_obj_filtered_dwells:
+dwell_obj_w_dur:
   type: MemoryDataset
   copy_mode: assign
 
-dwell_obj_crit_days:
+dwell_obj_w_avail_modes:
   type: MemoryDataset
   copy_mode: assign
 
@@ -198,15 +198,23 @@ dwell_obj_w_energy:
   type: MemoryDataset
   copy_mode: assign
 
+dwell_obj_crit_days:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_crit_dwells:
+  type: MemoryDataset
+  copy_mode: assign
+
 dwell_obj_w_charging:
   type: MemoryDataset
   copy_mode: assign
 
-dwell_obj_regions:
+dwell_obj_w_modes:
   type: MemoryDataset
   copy_mode: assign
 
-dwell_obj_w_scaling:
+dwell_obj_w_delays:
   type: MemoryDataset
   copy_mode: assign
 
