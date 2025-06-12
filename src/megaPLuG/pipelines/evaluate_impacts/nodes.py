@@ -3,13 +3,15 @@ This is a boilerplate pipeline 'evaluate_impacts'
 generated using Kedro 0.19.1
 """
 
+import gc
 import logging
 
+import dask
+import dask.distributed
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pyinstrument
-from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.group_times import AdaptiveTimeGrouper, HourOfWeekdayGrouper
@@ -583,6 +585,48 @@ class SliceWeightSampler:
         return sample_weights
 
 
+def process_sample(
+    winds: pd.DataFrame,
+    smpler: SliceWeightSampler,
+    discrete_freq: str,
+    pcols: dict,
+    params_slice: dict,
+    seed: int | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Process a single bootstrap sample iteration."""
+    if seed is not None:
+        sample_weights = smpler.sample(seed=seed, weight_col_name="samp_wgt")
+        samps = winds.merge(
+            sample_weights, how="left", left_index=True, right_index=True
+        )
+        samps["samp_wgt"] = samps["samp_wgt"].fillna(0.0)
+    else:
+        samps = winds.copy()
+        samps["samp_wgt"] = 1.0
+
+    # Calculate profiles and energies
+    samps["weighted_power"] = samps[params_slice["power_col"]] * samps["samp_wgt"]
+    samps_grp = samps.groupby(pcols["group_cols"], sort=False, observed=True)
+    samps[pcols["profile_col"]] = samps_grp["weighted_power"].cumsum()
+    samps["energy_kwh"] = samps[pcols["profile_col"]] * samps["dur_hrs"]
+    energies = samps.groupby(pcols["group_cols"])["energy_kwh"].sum()
+
+    with SuppressLogs():
+        discs = discretize_sparse_profiles(
+            profs=samps,
+            time_col=params_slice["slice_time_col"],
+            dur_col=pcols["duration_col"],
+            prof_col=pcols["profile_col"],
+            group_cols=pcols["group_cols"],
+            freq=discrete_freq,
+        )
+
+    # Clean up to reduce memory usage
+    del samps, samps_grp
+    gc.collect()
+    return (discs, energies)
+
+
 @pyinstrument.profile()
 def sample_vehicle_windows(
     windows: pd.DataFrame,
@@ -634,40 +678,39 @@ def sample_vehicle_windows(
     logger.info("Take samples")
     # Build seeds
     if not params_sample["skip_resampling"]:
-        n_bootstraps = params_sample["n_bootstraps"]
         rng = np.random.default_rng(seed=params_sample["seed_for_seeds"])
-        seeds = rng.integers(0, 1_000_000, size=n_bootstraps)
+        seeds = rng.integers(0, 1_000_000, size=params_sample["n_bootstraps"])
     else:
-        n_bootstraps = 1
-        samps = winds_mini
-        samps["samp_wgt"] = 1.0
+        seeds = [None]
 
+    client = dask.distributed.Client()
+    logger.info(f"Dask dashboard at: {client.dashboard_link}")
+
+    # Create delayed tasks
+    future_winds = client.scatter(winds_mini, broadcast=True)
+    future_smpler = client.scatter(smpler, broadcast=True)
+
+    future_results = [
+        client.submit(
+            process_sample,
+            winds=future_winds,
+            smpler=future_smpler,
+            discrete_freq=params_sample["discrete_freq"],
+            pcols=pcols,
+            params_slice=params_slice,
+            seed=seed,
+        )
+        for seed in seeds
+    ]
+    results = client.gather(future_results)
+    del future_results, future_winds, future_smpler
+
+    # Process results
     prof_dict = {}
     energy_dict = {}
-    for i in tqdm(range(n_bootstraps)):
-        if not params_sample["skip_resampling"]:
-            sample_weights = smpler.sample(seed=seeds[i], weight_col_name="samp_wgt")
-            samps = winds_mini.merge(
-                sample_weights, how="left", left_index=True, right_index=True
-            )
-            samps["samp_wgt"] = samps["samp_wgt"].fillna(0.0)
-
-        samps["weighted_power"] = samps[params_slice["power_col"]] * samps["samp_wgt"]
-        samps_grp = samps.groupby(pcols["group_cols"], sort=False, observed=True)
-        samps[pcols["profile_col"]] = samps_grp["weighted_power"].cumsum()
-        samps["energy_kwh"] = samps[pcols["profile_col"]] * samps["dur_hrs"]
-        energies = samps.groupby(pcols["group_cols"])["energy_kwh"].sum()
-        with SuppressLogs():
-            discs = discretize_sparse_profiles(
-                profs=samps,
-                time_col=slice_time_col,
-                dur_col=pcols["duration_col"],
-                prof_col=pcols["profile_col"],
-                group_cols=pcols["group_cols"],
-                freq=params_sample["discrete_freq"],
-            )
-        prof_dict[i] = discs
-        energy_dict[i] = energies
+    for i, (prof, energy) in enumerate(results):
+        prof_dict[i] = prof
+        energy_dict[i] = energy
 
     logger.info("Collect and concatenate samples")
     boot_profs = pd.concat(prof_dict, names=[params_slice["bootstrap_id_col"], "index"])
