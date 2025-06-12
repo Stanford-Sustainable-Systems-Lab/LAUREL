@@ -50,6 +50,7 @@ dev-dependencies = [
     "mapclassify>=2.8.1",
     "pre-commit>=4.2.0",
     "pyinstrument>=5.0.1",
+    "memray>=1.17.2",
 ]
 
 [tool.hatch.metadata]
