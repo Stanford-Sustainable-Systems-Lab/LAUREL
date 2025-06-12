@@ -50,8 +50,8 @@ class EventExpander:
 
         end_of_time_group = events[self.time_col].dt.ceil(self.freq)
         end_of_event = events[self.time_col] + events[self.dur_col]
-        events["overflow"] = end_of_time_group < end_of_event
-        need_expansion = events.loc[events["overflow"]]
+        is_overflow = end_of_time_group < end_of_event
+        need_expansion = events.loc[is_overflow]
 
         if need_expansion.index.names != [None]:
             need_expansion = need_expansion.reset_index()
