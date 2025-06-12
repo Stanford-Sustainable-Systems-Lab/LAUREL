@@ -218,10 +218,9 @@ def discretize_sparse_profiles(
     """Discretize profiles by region and time grouping."""
     logger.info("Remove all observations with unknown duration or zero power.")
     # First drop the observations with no duration or zero power
-    nonzero = profs.dropna(subset=[dur_col])
-    nonzero = nonzero.reset_index()
-    drop_idx = nonzero.loc[nonzero[prof_col] == 0].index
-    nonzero = nonzero.drop(index=drop_idx)
+    is_na_dur = profs[dur_col].isna()
+    is_zero_prof = profs[prof_col] == 0
+    nonzero = profs.loc[~is_na_dur & ~is_zero_prof, :]
 
     logger.info("Expand events to cover all groups across their duration")
     if tz_col is not None:
