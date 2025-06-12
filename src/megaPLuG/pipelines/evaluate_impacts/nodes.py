@@ -599,7 +599,8 @@ def sample_vehicle_windows(
     # case of zero-time events
     winds = windows.reset_index()
     sort_cols = pcols["group_cols"] + [slice_time_col, params_slice["power_col"]]
-    winds = winds.sort_values(sort_cols, ascending=[True, True, False])
+    sort_ord = [True] * (len(sort_cols) - 1) + [False]
+    winds = winds.sort_values(sort_cols, ascending=sort_ord)
 
     winds = winds.set_index([pcols["veh_col"], params_slice["slice_id_col"]])
     inter = IndexIntegerizer(int_col="wind_id")
