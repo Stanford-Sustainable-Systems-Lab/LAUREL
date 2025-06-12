@@ -594,7 +594,9 @@ def sample_vehicle_windows(
     """Sample vehicle windows in different categories up to desired numbers."""
     slice_time_col = params_slice["slice_time_col"]
 
-    # Sorting on impulse value is essential to keep all power levels positive, in the case of zero-time events
+    logger.info("Sort and set index for vehicle windows")
+    # Sorting on impulse value is essential to keep all power levels positive, in the
+    # case of zero-time events
     winds = windows.reset_index()
     sort_cols = pcols["group_cols"] + [slice_time_col, params_slice["power_col"]]
     winds = winds.sort_values(sort_cols, ascending=[True, True, False])
@@ -603,14 +605,14 @@ def sample_vehicle_windows(
     inter = IndexIntegerizer(int_col="wind_id")
     winds = inter.integerize(winds)
 
-    # Pre-calculate duration of the profile events
+    logger.info("Pre-calculate duration of the profile events")
     wind_grp = winds.groupby(pcols["group_cols"], sort=False, observed=True)
     winds[pcols["duration_col"]] = wind_grp[slice_time_col].transform(
         lambda ser: ser.shift(-1) - ser
     )
     winds["dur_hrs"] = total_hours(winds[pcols["duration_col"]])
 
-    # Prepare sampler
+    logger.info("Prepare sampler")
     smpler = SliceWeightSampler(
         strat_cols=params_sample["stratify_cols"],
         target_count_col=params_sample["target_count_col"],
@@ -618,6 +620,7 @@ def sample_vehicle_windows(
     )
     smpler.prepare(sources=winds, frame=frame, targets=targets)
 
+    logger.info("Take samples")
     # Build seeds
     if not params_sample["skip_resampling"]:
         n_bootstraps = params_sample["n_bootstraps"]
@@ -655,6 +658,7 @@ def sample_vehicle_windows(
         prof_dict[i] = discs
         energy_dict[i] = energies
 
+    logger.info("Collect and concatenate samples")
     boot_profs = pd.concat(prof_dict, names=[params_slice["bootstrap_id_col"], "index"])
     boot_profs = boot_profs.droplevel("index")
     boot_profs = boot_profs.reset_index()
