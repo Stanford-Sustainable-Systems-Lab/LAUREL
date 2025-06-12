@@ -7,11 +7,12 @@ import gc
 import logging
 
 import dask
-import dask.distributed
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pyinstrument
+from dask.distributed import as_completed
+from tqdm.auto import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.group_times import AdaptiveTimeGrouper, HourOfWeekdayGrouper
@@ -635,6 +636,7 @@ def sample_vehicle_windows(
     params_slice: dict,
     params_sample: dict,
     pcols: dict,
+    client: dask.distributed.Client,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Sample vehicle windows in different categories up to desired numbers."""
     slice_time_col = params_slice["slice_time_col"]
@@ -675,7 +677,6 @@ def sample_vehicle_windows(
     drop_cols = set(winds.columns).difference(keep_cols)
     winds_mini = winds.drop(columns=drop_cols)
 
-    logger.info("Take samples")
     # Build seeds
     if not params_sample["skip_resampling"]:
         rng = np.random.default_rng(seed=params_sample["seed_for_seeds"])
@@ -683,14 +684,13 @@ def sample_vehicle_windows(
     else:
         seeds = [None]
 
-    client = dask.distributed.Client()
-    logger.info(f"Dask dashboard at: {client.dashboard_link}")
-
     # Create delayed tasks
+    logger.info("Scatter datasets to distributed memory")
     future_winds = client.scatter(winds_mini, broadcast=True)
     future_smpler = client.scatter(smpler, broadcast=True)
 
-    future_results = [
+    logger.info("Compute samples")
+    futures = [
         client.submit(
             process_sample,
             winds=future_winds,
@@ -702,17 +702,21 @@ def sample_vehicle_windows(
         )
         for seed in seeds
     ]
-    results = client.gather(future_results)
-    del future_results, future_winds, future_smpler
 
     # Process results
     prof_dict = {}
     energy_dict = {}
-    for i, (prof, energy) in enumerate(results):
+    for i, (future, result) in tqdm(
+        enumerate(as_completed(futures, with_results=True)), total=len(futures)
+    ):
+        prof, energy = result
         prof_dict[i] = prof
         energy_dict[i] = energy
 
+    del futures, future_winds, future_smpler, future
+
     logger.info("Collect and concatenate samples")
+    # Note: With parallel sampling, the bootstrap id is no longer deterministic
     boot_profs = pd.concat(prof_dict, names=[params_slice["bootstrap_id_col"], "index"])
     boot_profs = boot_profs.droplevel("index")
     boot_profs = boot_profs.reset_index()

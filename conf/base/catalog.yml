@@ -274,6 +274,22 @@ dask_client_routing:
   type: MemoryDataset
   copy_mode: assign
 
+substation.dask_cluster_eval:
+  type: MemoryDataset
+  copy_mode: assign
+
+substation.dask_client_eval:
+  type: MemoryDataset
+  copy_mode: assign
+
+jurisdiction.dask_cluster_eval:
+  type: MemoryDataset
+  copy_mode: assign
+
+jurisdiction.dask_client_eval:
+  type: MemoryDataset
+  copy_mode: assign
+
 # Electrification simulation datasets
 dwells_with_charging_partition:
   type: partitions.PartitionedDataset

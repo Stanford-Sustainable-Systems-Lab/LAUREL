@@ -124,6 +124,13 @@ slice_events:
     source_time_col: time_local
     bootstrap_id_col: bootstrap_id
 
+dask_eval:
+  cluster:
+    n_workers: 4
+    processes: True
+    threads_per_worker: 1
+    memory_limit: 4GiB
+
 sample_slices:
     seed_for_seeds: 1
     n_bootstraps: 5
