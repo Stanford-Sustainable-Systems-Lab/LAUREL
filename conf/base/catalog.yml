@@ -274,19 +274,11 @@ dask_client_routing:
   type: MemoryDataset
   copy_mode: assign
 
-substation.dask_cluster_eval:
+dask_cluster_eval:
   type: MemoryDataset
   copy_mode: assign
 
-substation.dask_client_eval:
-  type: MemoryDataset
-  copy_mode: assign
-
-jurisdiction.dask_cluster_eval:
-  type: MemoryDataset
-  copy_mode: assign
-
-jurisdiction.dask_client_eval:
+dask_client_eval:
   type: MemoryDataset
   copy_mode: assign
 

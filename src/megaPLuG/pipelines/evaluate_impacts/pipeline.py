@@ -15,7 +15,7 @@ from megaPLuG.utils.data import (
     get_merge_params,
     merge_dataframes_node,
 )
-from megaPLuG.utils.distributed import start_dask_node, stop_dask_node
+from megaPLuG.utils.distributed import start_dask_node
 
 from .nodes import (
     build_eval_columns,
@@ -212,6 +212,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="sampling_totals",
                 name="build_sampling_totals",
             ),
+            node(
+                func=start_dask_node,
+                inputs="params:dask_eval",
+                outputs=["dask_cluster_eval", "dask_client_eval"],
+                name="start_dask_eval",
+            ),
         ],
         tags="scenario_run",
     )
@@ -223,12 +229,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["params:eval_columns", "params:group_columns"],
                 outputs="eval_columns",
                 name="build_eval_columns",
-            ),
-            node(
-                func=start_dask_node,
-                inputs="params:dask_eval",
-                outputs=["dask_cluster_eval", "dask_client_eval"],
-                name="start_dask_eval",
             ),
             node(
                 func=sample_vehicle_windows,
@@ -243,12 +243,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs=["bootstrap_profiles", "report_by_region_energies"],
                 name="sample_vehicle_windows",
-            ),
-            node(
-                func=stop_dask_node,
-                inputs=["dask_cluster_eval", "dask_client_eval", "bootstrap_profiles"],
-                outputs=None,
-                name="stop_dask_eval",
             ),
             node(
                 func=summarize_vehicle_window_quantiles,
@@ -283,12 +277,12 @@ def create_pipeline(**kwargs) -> Pipeline:
         "params:slice_events",
         "params:sample_slices",
         "params:summarize_slices",
-        "params:dask_eval",
     }
     profile_group_fixed_inputs = {
         "slices_filtered",
         "slice_frame_filtered",
         "sampling_totals",
+        "dask_client_eval",
     }
 
     report_profiles_pipes = [
