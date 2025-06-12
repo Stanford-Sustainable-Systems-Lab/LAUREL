@@ -167,7 +167,7 @@ class NonzeroGroupedSummarizer:
         kwargs could be passed straight through to the core summary function which is
         applied to each group.
         """
-        grouping = events.groupby(self.group_cols)
+        grouping = events.groupby(self.group_cols, observed=True)
         grp_idxs = grouping.indices
         values = get_basic_dtype_ser(events[value_col]).values
         counts = get_basic_dtype_ser(events[possible_count_col]).values

@@ -241,7 +241,8 @@ def discretize_sparse_profiles(
 
     logger.info("Group events")
     grouper = grp_cols + [pd.Grouper(key=time_col, freq=freq)]
-    grped_nonzero = nonzero_exp.groupby(grouper)[prof_col].max()
+    gpby = nonzero_exp.groupby(grouper, sort=False, observed=True)
+    grped_nonzero = gpby[prof_col].max()
     grped_nonzero = grped_nonzero.reset_index()
     return grped_nonzero
 
@@ -609,8 +610,10 @@ def process_sample(
     samps["weighted_power"] = samps[params_slice["power_col"]] * samps["samp_wgt"]
     samps_grp = samps.groupby(pcols["group_cols"], sort=False, observed=True)
     samps[pcols["profile_col"]] = samps_grp["weighted_power"].cumsum()
+
     samps["energy_kwh"] = samps[pcols["profile_col"]] * samps["dur_hrs"]
-    energies = samps.groupby(pcols["group_cols"])["energy_kwh"].sum()
+    samps_grp = samps.groupby(pcols["group_cols"], sort=False, observed=True)
+    energies = samps_grp["energy_kwh"].sum()
 
     with SuppressLogs():
         discs = discretize_sparse_profiles(
