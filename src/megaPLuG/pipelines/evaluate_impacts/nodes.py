@@ -559,15 +559,16 @@ class SliceWeightSampler:
     def sample(self, seed: int, weight_col_name: str) -> pd.DataFrame:
         """Produce a dataframe of sample weights, which can be merged onto slices."""
         rng = np.random.default_rng(seed=seed)
-        self.avail["n_nonempty_samples"] = rng.binomial(
+        n_nonempty_samples = rng.binomial(
             n=self.avail["n_samples"],
             p=self.avail["frac_nonempty"],
         )
-        sample_idx = np.zeros(self.avail["n_nonempty_samples"].sum(), dtype=int)
+        sample_idx = np.zeros(n_nonempty_samples.sum(), dtype=int)
         i = 0
-        for strata, row in self.avail.iterrows():
-            n_samps = row["n_nonempty_samples"]
-            cur_samp_idx = rng.choice(row["choice_indices"], size=n_samps, replace=True)
+        for strata_idx in range(n_nonempty_samples.shape[0]):
+            n_samps = n_nonempty_samples[strata_idx]
+            choices = self.avail["choice_indices"].iloc[strata_idx]
+            cur_samp_idx = rng.choice(choices, size=n_samps, replace=True)
             sample_idx[i : i + n_samps] = cur_samp_idx
             i += n_samps
 
