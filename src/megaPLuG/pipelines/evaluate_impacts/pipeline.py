@@ -10,7 +10,11 @@ from megaPLuG.scenarios.io import (
     read_scenario_partition,
     write_scenario_partition,
 )
-from megaPLuG.utils.data import get_merge_params, merge_dataframes_node
+from megaPLuG.utils.data import (
+    categorize_columns,
+    get_merge_params,
+    merge_dataframes_node,
+)
 
 from .nodes import (
     build_eval_columns,
@@ -48,6 +52,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="collate_partitions_vehicles_with_params",
             ),
             node(
+                func=categorize_columns,
+                inputs="vehicles_with_params_eval",
+                outputs="vehicles_with_params_eval_categorized",
+                name="categorize_vehicles_with_params_eval",
+            ),
+            node(
                 func=read_scenario_partition,
                 inputs=["events_partition", "params:results_partition"],
                 outputs="events_eval",
@@ -59,6 +69,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="hex_region_corresp",
                 name="collate_partitions_hexes",
             ),
+            node(
+                func=categorize_columns,
+                inputs="hex_region_corresp",
+                outputs="hex_region_corresp_categorized",
+                name="categorize_hex_region_corresp",
+            ),
         ],
         tags="scenario_run",
     )
@@ -69,7 +85,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=summarize_vehicles,
                 inputs=[
                     "dwell_obj_eval",
-                    "vehicles_with_params_eval",
+                    "vehicles_with_params_eval_categorized",
                     "params:summarize_vehicles",
                 ],
                 outputs="vehicles_evaluated",
@@ -91,7 +107,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=get_merge_params,
                 inputs=[
                     "params:assign_metadata_location",
-                    "hex_region_corresp",
+                    "hex_region_corresp_categorized",
                     "params:stratify_columns",
                     "params:substation.group_columns",
                     "params:jurisdiction.group_columns",
@@ -103,7 +119,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=merge_dataframes_node,
                 inputs=[
                     "events_eval",
-                    "hex_region_corresp",
+                    "hex_region_corresp_categorized",
                     "merge_params_locations",
                 ],
                 outputs="events_w_regions",
@@ -268,13 +284,13 @@ def create_pipeline(**kwargs) -> Pipeline:
             inputs=profile_group_fixed_inputs,
             tags="scenario_run",
         ),
-        pipeline(
-            report_profiles_scaled_pipe,
-            namespace="jurisdiction",
-            parameters=profile_group_fixed_params,
-            inputs=profile_group_fixed_inputs,
-            tags="scenario_run",
-        ),
+        # pipeline(
+        #     report_profiles_scaled_pipe,
+        #     namespace="jurisdiction",
+        #     parameters=profile_group_fixed_params,
+        #     inputs=profile_group_fixed_inputs,
+        #     tags="scenario_run",
+        # ),
     ]
 
     return (

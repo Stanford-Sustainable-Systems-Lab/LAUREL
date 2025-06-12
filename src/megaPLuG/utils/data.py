@@ -384,3 +384,11 @@ def to_arrays(  # noqa: PLR0912
             raise ValueError(msg)
 
     return (arrays, names, formats)
+
+
+def categorize_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Categorize object-typed columns to save memory."""
+    for col in df.columns:
+        if df[col].dtype == np.dtype("O"):
+            df[col] = pd.Categorical(df[col])
+    return df

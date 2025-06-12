@@ -6,6 +6,7 @@ import pandas as pd
 from megaPLuG.models.dwell_sets import DwellSet
 
 
+# ruff: noqa: PLR0912
 def set_entity_params(
     entities: pd.DataFrame | DwellSet, params: dict
 ) -> pd.DataFrame | DwellSet:
@@ -27,6 +28,8 @@ def set_entity_params(
             par_df = build_df_from_dict(
                 d=v["values"], id_cols=v["id_columns"], value_col=k
             )
+            if par_df[k].dtype == np.dtype("O"):
+                par_df[k] = pd.Categorical(par_df[k])
             entities = entities.merge(
                 par_df, how="left", on=v["id_columns"], indicator="_mrg"
             )
@@ -44,6 +47,8 @@ def set_entity_params(
             flat = flatten_dict({k: v})
             for col, val in flat.items():
                 entities[col] = val
+                if entities[col].dtype == np.dtype("O"):
+                    entities[col] = pd.Categorical(entities[col])
     if orig_idx != [None]:
         entities = entities.set_index(orig_idx)
 
