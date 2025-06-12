@@ -12,7 +12,7 @@ import pyinstrument
 from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
-from megaPLuG.models.group_times import HourOfWeekdayGrouper, LocalHourOfDayGrouper
+from megaPLuG.models.group_times import AdaptiveTimeGrouper, HourOfWeekdayGrouper
 from megaPLuG.models.summarize import EventExpander, NonzeroGroupedSummarizer
 from megaPLuG.utils.data import IndexIntegerizer, filter_by_vals_in_cols
 from megaPLuG.utils.h3 import cells_to_region_polygons
@@ -672,12 +672,13 @@ def summarize_vehicle_window_quantiles(
 ) -> pd.DataFrame:
     """Summarize vehicle windows by grouping into times and then quantiling."""
     tcol = params_slice["slice_time_col"]
-    grouper = LocalHourOfDayGrouper(
+    grouper = AdaptiveTimeGrouper(
         time_col=tcol,
         tz_col=pcols["timezone_col"],
         start_time=pd.Timestamp(0),
         end_time=pd.Timestamp(0) + pd.Timedelta(params_slice["slice_freq"]),
         possible_tzs=["no_time_zone"],
+        freq=params_summ["discrete_freq"],
     )
     profs = grouper.add_group_classes(profs)
     grp_cnts_tz = grouper.get_possible_obs_counts()

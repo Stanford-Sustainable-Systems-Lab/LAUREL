@@ -156,3 +156,50 @@ class LocalHourOfDayGrouper(AbstractTimeGrouper):
         """Add the group classes columns to a dataframe."""
         df = calc_time_attrs(df=df, time_col=self.time_col, attrs=self.time_attrs)
         return df
+
+
+class AdaptiveTimeGrouper(AbstractTimeGrouper):
+    """Note: This class has only been tested with the frequency of '1h'."""
+
+    _time_attrs: list[str] = []
+    _time_group_cols: list[str] = ["slice_time_relative"]
+    _test_time_attrs: list[str] = ["year", "day_of_week", "hour", "minute", "second"]
+
+    def __init__(self, time_col, tz_col, start_time, end_time, possible_tzs, freq: str):
+        super().__init__(time_col, tz_col, start_time, end_time, possible_tzs)
+        self.freq = freq
+        self.time_attrs = self._get_time_attrs_from_freq()
+
+    @property
+    def time_group_cols(self: Self) -> list[str]:
+        return self._time_group_cols
+
+    @property
+    def time_attrs(self: Self) -> list[str]:
+        return self._time_attrs
+
+    @time_attrs.setter
+    def time_attrs(self: Self, attrs: list[str]) -> None:
+        """Set the time attributes to use for grouping."""
+        self._time_attrs = attrs
+
+    def add_group_classes(self: Self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add the group classes columns to a dataframe."""
+        df = calc_time_attrs(df=df, time_col=self.time_col, attrs=self.time_attrs)
+        return df
+
+    def _get_time_attrs_from_freq(self: Self) -> list[str]:
+        """Get the time attributes required by the given frequency and time window."""
+        test_range = pd.date_range(
+            start=self.start_time,
+            end=self.end_time,
+            freq=self.freq,
+        )
+
+        components = []
+        for att in self._test_time_attrs:
+            att_vals = test_range.__getattribute__(att)
+            base_att_val = test_range[0].__getattribute__(att)
+            if (att_vals != base_att_val).any():
+                components.append(att)
+        return components

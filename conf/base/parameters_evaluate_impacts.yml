@@ -131,10 +131,11 @@ sample_slices:
       - home_base_state
       - primary_op_dist
     target_count_col: n_vehs_target
-    discrete_freq: 1h
+    discrete_freq: 15min
     skip_resampling: False
 
 summarize_slices:
+  discrete_freq: 15min
   quantiles:
     - 0.00
     - 0.05
