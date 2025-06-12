@@ -609,10 +609,14 @@ def process_sample(
     samps["weighted_power"] = samps[params_slice["power_col"]] * samps["samp_wgt"]
     samps_grp = samps.groupby(pcols["group_cols"], sort=False, observed=True)
     samps[pcols["profile_col"]] = samps_grp["weighted_power"].cumsum()
+    del samps_grp
+    gc.collect()
 
     samps["energy_kwh"] = samps[pcols["profile_col"]] * samps["dur_hrs"]
     samps_grp = samps.groupby(pcols["group_cols"], sort=False, observed=True)
     energies = samps_grp["energy_kwh"].sum()
+    del samps_grp
+    gc.collect()
 
     with SuppressLogs():
         discs = discretize_sparse_profiles(
@@ -625,7 +629,7 @@ def process_sample(
         )
 
     # Clean up to reduce memory usage
-    del samps, samps_grp
+    del samps
     gc.collect()
     return (discs, energies)
 
