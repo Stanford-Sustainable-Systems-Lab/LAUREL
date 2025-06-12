@@ -621,6 +621,15 @@ def sample_vehicle_windows(
     )
     smpler.prepare(sources=winds, frame=frame, targets=targets)
 
+    keep_cols = pcols["group_cols"] + [
+        slice_time_col,
+        params_slice["power_col"],
+        pcols["duration_col"],
+        "dur_hrs",
+    ]
+    drop_cols = set(winds.columns).difference(keep_cols)
+    winds_mini = winds.drop(columns=drop_cols)
+
     logger.info("Take samples")
     # Build seeds
     if not params_sample["skip_resampling"]:
@@ -629,7 +638,7 @@ def sample_vehicle_windows(
         seeds = rng.integers(0, 1_000_000, size=n_bootstraps)
     else:
         n_bootstraps = 1
-        samps = winds
+        samps = winds_mini
         samps["samp_wgt"] = 1.0
 
     prof_dict = {}
@@ -637,7 +646,7 @@ def sample_vehicle_windows(
     for i in tqdm(range(n_bootstraps)):
         if not params_sample["skip_resampling"]:
             sample_weights = smpler.sample(seed=seeds[i], weight_col_name="samp_wgt")
-            samps = winds.merge(
+            samps = winds_mini.merge(
                 sample_weights, how="left", left_index=True, right_index=True
             )
             samps["samp_wgt"] = samps["samp_wgt"].fillna(0.0)
