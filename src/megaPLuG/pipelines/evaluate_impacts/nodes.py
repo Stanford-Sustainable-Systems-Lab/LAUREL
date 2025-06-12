@@ -10,7 +10,6 @@ import dask
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-import pyinstrument
 from dask.distributed import as_completed
 from tqdm.auto import tqdm
 
@@ -631,7 +630,6 @@ def process_sample(
     return (discs, energies)
 
 
-@pyinstrument.profile()
 def sample_vehicle_windows(
     windows: pd.DataFrame,
     frame: pd.DataFrame,
