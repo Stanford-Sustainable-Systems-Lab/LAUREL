@@ -681,6 +681,8 @@ def sample_vehicle_windows(
     ]
     drop_cols = set(winds.columns).difference(keep_cols)
     winds_mini = winds.drop(columns=drop_cols)
+    del winds
+    gc.collect()
 
     # Build seeds
     if not params_sample["skip_resampling"]:
