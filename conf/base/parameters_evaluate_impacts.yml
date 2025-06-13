@@ -128,8 +128,10 @@ dask_eval:
   cluster:
     n_workers: 4
     processes: True
-    threads_per_worker: 1
-    memory_limit: 4GiB
+    threads_per_worker: 1 # Must stay at 1, since our code is not thread safe
+    memory_limit: 4GiB # For continental scale, workers had 16GiB and still spilled to disk
+    # The actual managed memory was only about 1GiB per 15 bootstraps (loaded at beginning, probably is winds_mini)
+    # In contrast, 350 bootstraps could be completed on 4GiB workers with no spilling
 
 sample_slices:
     seed_for_seeds: 1
