@@ -6,11 +6,10 @@ generated using Kedro 0.19.1
 import gc
 import logging
 
-import dask
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-from dask.distributed import as_completed
+from dask.distributed import Client, as_completed
 from tqdm.auto import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
@@ -641,7 +640,7 @@ def sample_vehicle_windows(
     params_slice: dict,
     params_sample: dict,
     pcols: dict,
-    client: dask.distributed.Client,
+    client: Client,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Sample vehicle windows in different categories up to desired numbers."""
     slice_time_col = params_slice["slice_time_col"]
