@@ -6,6 +6,7 @@ generated using Kedro 0.19.3
 from kedro.pipeline import Pipeline, node, pipeline
 
 from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
+from megaPLuG.pipelines.electrify_trips.nodes import merge_dwellset_node
 
 from .nodes import (
     calc_inter_visit_stats,
@@ -22,6 +23,7 @@ from .nodes import (
     mark_locations,
     mark_vehicle_centers,
     mark_weight_class_group,
+    prepare_shared_locations,
 )
 
 
@@ -173,10 +175,35 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="load_dwell_set_desc_dwells",
             ),
             node(
-                func=mark_locations,
+                func=prepare_shared_locations,
+                inputs=["parking_formatted", "params:prepare_shared_locations"],
+                outputs="shared_locations",
+                name="prepare_shared_locations",
+            ),
+            node(
+                func=merge_dwellset_node,
                 inputs=[
                     "dwell_obj_desc_dwells",
+                    "shared_locations",
+                    "params:merge_locations_shared",
+                ],
+                outputs="dwell_obj_desc_dwells_with_shared",
+                name="merge_shared_locations",
+            ),
+            node(
+                func=merge_dwellset_node,
+                inputs=[
+                    "dwell_obj_desc_dwells_with_shared",
                     "vehicle_location_pairs_labelled",
+                    "params:merge_locations_vehicle_specific",
+                ],
+                outputs="dwell_obj_desc_dwells_with_vehicle_specific",
+                name="merge_vehicle_specific_locations",
+            ),
+            node(
+                func=mark_locations,
+                inputs=[
+                    "dwell_obj_desc_dwells_with_vehicle_specific",
                     "params:mark_locations",
                 ],
                 outputs="dwell_obj_with_locations",

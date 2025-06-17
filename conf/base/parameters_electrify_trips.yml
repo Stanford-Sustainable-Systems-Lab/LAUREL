@@ -115,9 +115,11 @@ vehicles:
 charging_modes:
   none:
     max_power_kw: 0
+  enroute:
+    max_power_kw: 150
   depot:
     max_power_kw: 350
-  enroute:
+  truck_stop:
     max_power_kw: 1000
   name_column: mode_name
   id_column: mode_id
@@ -130,6 +132,9 @@ mode_location_corresp:
       depot:
         - none
         - depot
+      truck_stop:
+        - none
+        - truck_stop
       other:
         - none
         - enroute

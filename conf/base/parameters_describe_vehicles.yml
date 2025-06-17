@@ -57,9 +57,40 @@ classify_vehicles:
   loc_col: location
   base_location_type: depot
 
-mark_locations:
-  veh_loc_cols:
+prepare_shared_locations:
+  col_renamer:
+    hex_id: hex_id_park
+  loc_col: location
+  shared_location_type: truck_stop
+
+merge_locations_shared:
+  keep_right_columns:
+    - hex_id
     - location
+  merge_kwargs:
+    how: left
+    'on':
+      - hex_id
+
+merge_locations_vehicle_specific:
+  keep_right_columns:
+    - veh_id
+    - hex_id
+    - location
+  merge_kwargs:
+    how: left
+    'on':
+      - veh_id
+      - hex_id
+    suffixes:
+      - _shared
+      - _specific
+
+mark_locations:
+  veh_loc_cols: # Later columns take priority over earlier columns on a per-vehicle basis
+    - location_shared
+    - location_specific
+  loc_col_out: location
   na_fill: other
 
 weight_class_group:

@@ -14,7 +14,6 @@ from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
-from megaPLuG.utils.data import merge_on_int_cols
 from megaPLuG.utils.geo import (
     METERS_PER_MILE,
     find_time_weighted_centers,
@@ -382,17 +381,21 @@ def calc_vehicle_scaling_weights(
     return vehs
 
 
-def mark_locations(dw: DwellSet, veh_locs: pd.DataFrame, params: dict) -> DwellSet:
-    """Mark locations-of-interest for each vehicle (e.g. home base)."""
-    right = veh_locs.loc[:, params["veh_loc_cols"]]
-    merge_cols = [dw.veh, dw.hex]
-    if not dw.is_dask:
-        dw.data = dw.data.merge(right, how="left", on=merge_cols)
-    else:
-        dw.data = merge_on_int_cols(left=dw.data, right=right, on=[dw.veh, dw.hex])
+def prepare_shared_locations(shared: gpd.GeoDataFrame, params: dict) -> pd.DataFrame:
+    """Prepare the charging locations shared by all vehicles."""
+    shared = shared.rename(columns={v: k for k, v in params["col_renamer"].items()})
+    shared[params["loc_col"]] = params["shared_location_type"]
+    shared[params["loc_col"]] = pd.Categorical(shared[params["loc_col"]])
+    return shared
 
+
+def mark_locations(dw: DwellSet, params: dict) -> DwellSet:
+    """Mark locations-of-interest for each vehicle (e.g. home base)."""
+    ocol = params["loc_col_out"]
+    dw.data[ocol] = params["na_fill"]
     for col in params["veh_loc_cols"]:
-        if dw.data[col].dtype.name == "category":
-            dw.data[col] = dw.data[col].cat.add_categories(params["na_fill"])
-        dw.data[col] = dw.data[col].fillna(params["na_fill"])
+        cond_ser = dw.data[col].isna()
+        dw.data[ocol] = dw.data[ocol].where(cond=cond_ser, other=dw.data[col])
+    dw.data = dw.data.drop(columns=params["veh_loc_cols"])
+    dw.data[ocol] = pd.Categorical(dw.data[ocol])
     return dw
