@@ -168,6 +168,8 @@ simulate_charging_choice:
     soc_buffer_low: soc_buffer_low
     soc_buffer_high: soc_buffer_high
     plug_in_and_out_delay_hrs: minimum_times_plug_io_hrs
+  drop_cols:
+    - avail_modes_bool
 
 assign_scale_up_factor:
   apply_scaling: False
