@@ -160,6 +160,7 @@ def prepare_mode_loc_corresp(modes: pd.DataFrame, params: dict) -> DwellSet:
     avails[params["value_col_bool"]] = avails[avail_dict["value_col"]].transform(
         lambda av: np.isin(poss, av)
     )
+    avails[params["loc_col"]] = pd.Categorical(avails[params["loc_col"]])
     return avails
 
 
@@ -180,6 +181,7 @@ def simulate_charging_choice(
     dw.sort_by_veh_time()
     strat = ForwardLookingChargingChoiceStrategy(**params["input_cols"])
     dw.data = strat.run(dwells=dw, vehs=vehs, modes=modes)
+    dw.data = dw.data.drop(columns=params["drop_cols"])
     return dw
 
 

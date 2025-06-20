@@ -191,6 +191,10 @@ dwell_obj_filtered_vehs:
   type: MemoryDataset
   copy_mode: assign
 
+dwell_obj_filtered_vehs_categorized:
+  type: MemoryDataset
+  copy_mode: assign
+
 dwell_obj_w_veh_params:
   type: MemoryDataset
   copy_mode: assign

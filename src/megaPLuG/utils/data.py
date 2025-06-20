@@ -9,6 +9,8 @@ import pandas as pd
 from pandas.core import common as com
 from pandas.core.dtypes.common import is_dict_like
 
+from megaPLuG.models.dwell_sets import DwellSet
+
 logger = logging.getLogger(__name__)
 
 
@@ -386,9 +388,14 @@ def to_arrays(  # noqa: PLR0912
     return (arrays, names, formats)
 
 
-def categorize_columns(df: pd.DataFrame) -> pd.DataFrame:
+def categorize_columns(df: pd.DataFrame | DwellSet) -> pd.DataFrame:
     """Categorize object-typed columns to save memory."""
-    for col in df.columns:
-        if df[col].dtype == np.dtype("O"):
-            df[col] = pd.Categorical(df[col])
+    if isinstance(df, DwellSet):
+        df_to_cat = df.data
+    else:
+        df_to_cat = df
+
+    for col in df_to_cat.columns:
+        if df_to_cat[col].dtype == np.dtype("O"):
+            df_to_cat[col] = pd.Categorical(df_to_cat[col])
     return df

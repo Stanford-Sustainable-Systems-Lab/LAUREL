@@ -140,6 +140,7 @@ mode_location_corresp:
         - enroute
     value_col: avail_modes
   value_col_bool: avail_modes_bool
+  loc_col: location
 
 merge_avail_modes:
   keep_right_columns:
