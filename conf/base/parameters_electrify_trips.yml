@@ -122,7 +122,7 @@ charging_modes:
   truck_stop:
     max_power_kw: 1000
   name_column: mode_name
-  id_column: mode_id
+  id_column: charge_mode_id
 
 mode_location_corresp:
   charge_modes_avail:
@@ -178,14 +178,11 @@ assign_scale_up_factor:
 
 merge_chosen_mode:
   keep_right_columns:
-    - mode_id
+    - charge_mode_id
     - max_power_kw
   merge_kwargs:
     how: left
-    left_on:
-      - charge_mode
-    right_on:
-      - mode_id
+    "on": charge_mode_id
 
 apply_delays:
   delay_columns:

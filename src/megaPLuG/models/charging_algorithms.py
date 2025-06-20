@@ -39,7 +39,7 @@ class AbstractChargingChoiceStrategy(ABC):
                 "dwell_init_delay_hrs",
                 "delay_inc_hrs",
                 "delay_dec_hrs",
-                "charge_mode",
+                "charge_mode_id",
             ],
             "formats": [
                 np.float64,
@@ -262,7 +262,7 @@ class AbstractChargingChoiceStrategy(ABC):
                 chg, dly, mode = choice_func(cur_energy, avail_hrs, dwls[i], veh, modes)
             outs["charge_kwh"][i] = chg
             outs["delay_inc_hrs"][i] = dly
-            outs["charge_mode"][i] = mode
+            outs["charge_mode_id"][i] = mode
             cur_energy += chg
             cur_delay += dly
 
