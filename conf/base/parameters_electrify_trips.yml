@@ -19,6 +19,12 @@ filter_vehicles:
     vin_gvw:
       value_isin:
         - 8
+    home_base_state:
+      value_isin:
+        - CA
+    # home_base_hex:
+    #   value_isin:
+    #     - 613222834799378431
   keep_only_filter_cols: False
 
 merge_vehicle_params:
@@ -48,7 +54,8 @@ mark_critical_days:
   loc_col: location
   refresh_locations:
     - depot
-    - depot
+  dur_col: dwell_time_hrs
+  max_power_col: max_power_kw_avail
   refresh_col: is_refresh
   crit_col: is_crit_day
   batt_cap_col: battery_capacity_kwh
@@ -141,11 +148,14 @@ mode_location_corresp:
     value_col: avail_modes
   value_col_bool: avail_modes_bool
   loc_col: location
+  max_power_col: max_power_kw_avail
+  max_power_source_col: max_power_kw
 
 merge_avail_modes:
   keep_right_columns:
     - location
     - avail_modes_bool
+    - max_power_kw_avail
   merge_kwargs:
     how: left
     'on':
@@ -170,6 +180,7 @@ simulate_charging_choice:
     plug_in_and_out_delay_hrs: minimum_times_plug_io_hrs
   drop_cols:
     - avail_modes_bool
+    - max_power_kw_avail
 
 assign_scale_up_factor:
   apply_scaling: False
