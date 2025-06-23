@@ -56,6 +56,47 @@ def calc_dwell_durations(dw: DwellSet, params: dict) -> DwellSet:
     return dw
 
 
+def prepare_modes(modes: dict) -> pd.DataFrame:
+    """Prepare the modes dataframe."""
+    name_col = modes.pop("name_column")
+    id_col = modes.pop("id_column")
+    modes = pd.DataFrame.from_dict(data=modes, orient="index")
+    modes.index.name = name_col
+    modes = modes.reset_index()
+    modes.index.name = id_col
+    return modes
+
+
+def prepare_mode_loc_corresp(modes: pd.DataFrame, params: dict) -> DwellSet:
+    """Assign modes to each dwell using a boolean vector of mode availability."""
+    avail_dict = params["charge_modes_avail"]
+    avails = build_df_from_dict(
+        d=avail_dict["values"],
+        id_cols=avail_dict["id_columns"],
+        value_col=avail_dict["value_col"],
+    )
+
+    poss = modes["mode_name"]
+    avails[params["value_col_bool"]] = avails[avail_dict["value_col"]].transform(
+        lambda av: np.isin(poss, av)
+    )
+    avails[params["loc_col"]] = pd.Categorical(avails[params["loc_col"]])
+    avails[params["max_power_col"]] = avails[params["value_col_bool"]].transform(
+        lambda a: np.max(a * modes[params["max_power_source_col"]])
+    )
+    return avails
+
+
+def merge_dwellset_node(dw: DwellSet, right: pd.DataFrame, params: dict) -> DwellSet:
+    """Use merge_dataframes_node on a DwellSet."""
+    dw.data = merge_dataframes_node(
+        left=dw.data,
+        right=right,
+        params=params,
+    )
+    return dw
+
+
 def calc_energy_use(dw: DwellSet, params: dict) -> DwellSet:
     """Calculate energy use for all trips."""
     dw.data[params["energy_col"]] = (
@@ -136,47 +177,6 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     abs_diff = old_len - new_len
     pct_diff = round(abs_diff / old_len * 100, 1)
     logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
-    return dw
-
-
-def prepare_modes(modes: dict) -> pd.DataFrame:
-    """Prepare the modes dataframe."""
-    name_col = modes.pop("name_column")
-    id_col = modes.pop("id_column")
-    modes = pd.DataFrame.from_dict(data=modes, orient="index")
-    modes.index.name = name_col
-    modes = modes.reset_index()
-    modes.index.name = id_col
-    return modes
-
-
-def prepare_mode_loc_corresp(modes: pd.DataFrame, params: dict) -> DwellSet:
-    """Assign modes to each dwell using a boolean vector of mode availability."""
-    avail_dict = params["charge_modes_avail"]
-    avails = build_df_from_dict(
-        d=avail_dict["values"],
-        id_cols=avail_dict["id_columns"],
-        value_col=avail_dict["value_col"],
-    )
-
-    poss = modes["mode_name"]
-    avails[params["value_col_bool"]] = avails[avail_dict["value_col"]].transform(
-        lambda av: np.isin(poss, av)
-    )
-    avails[params["loc_col"]] = pd.Categorical(avails[params["loc_col"]])
-    avails[params["max_power_col"]] = avails[params["value_col_bool"]].transform(
-        lambda a: np.max(a * modes[params["max_power_source_col"]])
-    )
-    return avails
-
-
-def merge_dwellset_node(dw: DwellSet, right: pd.DataFrame, params: dict) -> DwellSet:
-    """Use merge_dataframes_node on a DwellSet."""
-    dw.data = merge_dataframes_node(
-        left=dw.data,
-        right=right,
-        params=params,
-    )
     return dw
 
 

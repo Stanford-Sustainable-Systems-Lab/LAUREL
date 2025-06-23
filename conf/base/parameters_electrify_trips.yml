@@ -46,39 +46,6 @@ calc_dwell_durations:
     plug_out: minimum_times_plug_out_mins
   in_out_time_unit: minute
 
-calc_energy_use:
-  consump_col: consump_rate_kwh_per_mi
-  energy_col: energy_use_kwh
-
-mark_critical_days:
-  loc_col: location
-  refresh_locations:
-    - depot
-  dur_col: dwell_time_hrs
-  max_power_col: max_power_kw_avail
-  refresh_col: is_refresh
-  crit_col: is_crit_day
-  batt_cap_col: battery_capacity_kwh
-  energy_col: energy_use_kwh
-  energy_col_next_trip: energy_use_kwh_next
-  energy_col_remain_shift: energy_use_kwh_shift
-
-filter_dwells:
-  filter_cols:
-    refresh: is_refresh
-    crit: is_crit_day
-  dwell_time_col: dwell_time_hrs
-  accum_cols_forward_extra:
-    - energy_use_kwh
-  accum_cols_reverse:
-    - energy_use_kwh_next
-  drop_cols:
-    - minimum_times_plug_in_mins
-    - minimum_times_plug_out_mins
-    - consump_rate_kwh_per_mi
-    - battery_capacity_kwh
-    - is_crit_day
-
 vehicles:
   battery_capacity_kwh:
     id_columns:
@@ -160,6 +127,39 @@ merge_avail_modes:
     how: left
     'on':
       - location
+
+calc_energy_use:
+  consump_col: consump_rate_kwh_per_mi
+  energy_col: energy_use_kwh
+
+mark_critical_days:
+  loc_col: location
+  refresh_locations:
+    - depot
+  dur_col: dwell_time_hrs
+  max_power_col: max_power_kw_avail
+  refresh_col: is_refresh
+  crit_col: is_crit_day
+  batt_cap_col: battery_capacity_kwh
+  energy_col: energy_use_kwh
+  energy_col_next_trip: energy_use_kwh_next
+  energy_col_remain_shift: energy_use_kwh_shift
+
+filter_dwells:
+  filter_cols:
+    refresh: is_refresh
+    crit: is_crit_day
+  dwell_time_col: dwell_time_hrs
+  accum_cols_forward_extra:
+    - energy_use_kwh
+  accum_cols_reverse:
+    - energy_use_kwh_next
+  drop_cols:
+    - minimum_times_plug_in_mins
+    - minimum_times_plug_out_mins
+    - consump_rate_kwh_per_mi
+    - battery_capacity_kwh
+    - is_crit_day
 
 simulate_charging_choice:
   input_cols:
