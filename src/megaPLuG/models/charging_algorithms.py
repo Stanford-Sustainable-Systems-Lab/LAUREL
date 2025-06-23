@@ -225,7 +225,7 @@ class AbstractChargingChoiceStrategy(ABC):
         for i in range(nsteps):
             # Manage hard resets of vehicles, including at the beginning
             if dwls["reset"][i]:
-                soc = rng.beta(a=veh["rng_alpha"], b=veh["rng_beta"])
+                soc = 1.0  # rng.beta(a=veh["rng_alpha"], b=veh["rng_beta"])
                 cur_energy = veh["batt_cap"] * soc
 
             # Update vehicle status
