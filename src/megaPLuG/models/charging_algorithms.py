@@ -386,26 +386,22 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         # flattened array) are more attractive given a tie. For example, lower power and
         # less delay options should be preferred.
         N_CHG_OPTS = 3
-        powers = modes["avail_kw"] * dwl["modes_avail"]
-        n_powers = powers.shape[0]
-        n_opts = N_CHG_OPTS * n_powers
-        e = np.zeros(n_opts)
+        powers_flat = modes["avail_kw"] * dwl["modes_avail"]
+        powers = np.broadcast_to(powers_flat, shape=(N_CHG_OPTS, powers_flat.shape[0]))
+        e = np.zeros_like(powers)
 
         # Option 1: No charging
         # e[0:n_powers] remains 0
 
         # Option 2: Charge for available time
-        e[n_powers : 2 * n_powers] = powers * avail_hrs
+        e[1, :] = powers_flat * avail_hrs
 
         # Option 3: Charge to meet needs
-        e[2 * n_powers :] = nrg_needed_final
+        e[2, :] = nrg_needed_final
 
         # Calculate outcomes
         e_cap = np.minimum(e, veh["batt_cap"] - cur_energy)
-        powers_flat = np.ravel(
-            powers.repeat(N_CHG_OPTS).reshape((-1, N_CHG_OPTS)).T
-        )  # TODO: Consider pre-computing this and passing in for speed
-        div = np.where(powers_flat == 0.0, EXTREME / BETA_DELAY, e_cap / powers_flat)
+        div = np.where(powers == 0.0, EXTREME / BETA_DELAY, e_cap / powers)
         div = np.where(e_cap == 0.0, 0.0, div)
         if not avail_hrs > 0:  # If this is a zero-duration optional stop
             div = np.where(e_cap == 0, div, div + veh["plug_in_and_out_delay_hrs"])
@@ -434,8 +430,9 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         v_delay = BETA_DELAY * delta
 
         # Dropped softmax because it is monotonic and we're not using the probabilities
-        sel_idx = np.argmax(v_soc_next + v_dsoc - v_delay)
+        v = v_soc_next + v_dsoc - v_delay
+        sel_idx = np.unravel_index(np.argmax(v, axis=None), v.shape)
         chg = e_cap[sel_idx]
         delay = delta[sel_idx]
-        mode = sel_idx % n_powers
+        mode = sel_idx[1]
         return (chg, delay, mode)
