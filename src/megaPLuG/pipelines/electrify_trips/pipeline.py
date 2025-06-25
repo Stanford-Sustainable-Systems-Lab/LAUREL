@@ -18,6 +18,7 @@ from .nodes import (
     filter_vehicles,
     manage_charging,
     mark_critical_days,
+    mark_shift_powers,
     merge_dwellset_node,
     prepare_mode_loc_corresp,
     prepare_modes,
@@ -128,9 +129,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 tags="frame-spatiotemporal",
             ),
             node(
+                func=mark_shift_powers,
+                inputs=["dwell_obj_crit_dwells", "params:mark_shift_powers"],
+                outputs="dwell_obj_shift_powers",
+                name="mark_shift_powers",
+                tags="frame-charging_choice",
+            ),
+            node(
                 func=simulate_charging_choice,
                 inputs=[
-                    "dwell_obj_crit_dwells",
+                    "dwell_obj_shift_powers",
                     "vehicles_with_params",
                     "charging_modes",
                     "params:simulate_charging_choice",

@@ -161,11 +161,19 @@ filter_dwells:
     - battery_capacity_kwh
     - is_crit_day
 
+mark_shift_powers:
+  refresh_col: is_refresh
+  max_power_col: max_power_kw_avail
+  max_power_col_shift: max_power_kw_avail_shift
+  final_value: 0
+  fill_value: ${charging_modes.enroute.max_power_kw}
+
 simulate_charging_choice:
   input_cols:
     consumed_kwh: energy_use_kwh
     consumed_kwh_next: energy_use_kwh_next
     consumed_kwh_shift: energy_use_kwh_shift
+    power_kw_shift_max_remaining: max_power_kw_avail_shift
     dwell_hrs: dwell_time_hrs
     modes_avail: avail_modes_bool
     avail_kw: max_power_kw

@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from megaPLuG.models.charging_algorithms import ForwardLookingChargingChoiceStrategy
-from megaPLuG.models.dwell_sets import DwellSet
+from megaPLuG.models.dwell_sets import CumAggFunc, DwellSet
 from megaPLuG.models.manage_charging import _MANAGER_MAP
 from megaPLuG.utils.data import merge_dataframes_node
 from megaPLuG.utils.params import build_df_from_dict
@@ -177,6 +177,27 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     abs_diff = old_len - new_len
     pct_diff = round(abs_diff / old_len * 100, 1)
     logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
+    return dw
+
+
+def mark_shift_powers(dw: DwellSet, params: dict) -> DwellSet:
+    """Mark the maximum available power in the remainder of the shift."""
+    refr_col = params["refresh_col"]
+    max_pow_col = params["max_power_col"]
+    dw.accum_masked(
+        keep_mask_col=refr_col,
+        accum_cols=max_pow_col,
+        reverse=True,
+        agg_func=CumAggFunc.MAX,
+        write_all=True,
+        inplace=True,
+    )
+    acc_col = f"{max_pow_col}_{refr_col}"
+    dw.data.loc[dw.data[refr_col], acc_col] = params["final_value"]
+    dw.data[params["max_power_col_shift"]] = dw.data.groupby(dw.veh)[acc_col].shift(
+        -1, fill_value=params["fill_value"]
+    )
+    dw.data.drop(columns=acc_col, inplace=True)
     return dw
 
 
