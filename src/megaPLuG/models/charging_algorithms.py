@@ -28,6 +28,7 @@ class AbstractChargingChoiceStrategy(ABC):
     _replace_dtypes: dict = {
         np.bool.__name__: "u1",
         pd.Float64Dtype().name: np.dtypes.Float64DType().name,
+        pd.Int64Dtype().name: np.dtypes.Int64DType().name,
     }
     # See https://numpy.org/doc/stable/user/basics.rec.html#structured-datatype-creation
     # for creation instructions
@@ -324,24 +325,30 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
 
     soc_buffer_low: str
     soc_buffer_high: str
+    min_soc_charge: str
     plug_in_and_out_delay_hrs: str
     consumed_kwh_next: str
     consumed_kwh_shift: str
+    power_kw_shift_max_remaining: str
 
     def __init__(
         self,
         soc_buffer_low: str,
         soc_buffer_high: str,
+        min_soc_charge: str,
         plug_in_and_out_delay_hrs: str,
         consumed_kwh_next: str,
         consumed_kwh_shift: str,
+        power_kw_shift_max_remaining: str,
         **kwargs,
     ) -> None:
         self.soc_buffer_low = soc_buffer_low
         self.soc_buffer_high = soc_buffer_high
+        self.min_soc_charge = min_soc_charge
         self.plug_in_and_out_delay_hrs = plug_in_and_out_delay_hrs
         self.consumed_kwh_next = consumed_kwh_next
         self.consumed_kwh_shift = consumed_kwh_shift
+        self.power_kw_shift_max_remaining = power_kw_shift_max_remaining
         super().__init__(**kwargs)
 
     @staticmethod
@@ -355,84 +362,92 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
     ) -> np.ndarray:
         """Choose the charging energy, delay, and mode for a dwell."""
         # Set some weighting constants
-        EXTREME = 100.0
-        BETA_DELAY = 0.01
+        EXTREME_DELAY_HRS = 100.0
+        BETA_SOC = 0.5
 
-        # Select energy needed so that we only charge when we cannot make the next trip
-        # And we only charge to 100% when needed for the next trip
-        buff = veh["soc_buffer_low"] * veh["batt_cap"]
-        nrg_needed_trip = np.maximum(dwl["consumed_kwh_next"] + buff - cur_energy, 0)
+        # Set the shapes of the evaluation arrays
+        N_CHG_OPTS = 6
+        n_modes = modes["avail_kw"].shape[0]
+        caster = np.ones((N_CHG_OPTS, 1), dtype=float)
 
-        if nrg_needed_trip > 0:
-            # Energy needed to get to the end of the current shift
-            nrg_needed_shift = np.maximum(
-                dwl["consumed_kwh_shift"] + buff - cur_energy, 0
-            )
-
-            # Maximum energy that can be charged while staying at or below the SoC soft cap
-            nrg_max_soft_cap_soc = veh["soc_buffer_high"] * veh["batt_cap"] - cur_energy
-
-            # Charge at least enough for the next trip, and if more energy is needed to
-            # finish the shift, then charge up to either the shift need or the soft cap,
-            # whichever is lower.
-            nrg_needed_final = np.maximum(
-                nrg_needed_trip,
-                np.minimum(nrg_needed_shift, nrg_max_soft_cap_soc),
-            )
-        else:
-            nrg_needed_final = 0
-
-        # Structure this array so that options up and to the left (smaller indices in the
-        # flattened array) are more attractive given a tie. For example, lower power and
-        # less delay options should be preferred.
-        N_CHG_OPTS = 3
-        powers_flat = modes["avail_kw"] * dwl["modes_avail"]
-        powers = np.broadcast_to(powers_flat, shape=(N_CHG_OPTS, powers_flat.shape[0]))
-        e = np.zeros_like(powers)
+        ## Build the set of charging energy options. Structure this array so that
+        # options up and to the left (smaller indices in the flattened array) are more
+        # attractive given a tie. For example, lower power and less delay options should
+        # be preferred.
+        e = np.zeros((N_CHG_OPTS, n_modes), dtype=float)
 
         # Option 1: No charging
-        # e[0:n_powers] remains 0
+        # e[0, :] = 0 # No need to actually call this line
 
-        # Option 2: Charge for available time
-        e[1, :] = powers_flat * avail_hrs
+        # Option 2: Charge for available time on available power levels, with a minimum
+        #   level charged to avoid tiny charging sessions.
+        powers_flat = modes["avail_kw"] * dwl["modes_avail"]
+        min_e_chg = veh["min_soc_charge"] * veh["batt_cap"]
+        e[1, :] = np.maximum(powers_flat * avail_hrs, min_e_chg)
 
-        # Option 3: Charge to meet needs
-        e[2, :] = nrg_needed_final
+        # Option 3: Charge for next trip
+        buff = veh["soc_buffer_low"] * veh["batt_cap"]
+        e[2, :] = np.maximum(dwl["consumed_kwh_next"] + buff - cur_energy, 0)
 
-        # Calculate outcomes
-        e_cap = np.minimum(e, veh["batt_cap"] - cur_energy)
-        div = np.where(powers == 0.0, EXTREME / BETA_DELAY, e_cap / powers)
-        div = np.where(e_cap == 0.0, 0.0, div)
-        if not avail_hrs > 0:  # If this is a zero-duration optional stop
-            div = np.where(e_cap == 0, div, div + veh["plug_in_and_out_delay_hrs"])
-        delta = np.maximum(div - avail_hrs, 0)
-        soc_next = (cur_energy + e_cap - dwl["consumed_kwh_next"]) / veh["batt_cap"]
+        # Option 4: Charge for full shift
+        nrg_needed_shift = np.maximum(dwl["consumed_kwh_shift"] + buff - cur_energy, 0)
+        e[3, :] = nrg_needed_shift
 
-        # Calculate indirect utilities
-        # First, for the SoC at the end the next trip
-        v_soc_next = np.zeros_like(soc_next)
-        EPS = 1e-4
-        low_bnd = 0 + EPS
-        high_bnd = 1 - EPS
-        std_idx = np.logical_and(soc_next > low_bnd, soc_next < high_bnd)
-        not_extr = soc_next[std_idx]
-        v_soc_next[std_idx] = -np.log(
-            (1 - not_extr) / ((1 / veh["soc_buffer_low"] - 1) * not_extr)
+        # Option 5: Charge to optimal SoC, with a minimum level charged to avoid tiny
+        #   charging sessions.
+        e[4, :] = np.maximum(
+            veh["soc_buffer_high"] * veh["batt_cap"] - cur_energy, min_e_chg
         )
-        v_soc_next[soc_next <= low_bnd] = -EXTREME
-        v_soc_next[soc_next >= high_bnd] = EXTREME
 
-        # Second, for the change in SoC during this dwell
-        dsoc = np.minimum(e / veh["batt_cap"], 1 - soc_next)
-        v_dsoc = 1 - (dsoc - 1) ** 2
+        # Option 6: Charge to fill battery
+        e[5, :] = np.maximum(veh["batt_cap"] - cur_energy, 0)
 
-        # Third, for the delay during this dwell
-        v_delay = BETA_DELAY * delta
+        # Zero out charging on unavailable modes
+        e = e * (caster * dwl["modes_avail"])
 
-        # Dropped softmax because it is monotonic and we're not using the probabilities
-        v = v_soc_next + v_dsoc - v_delay
-        sel_idx = np.unravel_index(np.argmax(v, axis=None), v.shape)
-        chg = e_cap[sel_idx]
-        delay = delta[sel_idx]
-        mode = sel_idx[1]
+        ## Calculate outcomes
+        # Energy at end of charging (i.e., "final" energy)
+        e_fin = cur_energy + e
+
+        # Trip successfully completed
+        # TODO: Implement a soft lower buffer, to deter insufficient charging
+        e_next = e_fin - dwl["consumed_kwh_next"]
+        trip_succeeds = np.where(e_next > 0, 0, -np.inf)
+
+        # Battery charged within bounds
+        batt_respected = np.where(e_fin <= veh["batt_cap"], 0, -np.inf)
+
+        # Delay at this dwell
+        powers = caster * powers_flat
+        div = np.where(powers == 0.0, EXTREME_DELAY_HRS, e / powers)
+        div = np.where(e == 0.0, 0.0, div)
+        # If this is a zero-duration optional stop, add a delay penalty for plugging in
+        # and out. This creates a subtle bias for charging later rather than sooner,
+        # since a similar bias is not added to the delay-in-remainder-of-shift
+        # (delta_shift) variable.
+        if not avail_hrs > 0:
+            div = np.where(e == 0, div, div + veh["plug_in_and_out_delay_hrs"])
+        delta = np.maximum(div - avail_hrs, 0)
+
+        # Delay that would result if we charged instead at the highest power dwell
+        #  remaining in this shift.
+        if dwl["power_kw_shift_max_remaining"] == 0:
+            delta_shift = np.ones_like(delta) * EXTREME_DELAY_HRS
+        else:
+            e_rem = (
+                nrg_needed_shift - cur_energy - np.maximum(nrg_needed_shift - e_fin, 0)
+            )
+            delta_shift = e_rem / dwl["power_kw_shift_max_remaining"]
+
+        soc_targeting = (
+            -BETA_SOC * (veh["soc_buffer_high"] - e_fin / veh["batt_cap"]) ** 2
+        )
+
+        ## Calculate indirect utility and maximize
+        v = soc_targeting - (delta - delta_shift) + trip_succeeds + batt_respected
+        flat_best_idx = np.argmax(v, axis=None)
+        best_idx = (flat_best_idx // n_modes, flat_best_idx % n_modes)
+        chg = e[best_idx]
+        delay = delta[best_idx]
+        mode = best_idx[1]
         return (chg, delay, mode)

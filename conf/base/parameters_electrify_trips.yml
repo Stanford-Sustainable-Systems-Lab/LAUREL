@@ -82,6 +82,7 @@ vehicles:
     beta: 5
   soc_buffer_low: 0.1
   soc_buffer_high: 0.8
+  min_soc_charge: 0.05
   random_seed:
     master_seed: 42 # Each vehicle gets their own seed based on this one and their ID
     seed_id_col: veh_id
@@ -185,6 +186,7 @@ simulate_charging_choice:
     rng_beta: initial_soc_beta
     soc_buffer_low: soc_buffer_low
     soc_buffer_high: soc_buffer_high
+    min_soc_charge: min_soc_charge
     plug_in_and_out_delay_hrs: minimum_times_plug_io_hrs
   drop_cols:
     - avail_modes_bool
