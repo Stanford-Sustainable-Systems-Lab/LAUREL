@@ -1,6 +1,7 @@
 import copy
 import logging
 import re
+from enum import IntEnum, auto
 from itertools import product
 from typing import Self
 
@@ -25,6 +26,15 @@ DEFAULT_COLUMN_NAMES = {
     "trip_dur": "trip_duration",
     "reset": "reset_state_before",
 }
+
+
+class CumAggFunc(IntEnum):
+    """Possible aggregation functions to be used by DwellSet."""
+
+    SUM = auto()
+    PRODUCT = auto()
+    MAX = auto()
+    MIN = auto()
 
 
 class DwellSet:
@@ -204,7 +214,8 @@ class DwellSet:
         self,
         keep_mask_col: str,
         accum_cols: str | list[str] = None,
-        reverse: bool = False,
+        reverse: bool | list[bool] = False,
+        agg_func: CumAggFunc | list[CumAggFunc] = CumAggFunc.SUM,
         write_all: bool = False,
         inplace: bool = False,
     ) -> Self | None:
@@ -236,6 +247,7 @@ class DwellSet:
             veh_col=self.veh,
             replace_dtypes=self._replace_dtypes,
             reverse=reverse,
+            agg_func=agg_func,
             write_all=write_all,
         )
         if self.is_dask:
@@ -257,6 +269,7 @@ class DwellSet:
         veh_col: str,
         replace_dtypes: dict[str, str],
         reverse: bool | list[bool],
+        agg_func: CumAggFunc | list[CumAggFunc],
         write_all: bool = False,
     ) -> pd.DataFrame:
         if isinstance(accum_cols, str):
@@ -266,6 +279,12 @@ class DwellSet:
         elif isinstance(reverse, list) and (len(reverse) != len(accum_cols)):
             raise ValueError(
                 "'reverse' must be a single bool or a list of bools of the same length as 'accum_cols'."
+            )
+        if isinstance(agg_func, CumAggFunc):
+            agg_func = [agg_func] * len(accum_cols)
+        elif isinstance(agg_func, list) and (len(agg_func) != len(accum_cols)):
+            raise ValueError(
+                "'agg_func' must be a single CumAggFunc or a list of CumAggFuncs of the same length as 'accum_cols'."
             )
 
         logic_renamer = {keep_mask_col: "keep", reset_col: "reset"}
@@ -279,15 +298,16 @@ class DwellSet:
 
         # Using pandas groupby indices to move over dwell recarray
         grp_idxs = df.groupby(veh_col).indices
-        col_rev = list(zip(accum_cols, reverse))
+        col_rev = list(zip(accum_cols, reverse, agg_func))
         for grp, idxs in tqdm(grp_idxs.items()):
             logics = logic_recs[idxs]
-            for col, rev in col_rev:
+            for col, rev, fnc in col_rev:
                 outs[col][idxs] = DwellSet._accum_masked_core(
                     logics=logics,
                     vals=vals[col][idxs],
                     outs=outs[col][idxs],
                     reverse=rev,
+                    agg_func=fnc,
                 )
 
         # Build output dataframe
@@ -325,6 +345,7 @@ class DwellSet:
         vals: np.ndarray,
         outs: np.ndarray,
         reverse: bool = False,
+        agg_func: CumAggFunc = CumAggFunc.SUM,
     ) -> np.ndarray:
         nsteps = logics.shape[0]
         if not nsteps == vals.shape[0] == outs.shape[0]:
@@ -339,8 +360,17 @@ class DwellSet:
         for i in itr:
             if (not reverse and logics["reset"][i]) or (reverse and prev_reset):
                 cur = vals[i]  # With reset, we just copy the original
-            else:
-                cur = vals[i] + cum_sum  # With no reset, we apply accumulation
+            else:  # With no reset, we apply accumulation
+                match agg_func:
+                    case CumAggFunc.SUM:
+                        cur = vals[i] + cum_sum
+                    case CumAggFunc.PRODUCT:
+                        cur = vals[i] * cum_sum
+                    case CumAggFunc.MAX:
+                        cur = np.maximum(vals[i], cum_sum)
+                    case CumAggFunc.MIN:
+                        cur = np.minimum(vals[i], cum_sum)
+
             prev_reset = logics["reset"][i]
 
             if logics["keep"][i]:  # If we're keeping this row, then reset the cumsum
