@@ -11,7 +11,7 @@ WEEKEND_FIRST_DAY = 5
 class AbstractTimeGrouper(ABC):
     """Abstract class for creating time groupings and evaluating their size."""
 
-    freq: str = "1h"
+    freq: str
     start_time: pd.Timestamp
     end_time: pd.Timestamp
     possible_tzs: list[str]
@@ -29,9 +29,11 @@ class AbstractTimeGrouper(ABC):
         start_time: pd.Timestamp,
         end_time: pd.Timestamp,
         possible_tzs: list[str],
+        freq: str = "1h",
     ) -> None:
         self.time_col = time_col
         self.tz_col = tz_col
+        self.freq = freq
         self.start_time = start_time.floor(self.freq)
         self.end_time = end_time.ceil(self.freq)
         self.possible_tzs = possible_tzs
@@ -80,7 +82,6 @@ class AbstractTimeGrouper(ABC):
 class HourOfWeekdayGrouper(AbstractTimeGrouper):
     """Note: This class has only been tested with the frequency of '1h'."""
 
-    freq: str = "1h"
     _time_attrs: list[str] = ["day_of_week", "hour"]
     _time_group_cols: list[str] = ["is_weekend", "time_local_hour"]
 
@@ -108,39 +109,9 @@ class HourOfWeekdayGrouper(AbstractTimeGrouper):
         return df
 
 
-class DateGrouper(AbstractTimeGrouper):
-    """Note: This class has only been tested with the frequency of '1D'."""
-
-    freq: str = "1D"
-    _time_attrs: list[str] = []
-    _time_group_cols: list[str] = ["time_local_date"]
-
-    @property
-    def time_group_cols(self: Self) -> list[str]:
-        return self._time_group_cols
-
-    @property
-    def time_attrs(self: Self) -> list[str]:
-        return self._time_attrs
-
-    def add_group_classes(self: Self, df: pd.DataFrame) -> pd.DataFrame:
-        """Add the group classes columns to a dataframe."""
-        local_col = self.time_col + "_local"
-        df = calc_local_time(
-            df=df,
-            time_cols=self.time_col,
-            local_cols=local_col,
-            tz_col=self.tz_col,
-        )
-        df[self.time_group_cols[0]] = df[local_col].dt.floor(self.freq)
-        df = df.drop(columns=local_col)
-        return df
-
-
 class LocalHourOfDayGrouper(AbstractTimeGrouper):
     """Note: This class has only been tested with the frequency of '1h'."""
 
-    freq: str = "1h"
     _time_attrs: list[str] = ["hour"]
     _time_group_cols: list[str] = ["slice_time_relative"]
 
@@ -166,8 +137,9 @@ class AdaptiveTimeGrouper(AbstractTimeGrouper):
     _test_time_attrs: list[str] = ["year", "day_of_week", "hour", "minute", "second"]
 
     def __init__(self, time_col, tz_col, start_time, end_time, possible_tzs, freq: str):
-        super().__init__(time_col, tz_col, start_time, end_time, possible_tzs)
-        self.freq = freq
+        super().__init__(
+            time_col, tz_col, start_time, end_time, possible_tzs, freq=freq
+        )
         self.time_attrs = self._get_time_attrs_from_freq()
 
     @property
