@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from megaPLuG.models.group_times import AdaptiveTimeGrouper
+
 MEDIAN = 0.5
 
 
@@ -39,44 +41,98 @@ def plot_quantile_bands(
     return g
 
 
-def densify_sparse_profiles(
-    profs: pd.DataFrame,
-    possible_times: np.ndarray,
-    grp_cols: str | list[str],
+def densify_profiles(
+    sparse: pd.DataFrame,
     time_col: str,
-    value_cols: str | list[str] = None,
-    fill_value=None,
+    grp_cols: list[object],
+    value_cols: list[object],
+    freq: str,
+    dur: str = "1d",
+    fill_value=0.0,
 ) -> pd.DataFrame:
-    """Take a sparse profile and densify it across time for all groups."""
+    """Densify sparse observed charging profiles across typical days.
 
-    if isinstance(grp_cols, str):
-        grp_cols = [grp_cols]
+    Creates a complete time series profile by filling missing time points with
+    specified fill values. For each group defined by grp_cols, generates all
+    possible time combinations within the specified duration and frequency, then
+    merges with the original sparse data.
 
-    if value_cols is not None and isinstance(value_cols, str):
-        value_cols = [value_cols]
+    Args:
+        sparse: Sparse DataFrame containing observed charging data with missing
+            time points. Can have grouping columns in either the columns or index.
+        time_col: Name of the column containing time/datetime values that will
+            be densified.
+        grp_cols: List of column names to group by. These columns define the
+            groups for which complete time series will be generated. Can reference
+            columns in either sparse.columns or sparse.index.names.
+        value_cols: List of column names containing the values to be preserved
+            and filled. These are the actual data columns that will be densified.
+        freq: Frequency string for time series generation (e.g., "15min", "1H").
+            Must be a valid pandas frequency string.
+        dur: Duration string defining the total time span for each profile
+            (default: "1d"). Must be a valid pandas timedelta string.
+        fill_value: Value to use for filling missing time points (default: 0.0).
+            Can be any scalar value compatible with the value_cols dtypes.
 
-    orig_idx = set(profs.index.names)
-    orig_cols = set(profs.columns)
-    prf = profs.reset_index()
-    if orig_idx == {None}:
-        new_cols = set(prf.columns)
-        prf = prf.drop(columns=new_cols.difference(orig_cols))
+    Returns:
+        Complete DataFrame with densified profiles indexed by grp_cols + [time_col].
+        All missing time points within each group are filled with fill_value.
+        The resulting DataFrame has a MultiIndex with grouping columns and time.
 
-    uniq_grp_dict = {}
-    for gcol in grp_cols:
-        uniq_grp_dict[gcol] = prf[gcol].unique()
-    uniq_grp_dict[time_col] = possible_times
+    Raises:
+        RuntimeError: If any column in grp_cols is not found in sparse.columns
+            or sparse.index.names.
 
-    frame = pd.MultiIndex.from_product(
-        uniq_grp_dict.values(), names=uniq_grp_dict.keys()
+    Example:
+        >>> sparse_df = pd.DataFrame({
+        ...     'group_id': [1, 1, 2, 2],
+        ...     'timestamp': pd.to_datetime(['2023-01-01 00:00', '2023-01-01 00:30',
+        ...                                 '2023-01-01 00:15', '2023-01-01 00:45']),
+        ...     'power': [10.0, 15.0, 8.0, 12.0]
+        ... })
+        >>> dense_df = densify_profiles(
+        ...     sparse=sparse_df,
+        ...     time_col='timestamp',
+        ...     grp_cols=['group_id'],
+        ...     value_cols=['power'],
+        ...     freq='15min',
+        ...     dur='1H'
+        ... )
+        >>> # Returns complete 15-minute intervals for each group with missing values filled
+    """
+    # Build all possible time combinations for a single group
+    grper = AdaptiveTimeGrouper(
+        time_col=time_col,
+        tz_col="tz",
+        start_time=pd.Timestamp(0),
+        end_time=pd.Timestamp(0) + pd.Timedelta(dur) - pd.Timedelta(freq),
+        possible_tzs=["local_time"],
+        freq=freq,
     )
-    frame = frame.to_frame(index=False)
-    mrg_sort_cols = grp_cols + [time_col]
-    frame = frame.merge(prf, how="left", on=grp_cols + [time_col])
-    frame = frame.set_index(mrg_sort_cols)
-    frame = frame.sort_index()
+    all_classes = grper.get_possible_obs_counts().reset_index()
+    all_classes = all_classes.drop(columns=["tz", grper.count_col])
+    all_classes[time_col] = all_classes[time_col].dt.tz_localize(None)
 
-    if value_cols is not None and fill_value is not None:
-        for vcol in value_cols:
-            frame[vcol] = frame[vcol].fillna(fill_value)
-    return frame
+    # Apply those time combinations to all groups
+    components = []
+    for col in grp_cols:
+        if col in sparse.columns:
+            vals = sparse[col]
+        elif col in sparse.index.names:
+            vals = sparse.index.get_level_values(col)
+        else:
+            raise RuntimeError(
+                f"Column {col} not found in the sparse dataframe columns or index names."
+            )
+        components.append(vals.unique())
+
+    components.append(all_classes[time_col])
+    sub_frame = pd.MultiIndex.from_product(components).to_frame(index=False)
+
+    # Merge on the original sparse profiles and fill missing values
+    idx_cols = grp_cols + [time_col]
+    mrg = sparse.reset_index().loc[:, idx_cols + value_cols]
+    profs_frame = sub_frame.merge(mrg, how="left", on=idx_cols)
+    profs_frame = profs_frame.set_index(idx_cols)
+    profs_frame = profs_frame.fillna(fill_value)
+    return profs_frame
