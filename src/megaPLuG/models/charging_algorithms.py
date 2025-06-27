@@ -236,27 +236,20 @@ class AbstractChargingChoiceStrategy(ABC):
             cur_energy -= dwls["consumed_kwh"][i]
             outs["dwell_init_kwh"][i] = cur_energy
             outs["dwell_init_delay_hrs"][i] = cur_delay
-            veh_is_dead = np.isnan(cur_energy) or cur_energy < 0
-
-            # Check dwell status
-            dwell_is_refresh = dwls["refresh"][i]
-
-            avail_hrs = dwls["dwell_hrs"][i]
 
             # Manage vehicles running out of energy and resuscitating
-            if veh_is_dead:
+            veh_is_alive = cur_energy >= 0
+            dwell_is_refresh = dwls["refresh"][i]
+
+            if veh_is_alive:  # Business as usual charging choice
+                chg, dly, mode = choice_func(cur_energy, dwls[i], veh, modes)
+            else:  # noqa: PLR5501
                 if dwell_is_refresh:  # If we are at a refresh point, then revive
                     cur_energy = 0.0
                     cur_delay = 0.0
-                    chg, dly, mode = choice_func(
-                        cur_energy, avail_hrs, dwls[i], veh, modes
-                    )
+                    chg, dly, mode = choice_func(cur_energy, dwls[i], veh, modes)
                 else:  # If not, then become/stay dead
-                    chg = np.nan
-                    dly = np.nan
-                    mode = np.argmin(modes["avail_kw"])
-            else:
-                chg, dly, mode = choice_func(cur_energy, avail_hrs, dwls[i], veh, modes)
+                    chg, dly, mode = (np.nan, np.nan, np.argmin(modes["avail_kw"]))
 
             # Set limits on the amount of delay which is recoverable
             if dwell_is_refresh:
@@ -360,7 +353,6 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
     @jit
     def _choose_charging(
         cur_energy: float,
-        avail_hrs: float,
         dwl: np.recarray,
         veh: np.recarray,
         modes: np.recarray,
@@ -386,6 +378,7 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
 
         # Option 2: Charge for available time on available power levels, with a minimum
         #   level charged to avoid tiny charging sessions.
+        avail_hrs = dwl["dwell_hrs"]
         powers_flat = modes["avail_kw"] * dwl["modes_avail"]
         min_e_chg = veh["min_soc_charge"] * veh["batt_cap"]
         e[1, :] = np.maximum(powers_flat * avail_hrs, min_e_chg)
