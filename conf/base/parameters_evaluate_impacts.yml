@@ -10,6 +10,7 @@ geo_partition_eval:
 summarize_vehicles:
   dead_energy_col: dwell_init_kwh
   delay_hrs_col: dwell_init_delay_hrs
+  delay_inc_hrs_col: delay_inc_hrs
   obs_duration_col: obs_duration
   dwell_dur_col: dwell_time_hrs
   quantiles:
@@ -23,8 +24,7 @@ summarize_vehicles:
     delay_frac: delay_frac
     shift_dur: shift_dur_hrs
     shift_dur_delayed: shift_dur_delayed_hrs
-    shift_delay: final_delay_hrs
-  drop_events_col: drop_events
+    shift_delay: shift_delay_hrs
   delay_frac_thresh_quantile: 0.95
   thresholds:
     n_deaths_per_week_max: 0.5
