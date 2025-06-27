@@ -59,9 +59,14 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     # Delay as fraction of shift duration for each vehicle
     dw.data["shift_id"] = dw.data.groupby(dw.veh)[params["shift_refresh_col"]].cumsum()
     dw.data["shift_id"] = dw.data.groupby(dw.veh)["shift_id"].shift(1, fill_value=0)
+    dw.data["delay_inc_hrs_shift"] = dw.data.groupby(dw.veh)[
+        params["delay_inc_hrs_col"]
+    ].shift(1, fill_value=0)
 
     delays = dw.data.groupby([dw.veh, "shift_id"]).agg(
         max_delay_hrs=pd.NamedAgg(params["delay_hrs_col"], "max"),
+        prev_delay_hrs_inc=pd.NamedAgg("delay_inc_hrs_shift", "first"),
+        init_delay_hrs=pd.NamedAgg(params["delay_hrs_col"], "first"),
         final_delay_hrs=pd.NamedAgg(params["delay_hrs_col"], "last"),
         trip_dur_sum=pd.NamedAgg(dw.trip_dur, "sum"),
         dwell_dur_sum=pd.NamedAgg(params["dwell_dur_col"], "sum"),
@@ -69,7 +74,19 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     )
 
     scols = params["summary_cols"]
-    delays = delays.rename(columns={"final_delay_hrs": scols["shift_delay"]})
+    # The delay incurred by this shift is: the cumulative delay level when the vehicle
+    # arrives at the final depot MINUS the cumulative delay level when the vehicle arrives
+    # at its first (non-refresh) stop in the shift PLUS the increase in delay incurred
+    # at the refresh stop directly before this shift (in preparation for this shift)
+    delays[scols["shift_delay"]] = (
+        delays["final_delay_hrs"]
+        - delays["init_delay_hrs"]
+        + delays["prev_delay_hrs_inc"]
+    )
+    # Vehicle death can sometimes cause cumulative delay to drop, so we ignore those
+    # shifts, setting their delay to zero
+    delays[scols["shift_delay"]] = delays[scols["shift_delay"]].clip(lower=0.0)
+
     delays[scols["shift_dur"]] = (
         delays["trip_dur_sum"] + delays["dwell_dur_sum"] - delays["dwell_dur_last"]
     )
