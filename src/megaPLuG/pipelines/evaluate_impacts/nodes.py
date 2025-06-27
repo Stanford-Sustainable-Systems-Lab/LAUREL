@@ -38,24 +38,40 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     dw.data["is_death"] = dw.data[params["dead_energy_col"]] < 0
     dw.data["is_death_circle"] = dw.data["is_death"] & dw.data["circle_trip"]
 
+    dw.data["is_dead"] = dw.data[params["dead_energy_col"]].isna() | dw.data["is_death"]
+    dw.data["is_resusc"] = (
+        dw.data["is_dead"] & ~dw.data[params["charge_energy_col"]].isna()
+    )
+    dw.data["dead_hrs"] = (
+        dw.data["is_dead"] * dw.data[dw.trip_dur]
+        + (dw.data["is_dead"] & ~dw.data["is_resusc"])
+        * dw.data[params["dwell_dur_col"]]
+    )
+
     n_deaths = dw.data.groupby(dw.veh, sort=False).agg(
         n_deaths_all=pd.NamedAgg("is_death", "sum"),
         n_deaths_circle=pd.NamedAgg("is_death_circle", "sum"),
+        dead_hrs=pd.NamedAgg("dead_hrs", "sum"),
     )
     n_deaths["n_deaths_addressable"] = (
         n_deaths["n_deaths_all"] - n_deaths["n_deaths_circle"]
     )
     vehs = vehs.merge(n_deaths, how="inner", on=dw.veh)
-    weeks_obs = total_hours(vehs[params["obs_duration_col"]]) / HOURS_PER_WEEK
+    hrs_obs = total_hours(vehs[params["obs_duration_col"]])
+    weeks_obs = hrs_obs / HOURS_PER_WEEK
     vehs["n_deaths_all_per_week"] = vehs["n_deaths_all"] / weeks_obs
     vehs["n_deaths_circle_per_week"] = vehs["n_deaths_circle"] / weeks_obs
     vehs["n_deaths_addressable_per_week"] = vehs["n_deaths_addressable"] / weeks_obs
+    vehs["frac_dead_hrs"] = vehs["dead_hrs"] / hrs_obs
 
     logger.info("Deaths per week per vehicle (all, including circle trips):")
     logger.info(vehs["n_deaths_all_per_week"].describe())
 
     logger.info("Deaths per week per vehicle (addressable):")
     logger.info(vehs["n_deaths_addressable_per_week"].describe())
+
+    logger.info("Fraction of observed hours spent in dead state per vehicle:")
+    logger.info(vehs["frac_dead_hrs"].describe())
 
     # Delay as fraction of shift duration for each vehicle
     dw.data["shift_id"] = dw.data.groupby(dw.veh)[params["shift_refresh_col"]].cumsum()

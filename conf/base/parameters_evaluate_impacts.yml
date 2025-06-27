@@ -13,6 +13,7 @@ summarize_vehicles:
   delay_inc_hrs_col: delay_inc_hrs
   obs_duration_col: obs_duration
   dwell_dur_col: dwell_time_hrs
+  charge_energy_col: charge_kwh
   quantiles:
     - 0.00
     - 0.05
