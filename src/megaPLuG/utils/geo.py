@@ -88,13 +88,17 @@ def calc_haversine_dist(
 ) -> float:
     """Calculate the Haversine distance between two points on Earth's surface.
 
-    Assumes (longitude, latitude) points.
+    Assumes (longitude, latitude) points. Each row is a point.
     """
-    pt1, pt2 = map(np.radians, [pt1, pt2])
+    caster = np.ones((1, 1))  # Used to cast to a 2-D array
+    pt1 = caster * np.radians(pt1)
+    pt2 = caster * np.radians(pt2)
     diffs = pt2 - pt1
 
     numer = (
-        1 - np.cos(diffs[1]) + np.cos(pt1[1]) * np.cos(pt2[1]) * (1 - np.cos(diffs[0]))
+        1
+        - np.cos(diffs[:, 1])
+        + np.cos(pt1[:, 1]) * np.cos(pt2[:, 1]) * (1 - np.cos(diffs[:, 0]))
     )
     res = 2 * radius * np.arcsin(np.sqrt(numer / 2))
     return res
