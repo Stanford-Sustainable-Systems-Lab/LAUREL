@@ -232,11 +232,25 @@ class AbstractChargingChoiceStrategy(ABC):
             # Update vehicle status
             cur_energy -= dwls["consumed_kwh"][i]
             outs["dwell_init_kwh"][i] = cur_energy
+            veh_is_dead = np.isnan(cur_energy) or cur_energy < 0
+
+            # Check dwell status
+            dwell_is_refresh = dwls["refresh"][i]
 
             # Check if we can decrease delay at this dwell
             outs["dwell_init_delay_hrs"][i] = cur_delay
-            if dwls["refresh"][i] and dwls["dwell_hrs"][i] > cur_delay:
-                delay_reduction = cur_delay
+            # Decrease delay only if this is a refresh point AND the vehicle is either
+            # recovering from death or there is plenty of time to make up for all delay.
+            if dwell_is_refresh:
+                if veh_is_dead:  # If recovering from death, then reset to zero delay
+                    cur_delay = 0.0
+                    delay_reduction = 0.0
+                elif (
+                    dwls["dwell_hrs"][i] > cur_delay
+                ):  # Or, decrease all delay if possible
+                    delay_reduction = cur_delay
+                else:  # If all delay cannot be removed, then remove none of it
+                    pass
             else:
                 delay_reduction = 0.0
             outs["delay_dec_hrs"][i] = delay_reduction
@@ -244,10 +258,9 @@ class AbstractChargingChoiceStrategy(ABC):
             avail_hrs = dwls["dwell_hrs"][i] - delay_reduction
 
             # Manage vehicles running out of energy and resuscitating
-            if np.isnan(cur_energy) or cur_energy < 0:  # Currently dead
-                if dwls["refresh"][i]:  # If we are at a refresh point, then revive
+            if veh_is_dead:
+                if dwell_is_refresh:  # If we are at a refresh point, then revive
                     cur_energy = 0.0
-                    cur_delay = 0.0
                     chg, dly, mode = choice_func(
                         cur_energy, avail_hrs, dwls[i], veh, modes
                     )
