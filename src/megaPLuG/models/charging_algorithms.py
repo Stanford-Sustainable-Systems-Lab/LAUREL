@@ -232,35 +232,19 @@ class AbstractChargingChoiceStrategy(ABC):
             # Update vehicle status
             cur_energy -= dwls["consumed_kwh"][i]
             outs["dwell_init_kwh"][i] = cur_energy
+            outs["dwell_init_delay_hrs"][i] = cur_delay
             veh_is_dead = np.isnan(cur_energy) or cur_energy < 0
 
             # Check dwell status
             dwell_is_refresh = dwls["refresh"][i]
 
-            # Check if we can decrease delay at this dwell
-            outs["dwell_init_delay_hrs"][i] = cur_delay
-            # Decrease delay only if this is a refresh point AND the vehicle is either
-            # recovering from death or there is plenty of time to make up for all delay.
-            if dwell_is_refresh:
-                if veh_is_dead:  # If recovering from death, then reset to zero delay
-                    cur_delay = 0.0
-                    delay_reduction = 0.0
-                elif (
-                    dwls["dwell_hrs"][i] > cur_delay
-                ):  # Or, decrease all delay if possible
-                    delay_reduction = cur_delay
-                else:  # If all delay cannot be removed, then remove none of it
-                    pass
-            else:
-                delay_reduction = 0.0
-            outs["delay_dec_hrs"][i] = delay_reduction
-            cur_delay -= delay_reduction
-            avail_hrs = dwls["dwell_hrs"][i] - delay_reduction
+            avail_hrs = dwls["dwell_hrs"][i]
 
             # Manage vehicles running out of energy and resuscitating
             if veh_is_dead:
                 if dwell_is_refresh:  # If we are at a refresh point, then revive
                     cur_energy = 0.0
+                    cur_delay = 0.0
                     chg, dly, mode = choice_func(
                         cur_energy, avail_hrs, dwls[i], veh, modes
                     )
@@ -270,11 +254,19 @@ class AbstractChargingChoiceStrategy(ABC):
                     mode = np.argmin(modes["avail_kw"])
             else:
                 chg, dly, mode = choice_func(cur_energy, avail_hrs, dwls[i], veh, modes)
+
+            if dwell_is_refresh:
+                dly_lim = np.maximum(
+                    dly, -cur_delay
+                )  # TODO: Add limits on delay reduction at refreshes
+            else:
+                dly_lim = np.maximum(dly, 0)  # No delay reduction except at refreshes
             outs["charge_kwh"][i] = chg
-            outs["delay_inc_hrs"][i] = dly
+            outs["delay_inc_hrs"][i] = np.maximum(dly_lim, 0)
+            outs["delay_dec_hrs"][i] = np.abs(np.minimum(dly_lim, 0))
             outs["charge_mode_id"][i] = mode
             cur_energy += chg
-            cur_delay += dly
+            cur_delay += dly_lim
 
         return outs
 
@@ -371,7 +363,7 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
     ) -> np.ndarray:
         """Choose the charging energy, delay, and mode for a dwell."""
         # Set some weighting constants
-        EXTREME_DELAY_HRS = 100.0
+        EXTREME_DELAY_HRS = 10000.0  # More than a year of delay
         BETA_SOC = 0.5
 
         # Set the shapes of the evaluation arrays
@@ -428,35 +420,37 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
 
         # Delay at this dwell
         powers = caster * powers_flat
-        div = np.where(powers == 0.0, EXTREME_DELAY_HRS, e / powers)
-        div = np.where(e == 0.0, 0.0, div)
+        chg_time = np.where(powers == 0.0, EXTREME_DELAY_HRS, e / powers)
+        chg_time = np.where(e == 0.0, 0.0, chg_time)
         # If this is a zero-duration optional stop, add a delay penalty for plugging in
         # and out. This creates a subtle bias for charging later rather than sooner,
         # since a similar bias is not added to the delay-in-remainder-of-shift
-        # (delta_shift) variable.
+        # (delay_shift) variable.
         if not avail_hrs > 0:
-            div = np.where(e == 0, div, div + veh["plug_in_and_out_delay_hrs"])
-        delta = np.maximum(div - avail_hrs, 0)
+            plug_time = veh["plug_in_and_out_delay_hrs"]
+            chg_time = np.where(e == 0, chg_time, chg_time + plug_time)
+        time_delta = chg_time - avail_hrs  # Will be negative if time can be made up
+        delay = np.maximum(time_delta, 0)  # Can only ever count new delay
 
         # Delay that would result if we charged instead at the highest power dwell
         #  remaining in this shift.
         if dwl["power_kw_shift_max_remaining"] == 0:
-            delta_shift = np.ones_like(delta) * EXTREME_DELAY_HRS
+            delay_shift = np.ones_like(delay) * EXTREME_DELAY_HRS
         else:
             e_rem = (
                 nrg_needed_shift - cur_energy - np.maximum(nrg_needed_shift - e_fin, 0)
             )
-            delta_shift = e_rem / dwl["power_kw_shift_max_remaining"]
+            delay_shift = e_rem / dwl["power_kw_shift_max_remaining"]
 
         soc_targeting = (
             -BETA_SOC * (veh["soc_buffer_high"] - e_fin / veh["batt_cap"]) ** 2
         )
 
         ## Calculate indirect utility and maximize
-        v = soc_targeting - (delta - delta_shift) + trip_succeeds + batt_respected
+        v = soc_targeting - (delay - delay_shift) + trip_succeeds + batt_respected
         flat_best_idx = np.argmax(v, axis=None)
         best_idx = (flat_best_idx // n_modes, flat_best_idx % n_modes)
         chg = e[best_idx]
-        delay = delta[best_idx]
+        dly = time_delta[best_idx]
         mode = best_idx[1]
-        return (chg, delay, mode)
+        return (chg, dly, mode)
