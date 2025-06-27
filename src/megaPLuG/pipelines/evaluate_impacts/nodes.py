@@ -31,6 +31,9 @@ logger = logging.getLogger(__name__)
 # ruff: noqa: PLR0915
 def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Summarize the results for each vehicle."""
+    # Set up arguments for describe calls
+    qtls_descr = sorted(list(set(params["quantiles"]).difference([0.0, 1.0])))
+
     # Number of deaths by vehicle
     dw.data["hex_id_prev"] = dw.data.groupby(dw.veh)[dw.hex].shift(1, fill_value=0)
     dw.data["circle_trip"] = dw.data["hex_id_prev"] == dw.data[dw.hex]
@@ -65,13 +68,13 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     vehs["dead_time_frac"] = vehs["dead_hrs"] / hrs_obs
 
     logger.info("Deaths per week per vehicle (all, including circle trips):")
-    logger.info(vehs["n_deaths_all_per_week"].describe())
+    logger.info(vehs["n_deaths_all_per_week"].describe(percentiles=qtls_descr))
 
     logger.info("Deaths per week per vehicle (addressable):")
-    logger.info(vehs["n_deaths_addressable_per_week"].describe())
+    logger.info(vehs["n_deaths_addressable_per_week"].describe(percentiles=qtls_descr))
 
     logger.info("Fraction of observed time spent in dead state per vehicle:")
-    logger.info(vehs["dead_time_frac"].describe())
+    logger.info(vehs["dead_time_frac"].describe(percentiles=qtls_descr))
 
     # Delay as fraction of shift duration for each vehicle
     dw.data["shift_id"] = dw.data.groupby(dw.veh)[params["shift_refresh_col"]].cumsum()
@@ -132,7 +135,7 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
         f"Delay as fraction of vehicle shift length per vehicle [{report_pctl}th percentile]:"
     )
     report_col = build_col_name(scols["delay_frac"], thresh_qtl)
-    logger.info(vehs[report_col].describe())
+    logger.info(vehs[report_col].describe(percentiles=qtls_descr))
 
     thresh_qtl = params["max_delay_thresh_quantile"]
     report_pctl = int(thresh_qtl * 100)
@@ -140,7 +143,7 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
         f"Maximum absolute delay accumulated per vehicle [{report_pctl}th percentile]:"
     )
     report_col = build_col_name(scols["max_delay"], thresh_qtl)
-    logger.info(vehs[report_col].describe())
+    logger.info(vehs[report_col].describe(percentiles=qtls_descr))
 
     # Get boolean columns for which vehicles are included in load profiles
     thrs = params["thresholds"]
