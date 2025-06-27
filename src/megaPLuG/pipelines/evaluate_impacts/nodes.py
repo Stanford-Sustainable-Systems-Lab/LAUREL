@@ -28,6 +28,7 @@ from megaPLuG.utils.time import (
 logger = logging.getLogger(__name__)
 
 
+# ruff: noqa: PLR0915
 def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Summarize the results for each vehicle."""
     # Number of deaths by vehicle
@@ -74,6 +75,7 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     )
 
     scols = params["summary_cols"]
+    delays = delays.rename(columns={"max_delay_hrs": scols["max_delay"]})
     # The delay incurred by this shift is: the cumulative delay level when the vehicle
     # arrives at the final depot MINUS the cumulative delay level when the vehicle arrives
     # at its first (non-refresh) stop in the shift PLUS the increase in delay incurred
@@ -116,6 +118,14 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     report_col = build_col_name(scols["delay_frac"], thresh_qtl)
     logger.info(vehs[report_col].describe())
 
+    thresh_qtl = params["max_delay_thresh_quantile"]
+    report_pctl = int(thresh_qtl * 100)
+    logger.info(
+        f"Maximum absolute delay accumulated per vehicle [{report_pctl}th percentile]:"
+    )
+    report_col = build_col_name(scols["max_delay"], thresh_qtl)
+    logger.info(vehs[report_col].describe())
+
     # Get boolean columns for which vehicles are included in load profiles
     thrs = params["thresholds"]
     vehs["dies_too_freq"] = (
@@ -123,7 +133,7 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     )
     dftcol = build_col_name(scols["delay_frac"], thresh_qtl)
     vehs["delays_too_long_rel"] = vehs[dftcol] > thrs["delay_frac_max"]
-    abstcol = build_col_name(scols["shift_delay"], 1.00)
+    abstcol = build_col_name(scols["max_delay"], 1.00)
     vehs["delays_too_long_abs"] = vehs[abstcol] > thrs["delay_hrs_max"]
     vehs[params["drop_events_col"]] = (
         vehs["dies_too_freq"]

@@ -25,7 +25,9 @@ summarize_vehicles:
     shift_dur: shift_dur_hrs
     shift_dur_delayed: shift_dur_delayed_hrs
     shift_delay: shift_delay_hrs
+    max_delay: max_delay_hrs
   delay_frac_thresh_quantile: 0.95
+  max_delay_thresh_quantile: 1.00
   thresholds:
     n_deaths_per_week_max: 0.5
     delay_frac_max: 0.1
