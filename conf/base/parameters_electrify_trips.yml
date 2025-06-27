@@ -83,6 +83,7 @@ vehicles:
   soc_buffer_low: 0.1
   soc_buffer_high: 0.8
   min_soc_charge: 0.05
+  max_delay_recoverable_hrs: ${summarize_vehicles.thresholds.delay_hrs_max}
   random_seed:
     master_seed: 42 # Each vehicle gets their own seed based on this one and their ID
     seed_id_col: veh_id
@@ -175,6 +176,7 @@ simulate_charging_choice:
     consumed_kwh_next: energy_use_kwh_next
     consumed_kwh_shift: energy_use_kwh_shift
     power_kw_shift_max_remaining: max_power_kw_avail_shift
+    max_delay_recoverable_hrs: max_delay_recoverable_hrs
     dwell_hrs: dwell_time_hrs
     modes_avail: avail_modes_bool
     avail_kw: max_power_kw

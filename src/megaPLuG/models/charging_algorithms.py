@@ -63,6 +63,7 @@ class AbstractChargingChoiceStrategy(ABC):
         refresh: str,
         reset: str,
         batt_cap: str,
+        max_delay_recoverable_hrs: str,
         random_seed: str,
         rng_alpha: str,
         rng_beta: str,
@@ -82,6 +83,7 @@ class AbstractChargingChoiceStrategy(ABC):
 
         And we need the vehicle parameters:
             - battery_capacity
+            - max_delay_recoverable_hrs
             - rng_alpha
             - rng_beta
         """
@@ -92,6 +94,7 @@ class AbstractChargingChoiceStrategy(ABC):
         self.refresh = refresh
         self.reset = reset
         self.batt_cap = batt_cap
+        self.max_delay_recoverable_hrs = max_delay_recoverable_hrs
         self.random_seed = random_seed
         self.rng_alpha = rng_alpha
         self.rng_beta = rng_beta
@@ -255,12 +258,13 @@ class AbstractChargingChoiceStrategy(ABC):
             else:
                 chg, dly, mode = choice_func(cur_energy, avail_hrs, dwls[i], veh, modes)
 
+            # Set limits on the amount of delay which is recoverable
             if dwell_is_refresh:
-                dly_lim = np.maximum(
-                    dly, -cur_delay
-                )  # TODO: Add limits on delay reduction at refreshes
+                max_recover = np.minimum(veh["max_delay_recoverable_hrs"], cur_delay)
             else:
-                dly_lim = np.maximum(dly, 0)  # No delay reduction except at refreshes
+                max_recover = 0.0
+            dly_lim = np.maximum(dly, -max_recover)
+
             outs["charge_kwh"][i] = chg
             outs["delay_inc_hrs"][i] = np.maximum(dly_lim, 0)
             outs["delay_dec_hrs"][i] = np.abs(np.minimum(dly_lim, 0))
