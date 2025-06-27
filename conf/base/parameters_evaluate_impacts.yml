@@ -32,6 +32,7 @@ summarize_vehicles:
   max_delay_thresh_quantile: 1.00
   thresholds:
     n_deaths_per_week_max: 0.5
+    dead_time_frac_max: 0.1 # Maximum time fraction of observed time spent dead
     delay_frac_max: 0.1 # Maximum time fraction of a single shift added by delay
     delay_hrs_max: 8 # Maximum accumulated delay at any point in vehicle's history
 

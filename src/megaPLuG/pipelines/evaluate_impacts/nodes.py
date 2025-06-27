@@ -62,7 +62,7 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     vehs["n_deaths_all_per_week"] = vehs["n_deaths_all"] / weeks_obs
     vehs["n_deaths_circle_per_week"] = vehs["n_deaths_circle"] / weeks_obs
     vehs["n_deaths_addressable_per_week"] = vehs["n_deaths_addressable"] / weeks_obs
-    vehs["frac_dead_hrs"] = vehs["dead_hrs"] / hrs_obs
+    vehs["dead_time_frac"] = vehs["dead_hrs"] / hrs_obs
 
     logger.info("Deaths per week per vehicle (all, including circle trips):")
     logger.info(vehs["n_deaths_all_per_week"].describe())
@@ -70,8 +70,8 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     logger.info("Deaths per week per vehicle (addressable):")
     logger.info(vehs["n_deaths_addressable_per_week"].describe())
 
-    logger.info("Fraction of observed hours spent in dead state per vehicle:")
-    logger.info(vehs["frac_dead_hrs"].describe())
+    logger.info("Fraction of observed time spent in dead state per vehicle:")
+    logger.info(vehs["dead_time_frac"].describe())
 
     # Delay as fraction of shift duration for each vehicle
     dw.data["shift_id"] = dw.data.groupby(dw.veh)[params["shift_refresh_col"]].cumsum()
@@ -147,12 +147,14 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     vehs["dies_too_freq"] = (
         vehs["n_deaths_all_per_week"] > thrs["n_deaths_per_week_max"]
     )
+    vehs["dead_time_too_long"] = vehs["dead_time_frac"] > thrs["dead_time_frac_max"]
     dftcol = build_col_name(scols["delay_frac"], thresh_qtl)
     vehs["delays_too_long_rel"] = vehs[dftcol] > thrs["delay_frac_max"]
     abstcol = build_col_name(scols["max_delay"], 1.00)
     vehs["delays_too_long_abs"] = vehs[abstcol] > thrs["delay_hrs_max"]
     vehs[params["drop_events_col"]] = (
         vehs["dies_too_freq"]
+        | vehs["dead_time_too_long"]
         | vehs["delays_too_long_rel"]
         | vehs["delays_too_long_abs"]
     )
@@ -160,6 +162,7 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     logger.info("Vehicles to be dropped [%] based on reason:")
     reasons = [
         "dies_too_freq",
+        "dead_time_too_long",
         "delays_too_long_rel",
         "delays_too_long_abs",
         params["drop_events_col"],
