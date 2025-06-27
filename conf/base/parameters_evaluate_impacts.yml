@@ -26,12 +26,13 @@ summarize_vehicles:
     shift_dur_delayed: shift_dur_delayed_hrs
     shift_delay: shift_delay_hrs
     max_delay: max_delay_hrs
+  drop_events_col: drop_events_all_reasons
   delay_frac_thresh_quantile: 0.95
   max_delay_thresh_quantile: 1.00
   thresholds:
     n_deaths_per_week_max: 0.5
-    delay_frac_max: 0.1
-    delay_hrs_max: 5
+    delay_frac_max: 0.1 # Maximum time fraction of a single shift added by delay
+    delay_hrs_max: 8 # Maximum accumulated delay at any point in vehicle's history
 
 localize_time_from_hexes:
   time_cols_source:
