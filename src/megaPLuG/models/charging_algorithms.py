@@ -244,17 +244,13 @@ class AbstractChargingChoiceStrategy(ABC):
             avail_hrs = dwls["dwell_hrs"][i] - delay_reduction
 
             # Manage vehicles running out of energy and resuscitating
-            max_power_mode = np.argmax(dwls["modes_avail"][i] * modes["avail_kw"])
-            avail_kwh = avail_hrs * modes["avail_kw"][max_power_mode]
             if np.isnan(cur_energy) or cur_energy < 0:  # Currently dead
-                if (
-                    avail_kwh >= veh["batt_cap"]
-                ):  # If full recharge is possible, then revive
+                if dwls["refresh"][i]:  # If we are at a refresh point, then revive
                     cur_energy = 0.0
                     cur_delay = 0.0
-                    chg = veh["batt_cap"]
-                    dly = 0.0
-                    mode = max_power_mode
+                    chg, dly, mode = choice_func(
+                        cur_energy, avail_hrs, dwls[i], veh, modes
+                    )
                 else:  # If not, then become/stay dead
                     chg = np.nan
                     dly = np.nan
