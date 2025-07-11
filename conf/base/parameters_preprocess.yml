@@ -61,7 +61,7 @@ get_optional_stop_trips:
   park_buffer_miles: 1.0
   columns:
     route_geom: trip_geom_route
-    park_point: park_point
+    park_point: geometry # Renamed from "park_point" by save and load to GeoPackage
     dist_along_miles: dist_along_miles
     hex_park: hex_id_park
     hex_end: ending_h3_8

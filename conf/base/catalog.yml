@@ -96,14 +96,14 @@ trips_routed:
   save_args:
     write_index: False
 
-# parking_formatted:
-#   type: megaPLuG.datasets.geopackage.GeoPackageDataset
-#   filepath: data/02_intermediate/parking.gpkg
-#   save_args:
-#     index: False
-#     layer: parking
-#   load_args:
-#     layer: parking
+parking_formatted:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/02_intermediate/parking.gpkg
+  save_args:
+    index: False
+    layer: parking
+  load_args:
+    layer: parking
 
 dwells:
   type: pandas.FeatherDataset
