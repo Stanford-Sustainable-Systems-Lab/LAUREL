@@ -19,7 +19,7 @@ from sklearn.preprocessing import OneHotEncoder
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.utils.geo import METERS_PER_MILE
-from megaPLuG.utils.h3 import H3_DEFAULT_RESOLUTION, str_to_h3
+from megaPLuG.utils.h3 import H3_CRS, H3_DEFAULT_RESOLUTION, str_to_h3
 from megaPLuG.utils.params import build_df_from_dict
 from megaPLuG.utils.time import total_hours
 
@@ -59,19 +59,53 @@ def calc_derived_trip_cols(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
     return trips
 
 
-def prepare_stop_locations(parks: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
+def prepare_stop_locations_public(
+    parks: gpd.GeoDataFrame, params: dict
+) -> gpd.GeoDataFrame:
     """Prepare the stop locations for optional stops."""
     pcols = params["columns"]
     parks[pcols["hex"]] = parks.geometry.apply(
         lambda pt: h3.latlng_to_cell(pt.y, pt.x, res=H3_DEFAULT_RESOLUTION)
     )
     parks = parks.rename_geometry(pcols["park_point"])
-    # Some sets of parking locations are so close together, that they fall within the
-    # same hex. The grid results will not differ if we only use one of these.
-    parks = parks.drop_duplicates(subset=pcols["hex"], keep="first")
-    parks[pcols["park_id"]] = pd.RangeIndex(stop=parks.shape[0])
     parks = parks.loc[:, params["keep_cols"]]
     return parks
+
+
+def prepare_stop_locations_private(
+    stops: pd.DataFrame, params: dict
+) -> gpd.GeoDataFrame:
+    """Prepare the stop locations for optional stops."""
+    pcols = params["columns"]
+    pts = gpd.points_from_xy(
+        x=stops[pcols["lon"]],
+        y=stops[pcols["lat"]],
+        crs=H3_CRS,
+    )
+    stops = gpd.GeoDataFrame(stops, geometry=pts)
+    stops = stops.rename_geometry(pcols["park_point"])
+
+    stops[pcols["hex"]] = stops.geometry.apply(
+        lambda pt: h3.latlng_to_cell(pt.y, pt.x, res=H3_DEFAULT_RESOLUTION)
+    )
+    stops = stops.loc[:, params["keep_cols"]]
+    return stops
+
+
+def concat_stop_locations(
+    stops_publ: gpd.GeoDataFrame, stops_priv: gpd.GeoDataFrame, params: dict
+) -> gpd.GeoDataFrame:
+    """Concatenate together the locations for optional stops from several sources."""
+    assert isinstance(stops_publ, gpd.GeoDataFrame)
+    assert isinstance(stops_priv, gpd.GeoDataFrame)
+
+    stops = pd.concat([stops_publ, stops_priv], axis=0)
+    pcols = params["columns"]
+    # Some sets of stop locations are so close together, that they fall within the
+    # same hex. The grid results will not differ if we only use one of these.
+    stops = stops.drop_duplicates(subset=pcols["hex"], keep="first")
+    stops[pcols["park_id"]] = pd.RangeIndex(stop=stops.shape[0])
+    return stops
 
 
 def get_optional_stop_trips(

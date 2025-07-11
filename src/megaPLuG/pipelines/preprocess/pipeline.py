@@ -9,11 +9,13 @@ from .nodes import (
     build_vius_scaling_totals,
     calc_derived_trip_cols,
     concat_optional_stops,
+    concat_stop_locations,
     create_dwells,
     describe_optional_stop_trips,
     format_trips_columns,
     get_optional_stop_trips,
-    prepare_stop_locations,
+    prepare_stop_locations_private,
+    prepare_stop_locations_public,
     strip_vehicle_attrs,
 )
 
@@ -52,10 +54,26 @@ def create_pipeline(**kwargs) -> Pipeline:
     opt_stops_pipe = pipeline(
         [
             node(
-                func=prepare_stop_locations,
-                inputs=["parking", "params:prepare_stop_locations"],
+                func=prepare_stop_locations_public,
+                inputs=["parking_public", "params:prepare_stop_locations_public"],
+                outputs="parking_formatted_public",
+                name="prepare_stop_locations_public",
+            ),
+            node(
+                func=prepare_stop_locations_private,
+                inputs=["parking_private", "params:prepare_stop_locations_private"],
+                outputs="parking_formatted_private",
+                name="prepare_stop_locations_private",
+            ),
+            node(
+                func=concat_stop_locations,
+                inputs=[
+                    "parking_formatted_public",
+                    "parking_formatted_private",
+                    "params:concat_stop_locations",
+                ],
                 outputs="parking_formatted",
-                name="prepare_stop_locations",
+                name="concat_stop_locations",
             ),
             node(
                 func=get_optional_stop_trips,

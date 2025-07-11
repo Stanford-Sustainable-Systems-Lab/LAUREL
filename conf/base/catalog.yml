@@ -69,9 +69,13 @@ highways:
   load_args:
     layer: North_American_Roads
 
-parking:
+parking_public:
   type: megaPLuG.datasets.shapefile.ShapefileDataset
   filepath: data/01_raw/Truck_Parking/jlaw_data_shapefile_2019/Final Public Truck Parking Locations-2019.shp
+
+parking_private:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/Data_Axle_Establishments/from_Redivis/truck_stops_by_naics_output.csv
 
 # Preprocessed datasets
 trips_formatted:
@@ -92,14 +96,14 @@ trips_routed:
   save_args:
     write_index: False
 
-parking_formatted:
-  type: megaPLuG.datasets.geopackage.GeoPackageDataset
-  filepath: data/02_intermediate/parking.gpkg
-  save_args:
-    index: False
-    layer: parking
-  load_args:
-    layer: parking
+# parking_formatted:
+#   type: megaPLuG.datasets.geopackage.GeoPackageDataset
+#   filepath: data/02_intermediate/parking.gpkg
+#   save_args:
+#     index: False
+#     layer: parking
+#   load_args:
+#     layer: parking
 
 dwells:
   type: pandas.FeatherDataset

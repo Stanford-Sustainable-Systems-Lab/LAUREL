@@ -33,14 +33,28 @@ strip_vehicle_attrs:
     - vin_gvw
   min_trips_per_veh: 2
 
-prepare_stop_locations:
+prepare_stop_locations_public:
   columns:
     hex: hex_id_park
-    park_id: park_id
     park_point: park_point
   keep_cols:
     - hex_id_park
     - park_point
+
+prepare_stop_locations_private:
+  columns:
+    hex: hex_id_park
+    park_point: park_point
+    lon: LONGITUDE
+    lat: LATITUDE
+  keep_cols:
+    - hex_id_park
+    - park_point
+
+concat_stop_locations:
+  columns:
+    park_id: park_id
+    hex: hex_id_park
 
 get_optional_stop_trips:
   projected_crs: EPSG:5072
