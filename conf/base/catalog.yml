@@ -107,11 +107,11 @@ parking_formatted:
 
 dwells:
   type: pandas.FeatherDataset
-  filepath: data/02_intermediate/dwells.feather
+  filepath: "${runtime_params:partition_data_dir, 'data/02_intermediate'}/dwells.feather"
 
 dwells_with_locations:
   type: pandas.FeatherDataset
-  filepath: data/02_intermediate/dwells_with_locations.feather
+  filepath: "${runtime_params:partition_data_dir, 'data/02_intermediate'}/dwells_with_locations.feather"
 
 vehicles_raw:
   type: pandas.FeatherDataset
