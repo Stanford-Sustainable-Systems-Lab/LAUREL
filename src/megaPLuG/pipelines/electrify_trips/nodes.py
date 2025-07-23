@@ -108,11 +108,9 @@ def calc_energy_use(dw: DwellSet, params: dict) -> DwellSet:
 def mark_critical_days(dw: DwellSet, params: dict) -> DwellSet:
     """Mark critical days, vehicle-days which cannot be achieved on a single charge."""
     refr_col = params["refresh_col"]
-    refr_locs = set(params["refresh_locations"])
-    is_refresh_location = dw.data[params["loc_col"]].isin(refr_locs)
     hrs_to_fill = dw.data[params["batt_cap_col"]] / dw.data[params["max_power_col"]]
     is_long_enough_dur = dw.data[params["dur_col"]] >= hrs_to_fill
-    dw.data[refr_col] = is_refresh_location & is_long_enough_dur
+    dw.data[refr_col] = is_long_enough_dur
 
     nrg_col_next = params["energy_col_next_trip"]
     nrg_col_shift = params["energy_col_remain_shift"]

@@ -136,8 +136,6 @@ calc_energy_use:
 
 mark_critical_days:
   loc_col: location
-  refresh_locations:
-    - depot
   dur_col: dwell_time_hrs
   max_power_col: max_power_kw_avail
   refresh_col: is_refresh
