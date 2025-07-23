@@ -20,7 +20,10 @@ summarize_vehicles:
     - 0.50
     - 0.95
     - 1.00
-  shift_refresh_col: is_refresh
+  refresh_col: is_refresh
+  location_col: location
+  refresh_locations:
+  - depot
   summary_cols:
     delay_frac: delay_frac
     shift_dur: shift_dur_hrs
