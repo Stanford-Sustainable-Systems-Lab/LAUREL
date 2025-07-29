@@ -223,6 +223,10 @@ dwell_obj_w_energy:
   type: MemoryDataset
   copy_mode: assign
 
+dwell_obj_w_refreshes:
+  type: MemoryDataset
+  copy_mode: assign
+
 dwell_obj_crit_days:
   type: MemoryDataset
   copy_mode: assign

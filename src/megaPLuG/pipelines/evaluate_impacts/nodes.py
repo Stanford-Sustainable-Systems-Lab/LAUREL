@@ -77,11 +77,7 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     logger.info(vehs["dead_time_frac"].describe(percentiles=qtls_descr))
 
     # Delay as fraction of shift duration for each vehicle
-    refr_locs = set(params["refresh_locations"])
-    is_refresh_location = dw.data[params["location_col"]].isin(refr_locs)
-    dw.data["is_refresh_shift"] = is_refresh_location & dw.data[params["refresh_col"]]
-
-    dw.data["shift_id"] = dw.data.groupby(dw.veh)["is_refresh_shift"].cumsum()
+    dw.data["shift_id"] = dw.data.groupby(dw.veh)[params["refresh_col"]].cumsum()
     dw.data["shift_id"] = dw.data.groupby(dw.veh)["shift_id"].shift(1, fill_value=0)
     dw.data["delay_inc_hrs_shift"] = dw.data.groupby(dw.veh)[
         params["delay_inc_hrs_col"]

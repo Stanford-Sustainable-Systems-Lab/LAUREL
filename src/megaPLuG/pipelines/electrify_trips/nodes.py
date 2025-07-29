@@ -105,12 +105,26 @@ def calc_energy_use(dw: DwellSet, params: dict) -> DwellSet:
     return dw
 
 
+def mark_shift_refreshes(dw: DwellSet, params: dict) -> DwellSet:
+    """Mark shifts by setting a 'refresh' column.
+
+    This is done using a time threshold, currently based on the Federal Motor Carrier
+    Safety Administration (FMCSA) hours of service regulations for commercial vehicle
+    drivers.
+    """
+    pcols = params["columns"]
+    dw.data[pcols["refresh"]] = dw.data[pcols["dur"]] >= params["min_refresh_hrs"]
+    return dw
+
+
 def mark_critical_days(dw: DwellSet, params: dict) -> DwellSet:
     """Mark critical days, vehicle-days which cannot be achieved on a single charge."""
     refr_col = params["refresh_col"]
+    crit_bnd_col = params["crit_bound_col"]
+
     hrs_to_fill = dw.data[params["batt_cap_col"]] / dw.data[params["max_power_col"]]
-    is_long_enough_dur = dw.data[params["dur_col"]] >= hrs_to_fill
-    dw.data[refr_col] = is_long_enough_dur
+    can_fully_charge = dw.data[params["dur_col"]] >= hrs_to_fill
+    dw.data[crit_bnd_col] = dw.data[refr_col] & can_fully_charge
 
     nrg_col_next = params["energy_col_next_trip"]
     nrg_col_shift = params["energy_col_remain_shift"]
@@ -119,9 +133,13 @@ def mark_critical_days(dw: DwellSet, params: dict) -> DwellSet:
         -1, fill_value=fill_val
     )
     dw.accum_masked(
-        refr_col, accum_cols=nrg_col_next, reverse=True, write_all=True, inplace=True
+        crit_bnd_col,
+        accum_cols=nrg_col_next,
+        reverse=True,
+        write_all=True,
+        inplace=True,
     )
-    dw.data = dw.data.rename(columns={f"{nrg_col_next}_{refr_col}": nrg_col_shift})
+    dw.data = dw.data.rename(columns={f"{nrg_col_next}_{crit_bnd_col}": nrg_col_shift})
 
     # Apply vehicle-specific battery capacity
     crcol = params["crit_col"]
@@ -131,11 +149,12 @@ def mark_critical_days(dw: DwellSet, params: dict) -> DwellSet:
     # assumption is to reduce public charging on days when we're sure it's unnecessary
     # Note that "boolean" is different from "bool" data type. See Pandas BooleanArray
     is_critical = dw.data[crcol].astype("boolean")
-    is_refresh = dw.data[refr_col].astype("boolean")
-    dw.data[crcol] = (is_refresh & is_critical) ^ ~(is_refresh | pd.NA)
+    is_crit_bnd = dw.data[crit_bnd_col].astype("boolean")
+    dw.data[crcol] = (is_crit_bnd & is_critical) ^ ~(is_crit_bnd | pd.NA)
     dw.data[crcol] = dw.data[crcol].groupby(dw.veh, sort=False).ffill()
     dw.data[crcol] = dw.data[crcol].fillna(True).astype(bool)
-    dw.data[refr_col] = dw.data[refr_col].fillna(False).astype(bool)
+    # dw.data[refr_col] = dw.data[refr_col].fillna(False).astype(bool)
+    dw.data.drop(columns=[crit_bnd_col], inplace=True)
     return dw
 
 
@@ -152,22 +171,23 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     flt_cols = params["filter_cols"]
     is_critical = dw.data[flt_cols["refresh"]] | dw.data[flt_cols["crit"]]
     is_long_enough = dw.data[params["dwell_time_col"]] >= 0
-    dw.data["keep_dwells"] = is_critical & is_long_enough
+    mask_col = "keep_dwells"
+    dw.data[mask_col] = is_critical & is_long_enough
 
     accum_cols_internal = [dw.trip_dist, dw.trip_dur, dw.reset]
     accum_cols_fw = accum_cols_internal + params["accum_cols_forward_extra"]
     accum_cols_rv = params["accum_cols_reverse"]
     accum_cols = accum_cols_fw + accum_cols_rv
     revs = ([False] * len(accum_cols_fw)) + ([True] * len(accum_cols_rv))
-    dw.accum_masked("keep_dwells", accum_cols=accum_cols, reverse=revs, inplace=True)
+    dw.accum_masked(mask_col, accum_cols=accum_cols, reverse=revs, inplace=True)
 
-    dw.data["keep_dwells"] = dw.data["keep_dwells"].astype("boolean")
-    dw.data["keep_dwells"] = dw.data["keep_dwells"].replace(False, pd.NA)
-    dw.data.dropna(subset="keep_dwells", inplace=True)
-    dw.data["keep_dwells"] = dw.data["keep_dwells"].astype(bool)
-    drop_cols = ["keep_dwells"] + params["drop_cols"] + accum_cols
+    dw.data[mask_col] = dw.data[mask_col].astype("boolean")
+    dw.data[mask_col] = dw.data[mask_col].replace(False, pd.NA)
+    dw.data.dropna(subset=mask_col, inplace=True)
+    dw.data[mask_col] = dw.data[mask_col].astype(bool)
+    drop_cols = [mask_col] + params["drop_cols"] + accum_cols
     dw.data = dw.data.drop(columns=drop_cols)
-    renamer = {f"{old}_keep_dwells": old for old in accum_cols}
+    renamer = {f"{old}_{mask_col}": old for old in accum_cols}
     dw.data = dw.data.rename(columns=renamer)
     dw.data[dw.reset] = dw.data[dw.reset].astype(bool)
 

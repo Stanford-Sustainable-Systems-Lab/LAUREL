@@ -19,6 +19,7 @@ from .nodes import (
     manage_charging,
     mark_critical_days,
     mark_shift_powers,
+    mark_shift_refreshes,
     merge_dwellset_node,
     prepare_mode_loc_corresp,
     prepare_modes,
@@ -112,9 +113,19 @@ def create_pipeline(**kwargs) -> Pipeline:
                 tags="frame-energy",
             ),
             node(
-                func=mark_critical_days,
+                func=mark_shift_refreshes,
                 inputs=[
                     "dwell_obj_w_energy",
+                    "params:mark_shift_refreshes",
+                ],
+                outputs="dwell_obj_w_refreshes",
+                name="mark_shift_refreshes",
+                tags="frame-spatiotemporal",
+            ),
+            node(
+                func=mark_critical_days,
+                inputs=[
+                    "dwell_obj_w_refreshes",
                     "params:mark_critical_days",
                 ],
                 outputs="dwell_obj_crit_days",
