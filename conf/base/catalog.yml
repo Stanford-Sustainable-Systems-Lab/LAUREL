@@ -191,6 +191,14 @@ dwell_obj:
   type: MemoryDataset
   copy_mode: assign
 
+dwell_obj_preprocess:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_coalesced:
+  type: MemoryDataset
+  copy_mode: assign
+
 dwell_obj_filtered_vehs:
   type: MemoryDataset
   copy_mode: assign

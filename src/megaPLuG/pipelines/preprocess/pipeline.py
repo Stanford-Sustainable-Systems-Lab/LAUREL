@@ -5,9 +5,12 @@ generated using Kedro 0.19.1
 
 from kedro.pipeline import Pipeline, node, pipeline
 
+from megaPLuG.models.dwell_sets import save_dwell_set
+
 from .nodes import (
     build_vius_scaling_totals,
     calc_derived_trip_cols,
+    coalesce_interrupted_dwells,
     concat_optional_stops,
     concat_stop_locations,
     create_dwells,
@@ -116,9 +119,21 @@ def create_pipeline(**kwargs) -> Pipeline:
             # "create_dwells_optional_stops" tag for convenience.
             node(
                 func=create_dwells,
-                inputs=["trips_with_optional", "params:create_dwells"],
-                outputs="dwells",
+                inputs=["trips_formatted", "params:create_dwells"],
+                outputs="dwell_obj_preprocess",
                 name="create_dwells",
+            ),
+            node(
+                func=coalesce_interrupted_dwells,
+                inputs=["dwell_obj_preprocess", "params:coalesce_interrupted_dwells"],
+                outputs="dwell_obj_coalesced",
+                name="coalesce_interrupted_dwells",
+            ),
+            node(
+                func=save_dwell_set,
+                inputs="dwell_obj_coalesced",
+                outputs="dwells",
+                name="save_dwell_set_preprocess",
             ),
         ],
         tags=["create_dwells", "create_dwells_optional_stops"],

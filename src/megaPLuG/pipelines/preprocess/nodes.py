@@ -17,7 +17,7 @@ import requests
 from dask.diagnostics import ProgressBar
 from sklearn.preprocessing import OneHotEncoder
 
-from megaPLuG.models.dwell_sets import DwellSet
+from megaPLuG.models.dwell_sets import CumAggFunc, DwellSet
 from megaPLuG.utils.geo import METERS_PER_MILE
 from megaPLuG.utils.h3 import H3_CRS, H3_DEFAULT_RESOLUTION, str_to_h3
 from megaPLuG.utils.params import build_df_from_dict
@@ -258,7 +258,7 @@ def strip_vehicle_attrs(
     return vehs
 
 
-def create_dwells(trips: dd.DataFrame, params: dict) -> dd.DataFrame | pd.DataFrame:
+def create_dwells(trips: dd.DataFrame, params: dict) -> DwellSet:
     """Create dwell data from trips data."""
     if params["debug_subsample"]["active"]:
         trips = trips.loc[0 : params["debug_subsample"]["n"]]
@@ -280,7 +280,71 @@ def create_dwells(trips: dd.DataFrame, params: dict) -> dd.DataFrame | pd.DataFr
         trip_dist=colnames["trip_dist"],
         trip_dur=colnames["trip_dur"],
     )
-    return dw.data
+    return dw
+
+
+def coalesce_interrupted_dwells(dw: DwellSet, params: dict) -> DwellSet:
+    """Coalesce dwells interrupted by trips with identical origin and destination which
+    are short in time and distance.
+
+    This algorithm assumes that the distances and durations for these short trips are
+    negligible for the purposes of a charging model, so they are dropped instead of
+    being accumulated. The algorithm could be modified easily to have them included.
+
+    If the distances and times do not need to be accumulated, then an alternative
+    implementation would simply drop short trips from the trips dataset before dwells
+    were created.
+    """
+    nxt_col = f"{dw.hex}_next"
+    mask_col = "is_short_circle"
+
+    max_dist = params["max_short_dist_miles"]
+    max_dur = params["max_short_dur_hrs"]
+
+    logger.info("Setting shift id column")
+    # WARNING: This code is not yet Dask compatible, especially due to inplace args
+    dw.data[nxt_col] = dw.data.groupby(dw.veh)[dw.hex].shift(-1, fill_value=0)
+    dw.data[mask_col] = ~(
+        (dw.data[nxt_col] == dw.data[dw.hex])
+        & (dw.data[dw.trip_dist] < max_dist)
+        & (dw.data[dw.trip_dur] < max_dur)
+    )
+    dw.data.drop(columns=[nxt_col], inplace=params["inplace"])
+
+    # Comments suggest some modifications to apply if distance and duration of dropped
+    # trips should be retained.
+    logger.info("Accumulating columns across coalescing dwells")
+    accum_cols = [dw.reset, dw.end]  # "trip_miles", "trip_hrs", "dwell_hrs"
+    agg_funcs = [
+        CumAggFunc.MAX,
+        CumAggFunc.MAX,
+    ]  # CumAggFunc.SUM, CumAggFunc.SUM, CumAggFunc.SUM
+
+    dw.data[dw.end] = dw.data[dw.end].astype(np.int64)
+    dw.accum_masked(
+        keep_mask_col=mask_col,
+        accum_cols=accum_cols,
+        reverse=True,
+        agg_func=agg_funcs,
+        write_all=False,
+        inplace=params["inplace"],
+    )
+    mod_col = f"{dw.end}_{mask_col}"
+    dw.data[mod_col] = pd.to_datetime(
+        dw.data[mod_col].astype("datetime64[ns]"), utc=True
+    )
+
+    logger.info("Dropping coalesced dwells")
+    dw.data[mask_col] = dw.data[mask_col].astype("boolean")
+    dw.data[mask_col] = dw.data[mask_col].replace(False, pd.NA)
+    dw.data.dropna(subset=mask_col, inplace=params["inplace"])
+    dw.data[mask_col] = dw.data[mask_col].astype(bool)
+    drop_cols = [mask_col] + accum_cols
+    dw.data = dw.data.drop(columns=drop_cols)
+    renamer = {f"{old}_{mask_col}": old for old in accum_cols}
+    dw.data = dw.data.rename(columns=renamer)
+    dw.data[dw.reset] = dw.data[dw.reset].astype(bool)
+    return dw
 
 
 def get_vius_from_url(url: str, params: dict) -> pd.DataFrame:
