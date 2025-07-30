@@ -119,7 +119,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             # "create_dwells_optional_stops" tag for convenience.
             node(
                 func=create_dwells,
-                inputs=["trips_formatted", "params:create_dwells"],
+                inputs=["trips_with_optional", "params:create_dwells"],
                 outputs="dwell_obj_preprocess",
                 name="create_dwells",
             ),
