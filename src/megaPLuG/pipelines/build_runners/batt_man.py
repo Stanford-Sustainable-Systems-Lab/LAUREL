@@ -20,7 +20,7 @@ class BatteryManageScenarioBuilder(ScenarioBuilder):
         for batt, mngr in product(batt_levels, manage_levels):
             pth = Path(self.display_name, f"batt_{batt}", mngr)
             cur_vehs = deepcopy(self.params["vehicles"])
-            cur_vehs["battery_capacity_kwh"]["values"][True][8] = batt
+            cur_vehs["battery_capacity_kwh"] = batt
             cur_mngr = deepcopy(self.params["manage_charging"])
             cur_mngr["charging_manager"] = mngr
             scn = {

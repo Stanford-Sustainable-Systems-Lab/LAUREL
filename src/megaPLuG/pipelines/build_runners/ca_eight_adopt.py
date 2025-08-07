@@ -51,10 +51,9 @@ class CalifClass8AdoptionScenarioBuilder(ScenarioBuilder):
 
             cur_vehs = deepcopy(self.params["vehicles"])
             consump_vals = cur_vehs["consump_rate_kwh_per_mi"]["values"]
-            cur_vehs["battery_capacity_kwh"]["values"] = {
-                True: {8: range * consump_vals[True][8]},
-                False: {8: range * consump_vals[False][8]},
-            }
+            cur_vehs["battery_capacity_kwh"]["values"] = multiply_dict_leaves(
+                consump_vals, range
+            )
 
             cur_powers = deepcopy(self.params["locations"])
             cur_powers["max_power_kw"]["values"] = {
@@ -116,3 +115,12 @@ class CalifClass8AdoptionScenarioReader(ScenarioReader):
         return self.concat_name_components(
             adopt_pct, range_mi, depot_kw, enroute_kw, manage
         )
+
+
+def multiply_dict_leaves(d, scalar):
+    """Multiply all leaf values in a dictionary by a scalar."""
+    if isinstance(d, dict):
+        return {k: multiply_dict_leaves(v, scalar) for k, v in d.items()}
+    else:
+        # Leaf node - multiply by scalar
+        return d * scalar

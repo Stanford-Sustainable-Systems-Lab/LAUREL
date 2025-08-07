@@ -38,8 +38,7 @@ class SenseScenarioBuilder(ScenarioBuilder):
             cur_vehs["consump_rate_kwh_per_mi"]["values"][False][8] = pars[
                 "consump_kwh_per_mile"
             ]
-            cur_vehs["battery_capacity_kwh"]["values"][True][8] = pars["batt_cap_kwh"]
-            cur_vehs["battery_capacity_kwh"]["values"][False][8] = pars["batt_cap_kwh"]
+            cur_vehs["battery_capacity_kwh"] = pars["batt_cap_kwh"]
             cur_vehs["minimum_times"]["plug_in_mins"] = pars["time_to_initiate_mins"]
             cur_vehs["minimum_times"]["plug_out_mins"] = pars["time_to_initiate_mins"]
             cur_vehs["soc_buffer_low"] = pars["soc_buffer_low"]

@@ -29,8 +29,7 @@ class BatteryPowerScenarioBuilder(ScenarioBuilder):
                 self.display_name, f"batt_{batt}", f"depot_{dkw}", f"mand_{mand}"
             )
             cur_vehs = deepcopy(self.params["vehicles"])
-            cur_vehs["battery_capacity_kwh"]["values"][True][8] = batt
-            cur_vehs["battery_capacity_kwh"]["values"][False][8] = batt
+            cur_vehs["battery_capacity_kwh"] = batt
 
             cur_modes = deepcopy(self.params["charging_modes"])
             cur_modes["depot"]["max_power_kw"] = dkw
