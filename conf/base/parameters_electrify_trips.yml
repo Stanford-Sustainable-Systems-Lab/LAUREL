@@ -49,29 +49,45 @@ calc_dwell_durations:
 vehicles:
   battery_capacity_kwh:
     id_columns:
-      - has_home_base
+      - primary_op_dist
       - vin_gvw
     values:
-      True:
+      0-99 Miles:
         6: 400
         7: 400
         8: 1000
-      False:
-        6: 600
-        7: 600
+      100-249 Miles:
+        6: 400
+        7: 400
+        8: 1000
+      250-499 Miles:
+        6: 400
+        7: 400
+        8: 1000
+      500+ Miles:
+        6: 400
+        7: 400
         8: 1000
   consump_rate_kwh_per_mi:
     id_columns:
-      - has_home_base
+      - primary_op_dist
       - vin_gvw
     values:
-      True:
+      0-99 Miles:
         6: 1.25
         7: 1.25
         8: 2.0
-      False:
-        6: 3.06
-        7: 3.06
+      100-249 Miles:
+        6: 1.25
+        7: 1.25
+        8: 2.0
+      250-499 Miles:
+        6: 1.25
+        7: 1.25
+        8: 2.0
+      500+ Miles:
+        6: 1.25
+        7: 1.25
         8: 2.0
   minimum_times:
     plug_in_mins: 5
