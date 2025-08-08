@@ -19,7 +19,6 @@ from megaPLuG.utils.data import IndexIntegerizer, filter_by_vals_in_cols
 from megaPLuG.utils.h3 import cells_to_region_polygons
 from megaPLuG.utils.logging import SuppressLogs
 from megaPLuG.utils.time import (
-    HOURS_PER_WEEK,
     calc_local_time,
     calc_time_zones_from_hexes,
     total_hours,
@@ -34,6 +33,7 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     # Set up arguments for describe calls
     qtls_descr = sorted(list(set(params["quantiles"]).difference([0.0, 1.0])))
 
+    ## Build explanatory variables
     # Number of deaths by vehicle
     dw.data["hex_id_prev"] = dw.data.groupby(dw.veh)[dw.hex].shift(1, fill_value=0)
     dw.data["circle_trip"] = dw.data["hex_id_prev"] == dw.data[dw.hex]
@@ -51,39 +51,19 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
         * dw.data[params["dwell_dur_col"]]
     )
 
-    n_deaths = dw.data.groupby(dw.veh, sort=False).agg(
-        n_deaths_all=pd.NamedAgg("is_death", "sum"),
-        n_deaths_circle=pd.NamedAgg("is_death_circle", "sum"),
-        dead_hrs=pd.NamedAgg("dead_hrs", "sum"),
-    )
-    n_deaths["n_deaths_addressable"] = (
-        n_deaths["n_deaths_all"] - n_deaths["n_deaths_circle"]
-    )
-    vehs = vehs.merge(n_deaths, how="inner", on=dw.veh)
-    hrs_obs = total_hours(vehs[params["obs_duration_col"]])
-    weeks_obs = hrs_obs / HOURS_PER_WEEK
-    vehs["n_deaths_all_per_week"] = vehs["n_deaths_all"] / weeks_obs
-    vehs["n_deaths_circle_per_week"] = vehs["n_deaths_circle"] / weeks_obs
-    vehs["n_deaths_addressable_per_week"] = vehs["n_deaths_addressable"] / weeks_obs
-    vehs["dead_time_frac"] = vehs["dead_hrs"] / hrs_obs
-
-    logger.info("Deaths per week per vehicle (all, including circle trips):")
-    logger.info(vehs["n_deaths_all_per_week"].describe(percentiles=qtls_descr))
-
-    logger.info("Deaths per week per vehicle (addressable):")
-    logger.info(vehs["n_deaths_addressable_per_week"].describe(percentiles=qtls_descr))
-
-    logger.info("Fraction of observed time spent in dead state per vehicle:")
-    logger.info(vehs["dead_time_frac"].describe(percentiles=qtls_descr))
-
-    # Delay as fraction of shift duration for each vehicle
+    # Shift identification
     dw.data["shift_id"] = dw.data.groupby(dw.veh)[params["refresh_col"]].cumsum()
     dw.data["shift_id"] = dw.data.groupby(dw.veh)["shift_id"].shift(1, fill_value=0)
+
+    # Delay
     dw.data["delay_inc_hrs_shift"] = dw.data.groupby(dw.veh)[
         params["delay_inc_hrs_col"]
     ].shift(1, fill_value=0)
 
-    delays = dw.data.groupby([dw.veh, "shift_id"]).agg(
+    ## Compute performance metrics by vehicle and shift
+    shifts_summ = dw.data.groupby([dw.veh, "shift_id"]).agg(
+        n_deaths_all=pd.NamedAgg("is_death", "sum"),
+        n_deaths_circle=pd.NamedAgg("is_death_circle", "sum"),
         max_delay_hrs=pd.NamedAgg(params["delay_hrs_col"], "max"),
         prev_delay_hrs_inc=pd.NamedAgg("delay_inc_hrs_shift", "first"),
         init_delay_hrs=pd.NamedAgg(params["delay_hrs_col"], "first"),
@@ -93,42 +73,82 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
         dwell_dur_last=pd.NamedAgg(params["dwell_dur_col"], "last"),
     )
 
+    # Deaths
+    shifts_summ["n_deaths_addressable"] = (
+        shifts_summ["n_deaths_all"] - shifts_summ["n_deaths_circle"]
+    )
+    shifts_summ["any_deaths_all"] = shifts_summ["n_deaths_all"] > 0
+    shifts_summ["any_deaths_addressable"] = shifts_summ["n_deaths_addressable"] > 0
+
+    # Delays
     scols = params["summary_cols"]
-    delays = delays.rename(columns={"max_delay_hrs": scols["max_delay"]})
+    shifts_summ = shifts_summ.rename(columns={"max_delay_hrs": scols["max_delay"]})
     # The delay incurred by this shift is: the cumulative delay level when the vehicle
     # arrives at the final depot MINUS the cumulative delay level when the vehicle arrives
     # at its first (non-refresh) stop in the shift PLUS the increase in delay incurred
     # at the refresh stop directly before this shift (in preparation for this shift)
-    delays[scols["shift_delay"]] = (
-        delays["final_delay_hrs"]
-        - delays["init_delay_hrs"]
-        + delays["prev_delay_hrs_inc"]
+    shifts_summ[scols["shift_delay"]] = (
+        shifts_summ["final_delay_hrs"]
+        - shifts_summ["init_delay_hrs"]
+        + shifts_summ["prev_delay_hrs_inc"]
     )
     # Vehicle death can sometimes cause cumulative delay to drop, so we ignore those
     # shifts, setting their delay to zero
-    delays[scols["shift_delay"]] = delays[scols["shift_delay"]].clip(lower=0.0)
-
-    delays[scols["shift_dur"]] = (
-        delays["trip_dur_sum"] + delays["dwell_dur_sum"] - delays["dwell_dur_last"]
-    )
-    delays[scols["shift_dur_delayed"]] = (
-        delays[scols["shift_dur"]] + delays[scols["shift_delay"]]
-    )
-    delays[scols["delay_frac"]] = (
-        delays[scols["shift_delay"]] / delays[scols["shift_dur"]]
+    shifts_summ[scols["shift_delay"]] = shifts_summ[scols["shift_delay"]].clip(
+        lower=0.0
     )
 
-    delays_grp = delays.groupby(dw.veh)
-    veh_delays_rel = delays_grp[list(scols.values())].quantile(params["quantiles"])
-    veh_delays_rel = veh_delays_rel.unstack(level=1)
+    shifts_summ[scols["shift_dur"]] = (
+        shifts_summ["trip_dur_sum"]
+        + shifts_summ["dwell_dur_sum"]
+        - shifts_summ["dwell_dur_last"]
+    )
+    shifts_summ[scols["shift_dur_delayed"]] = (
+        shifts_summ[scols["shift_dur"]] + shifts_summ[scols["shift_delay"]]
+    )
+    shifts_summ[scols["delay_frac"]] = (
+        shifts_summ[scols["shift_delay"]] / shifts_summ[scols["shift_dur"]]
+    )
+
+    # Compute performance metrics by vehicle
+    shifts_summ = shifts_summ.reset_index("shift_id")
+    vehs_summ_grp = shifts_summ.groupby(dw.veh, sort=False)
+
+    vehs_summ_point = vehs_summ_grp.agg(
+        n_shifts=pd.NamedAgg("shift_id", "count"),
+        n_shifts_w_deaths=pd.NamedAgg("any_deaths_all", "sum"),
+        n_shifts_w_deaths_addressable=pd.NamedAgg("any_deaths_addressable", "sum"),
+    )
+    vehs_summ_point["pct_shifts_w_deaths"] = (
+        vehs_summ_point["n_shifts_w_deaths"] / vehs_summ_point["n_shifts"]
+    )
+    vehs_summ_point["pct_shifts_w_deaths_addressable"] = (
+        vehs_summ_point["n_shifts_w_deaths_addressable"] / vehs_summ_point["n_shifts"]
+    )
+
+    vehs_summ_dists = vehs_summ_grp[list(scols.values())].quantile(params["quantiles"])
+    vehs_summ_dists = vehs_summ_dists.unstack(level=1)
 
     def build_col_name(val: str, pct: float) -> str:
         return f"{val}_{int(pct * 100)}"
 
-    flat_cols = [build_col_name(name, pct) for name, pct in veh_delays_rel.columns]
-    veh_delays_rel.columns = flat_cols
-    vehs = vehs.merge(veh_delays_rel, how="left", on=dw.veh)
+    flat_cols = [build_col_name(name, pct) for name, pct in vehs_summ_dists.columns]
+    vehs_summ_dists.columns = flat_cols
 
+    vehs_summ = vehs_summ_point.merge(vehs_summ_dists, how="inner", on=dw.veh)
+    vehs = vehs.merge(vehs_summ, how="inner", on=dw.veh)
+
+    ## Report results by vehicle
+    # Deaths
+    logger.info("Percent of shifts with deaths (all causes) by vehicle:")
+    logger.info(vehs["pct_shifts_w_deaths"].describe(percentiles=qtls_descr))
+
+    logger.info("Percent of shifts with deaths (addressable) by vehicle:")
+    logger.info(
+        vehs["pct_shifts_w_deaths_addressable"].describe(percentiles=qtls_descr)
+    )
+
+    # Delays
     thresh_qtl = params["delay_frac_thresh_quantile"]
     report_pctl = int(thresh_qtl * 100)
     logger.info(
@@ -148,16 +168,14 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     # Get boolean columns for which vehicles are included in load profiles
     thrs = params["thresholds"]
     vehs["dies_too_freq"] = (
-        vehs["n_deaths_all_per_week"] > thrs["n_deaths_per_week_max"]
+        vehs["pct_shifts_w_deaths"] > thrs["pct_shifts_w_deaths_max"]
     )
-    vehs["dead_time_too_long"] = vehs["dead_time_frac"] > thrs["dead_time_frac_max"]
     dftcol = build_col_name(scols["delay_frac"], thresh_qtl)
     vehs["delays_too_long_rel"] = vehs[dftcol] > thrs["delay_frac_max"]
     abstcol = build_col_name(scols["max_delay"], 1.00)
     vehs["delays_too_long_abs"] = vehs[abstcol] > thrs["delay_hrs_max"]
     vehs[params["drop_events_col"]] = (
         vehs["dies_too_freq"]
-        | vehs["dead_time_too_long"]
         | vehs["delays_too_long_rel"]
         | vehs["delays_too_long_abs"]
     )
@@ -165,7 +183,6 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     logger.info("Vehicles to be dropped [%] based on reason:")
     reasons = [
         "dies_too_freq",
-        "dead_time_too_long",
         "delays_too_long_rel",
         "delays_too_long_abs",
         params["drop_events_col"],
