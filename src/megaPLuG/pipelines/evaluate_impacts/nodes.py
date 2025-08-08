@@ -106,6 +106,11 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     shifts_summ[scols["shift_dur_delayed"]] = (
         shifts_summ[scols["shift_dur"]] + shifts_summ[scols["shift_delay"]]
     )
+
+    max_dur = params["shift_max_dur_hrs"]
+    shifts_summ[scols["shift_dur_delayed_thresh"]] = (
+        shifts_summ[scols["shift_dur"]] <= max_dur
+    ) & (shifts_summ[scols["shift_dur_delayed"]] > max_dur)
     shifts_summ[scols["delay_frac"]] = (
         shifts_summ[scols["shift_delay"]] / shifts_summ[scols["shift_dur"]]
     )
@@ -118,13 +123,19 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
         n_shifts=pd.NamedAgg("shift_id", "count"),
         n_shifts_w_deaths=pd.NamedAgg("any_deaths_all", "sum"),
         n_shifts_w_deaths_addressable=pd.NamedAgg("any_deaths_addressable", "sum"),
+        n_shifts_delayed_over_thresh=pd.NamedAgg(
+            scols["shift_dur_delayed_thresh"], "sum"
+        ),
     )
     vehs_summ_point["pct_shifts_w_deaths"] = (
         vehs_summ_point["n_shifts_w_deaths"] / vehs_summ_point["n_shifts"]
-    )
+    ) * 100
     vehs_summ_point["pct_shifts_w_deaths_addressable"] = (
         vehs_summ_point["n_shifts_w_deaths_addressable"] / vehs_summ_point["n_shifts"]
-    )
+    ) * 100
+    vehs_summ_point["pct_shifts_delayed_past_thresh"] = (
+        vehs_summ_point["n_shifts_delayed_over_thresh"] / vehs_summ_point["n_shifts"]
+    ) * 100
 
     vehs_summ_dists = vehs_summ_grp[list(scols.values())].quantile(params["quantiles"])
     vehs_summ_dists = vehs_summ_dists.unstack(level=1)
@@ -149,6 +160,11 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     )
 
     # Delays
+    logger.info(
+        f"Percent of shifts delayed past threshold time ({max_dur} hours) by vehicle:"
+    )
+    logger.info(vehs["pct_shifts_delayed_past_thresh"].describe(percentiles=qtls_descr))
+
     thresh_qtl = params["delay_frac_thresh_quantile"]
     report_pctl = int(thresh_qtl * 100)
     logger.info(

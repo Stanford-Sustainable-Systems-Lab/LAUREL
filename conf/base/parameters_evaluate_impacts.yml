@@ -28,11 +28,13 @@ summarize_vehicles:
     delay_frac: delay_frac
     shift_dur: shift_dur_hrs
     shift_dur_delayed: shift_dur_delayed_hrs
+    shift_dur_delayed_thresh: shift_dur_delayed_past_FMCSA
     shift_delay: shift_delay_hrs
     max_delay: max_delay_hrs
   drop_events_col: drop_events_all_reasons
   delay_frac_thresh_quantile: 0.95
   max_delay_thresh_quantile: 1.00
+  shift_max_dur_hrs: 14 # From FMCSA hours of service regulations
   thresholds:
     pct_shifts_w_deaths_max: 0.05 # Maximum percentage of shifts with deaths from all causes
     delay_frac_max: 0.1 # Maximum time fraction of a single shift added by delay
