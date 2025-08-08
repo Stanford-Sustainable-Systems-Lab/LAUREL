@@ -43,8 +43,8 @@ graphhopper:
             mem_start_gb: 160
             startup_delay_secs: 5
         server:
-            mem_max_gb: 48 # 8 is not enough to load the US, but 10 is
-            mem_start_gb: 48 # I learned from the following link that setting memory to be the same is important: https://www.graphhopper.com/blog/2022/06/27/host-your-own-worldwide-route-calculator-with-graphhopper/
+            mem_max_gb: 64 # 8 is not enough to load the US, but 10 is
+            mem_start_gb: 64 # I learned from the following link that setting memory to be the same is important: https://www.graphhopper.com/blog/2022/06/27/host-your-own-worldwide-route-calculator-with-graphhopper/
             startup_delay_secs: 15 # This is quite close to the shortest possible
 
 get_routes:
