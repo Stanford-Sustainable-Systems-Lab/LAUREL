@@ -9,7 +9,7 @@ dependencies = [
     "dask>=2024.5.2",
     "geopandas>=1.0.1",
     "h3~=4.1",
-    "kedro>=0.19.11",
+    "kedro==0.19.11",
     "kedro-datasets[pandas.CSVDataset,pandas.FeatherDataset,matplotlib.MatplotlibDataset,dask.ParquetDataset]>=1.0",
     "kedro-viz>=10.2.0",
     "pandas>=2.2.2",
