@@ -186,131 +186,6 @@ substation.usage:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/usage/substation.feather
 
-# Ephemeral memory datasets (used to set copy_mode)
-dwell_obj:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_preprocess:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_coalesced:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_filtered_vehs:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_filtered_vehs_categorized:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_w_veh_params:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_w_dur:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_w_avail_modes:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_w_energy:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_w_refreshes:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_crit_days:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_crit_dwells:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_w_charging:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_w_modes:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_w_delays:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_eval:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_desc_veh_locs:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_filtered_desc_veh_locs:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_inter_visit_desc_veh_locs:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_roll_desc_veh_locs:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_desc_vehs:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_filtered_desc_vehs:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_desc_dwells:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_with_locations:
-  type: MemoryDataset
-  copy_mode: assign
-
-routing_server:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_cluster:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_client:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_cluster_routing:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_client_routing:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_cluster_eval:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_client_eval:
-  type: MemoryDataset
-  copy_mode: assign
-
 # Electrification simulation datasets
 dwells_with_charging_partition:
   type: partitions.PartitionedDataset
@@ -534,3 +409,128 @@ scenario_slurm_script:
   dataset:
     type: text.TextDataset
   filename_suffix: ".sh"
+
+# Ephemeral memory datasets (used to set copy_mode)
+dwell_obj:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_preprocess:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_coalesced:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_filtered_vehs:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_filtered_vehs_categorized:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_w_veh_params:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_w_dur:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_w_avail_modes:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_w_energy:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_w_refreshes:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_crit_days:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_crit_dwells:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_w_charging:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_w_modes:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_w_delays:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_eval:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_desc_veh_locs:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_filtered_desc_veh_locs:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_inter_visit_desc_veh_locs:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_roll_desc_veh_locs:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_desc_vehs:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_filtered_desc_vehs:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_desc_dwells:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_with_locations:
+  type: MemoryDataset
+  copy_mode: assign
+
+routing_server:
+  type: MemoryDataset
+  copy_mode: assign
+
+dask_cluster:
+  type: MemoryDataset
+  copy_mode: assign
+
+dask_client:
+  type: MemoryDataset
+  copy_mode: assign
+
+dask_cluster_routing:
+  type: MemoryDataset
+  copy_mode: assign
+
+dask_client_routing:
+  type: MemoryDataset
+  copy_mode: assign
+
+dask_cluster_eval:
+  type: MemoryDataset
+  copy_mode: assign
+
+dask_client_eval:
+  type: MemoryDataset
+  copy_mode: assign
