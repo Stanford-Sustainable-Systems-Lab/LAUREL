@@ -29,7 +29,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=format_substation_boundaries_pg_and_e,
                 inputs=["substations_pg_and_e", "params:format_substations_pg_and_e"],
-                outputs="pg_and_e.substations_standard",
+                outputs="substations_standard_pg_and_e",
                 name="format_substation_geographies_ca",
             ),
             Node(
@@ -45,10 +45,10 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=describe_substation_usage,
                 inputs=[
                     "substation_profiles_formatted",
-                    "pg_and_e.substations_standard",
+                    "substations_standard_pg_and_e",
                     "params:describe_substation_usage",
                 ],
-                outputs="substation.usage",
+                outputs="substation_usage",
                 name="describe_substation_usage",
             ),
         ],
@@ -85,7 +85,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "govt_areas_contin",
                     "params:build_substation_polygons",
                 ],
-                outputs="continental.substations_standard",
+                outputs="substations_standard_continental",
                 name="build_substation_polygons",
             ),
         ],
@@ -186,25 +186,26 @@ def create_pipeline(**kwargs) -> Pipeline:
         "params:get_hexes_by_area",
         "params:get_timezones",
     }
-    geo_pipe_fixed_inputs = {
-        "states_formatted",
-        # "highways_formatted",
-        # "urban_areas_formatted",
-    }
 
     geo_pipes = [
         Pipeline(
             geo_pipe,
             namespace="pg_and_e",
             parameters=geo_pipe_fixed_params,
-            inputs=geo_pipe_fixed_inputs,
+            inputs={
+                "states_formatted": "states_formatted",
+                "substations_standard": "substations_standard_pg_and_e",
+            },
             tags="geos_pg_and_e",
         ),
         Pipeline(
             geo_pipe,
             namespace="continental",
             parameters=geo_pipe_fixed_params,
-            inputs=geo_pipe_fixed_inputs,
+            inputs={
+                "states_formatted": "states_formatted",
+                "substations_standard": "substations_standard_continental",
+            },
             tags="geos_continental",
         ),
     ]
