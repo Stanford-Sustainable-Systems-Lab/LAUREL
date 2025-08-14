@@ -21,14 +21,6 @@ advanced_clean_trucks_states:
   type: pandas.CSVDataset
   filepath: data/01_raw/ACF/act_states.csv
 
-vius_home_base_state_raw:
-  type: text.TextDataset
-  filepath: data/01_raw/VIUS/vius_home_base_state_url.txt
-
-vius_weight_class_raw:
-  type: text.TextDataset
-  filepath: data/01_raw/VIUS/vius_weight_class_url.txt
-
 state_boundaries:
   type: megaPLuG.datasets.geodatabase.GeoDataBaseDataset
   filepath: data/01_raw/Census_Geographies/cb_2023_us_all_500k.gdb
@@ -166,14 +158,6 @@ hex_region_corresp_partition:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
-vius_home_base_state:
-  type: pandas.FeatherDataset
-  filepath: data/02_intermediate/VIUS/vius_home_base_state.feather
-
-vius_weight_class:
-  type: pandas.FeatherDataset
-  filepath: data/02_intermediate/VIUS/vius_weight_class.feather
-
 vius_scaling:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vius_scaling.feather
@@ -280,10 +264,6 @@ vehicle_depots_geoms:
 clusterable_veh_locs:
   type: pandas.FeatherDataset
   filepath: data/04_feature/clusterable_veh_locs.feather
-
-profiles:
-  type: pandas.FeatherDataset
-  filepath: data/04_feature/profiles.feather
 
 canonical_veh_locs:
   type: pandas.CSVDataset
