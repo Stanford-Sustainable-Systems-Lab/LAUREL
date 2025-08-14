@@ -3,7 +3,7 @@ This is a boilerplate pipeline 'build_runners'
 generated using Kedro 0.18.13
 """
 
-from kedro.pipeline import Pipeline, node, pipeline
+from kedro.pipeline import Node, Pipeline
 
 from megaPLuG.scenarios.cmd import generate_bash_script
 
@@ -11,15 +11,15 @@ from .nodes import generate_scenario_configs
 
 
 def create_pipeline(**kwargs) -> Pipeline:
-    pipe = pipeline(
+    pipe = Pipeline(
         [
-            node(
+            Node(
                 func=generate_scenario_configs,
                 inputs=["params:scenario_params", "parameters"],
                 outputs=["scenario_configs", "scenario_builder"],
                 name="generate_scenario_configs",
             ),
-            node(
+            Node(
                 func=generate_bash_script,
                 inputs=[
                     "params:slurm_command",

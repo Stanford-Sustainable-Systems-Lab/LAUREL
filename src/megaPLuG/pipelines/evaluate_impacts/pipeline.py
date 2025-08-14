@@ -3,7 +3,7 @@ This is a boilerplate pipeline 'evaluate_impacts'
 generated using Kedro 0.19.1
 """
 
-from kedro.pipeline import Pipeline, node, pipeline
+from kedro.pipeline import Node, Pipeline
 
 from megaPLuG.models.dwell_sets import load_dwell_set
 from megaPLuG.scenarios.io import (
@@ -32,45 +32,45 @@ from .nodes import (
 
 
 def create_pipeline(**kwargs) -> Pipeline:
-    read_pipe = pipeline(
+    read_pipe = Pipeline(
         [
-            node(
+            Node(
                 func=read_scenario_partition,
                 inputs=["dwells_with_charging_partition", "params:results_partition"],
                 outputs="dwells_with_charging_eval",
                 name="collate_partitions_dwells_with_charging",
             ),
-            node(
+            Node(
                 func=load_dwell_set,
                 inputs=["dwells_with_charging_eval", "params:load_dwell_set"],
                 outputs="dwell_obj_eval",
                 name="load_dwell_set_eval_impacts",
             ),
-            node(
+            Node(
                 func=read_scenario_partition,
                 inputs=["vehicles_with_params_partition", "params:results_partition"],
                 outputs="vehicles_with_params_eval",
                 name="collate_partitions_vehicles_with_params",
             ),
-            node(
+            Node(
                 func=categorize_columns,
                 inputs="vehicles_with_params_eval",
                 outputs="vehicles_with_params_eval_categorized",
                 name="categorize_vehicles_with_params_eval",
             ),
-            node(
+            Node(
                 func=read_scenario_partition,
                 inputs=["events_partition", "params:results_partition"],
                 outputs="events_eval",
                 name="collate_partitions_events",
             ),
-            node(
+            Node(
                 func=read_scenario_partition,
                 inputs=["hex_region_corresp_partition", "params:geo_partition_eval"],
                 outputs="hex_region_corresp",
                 name="collate_partitions_hexes",
             ),
-            node(
+            Node(
                 func=categorize_columns,
                 inputs="hex_region_corresp",
                 outputs="hex_region_corresp_categorized",
@@ -80,9 +80,9 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="scenario_run",
     )
 
-    report_vehicles_pipe = pipeline(
+    report_vehicles_pipe = Pipeline(
         [
-            node(
+            Node(
                 func=summarize_vehicles,
                 inputs=[
                     "dwell_obj_eval",
@@ -92,7 +92,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="vehicles_evaluated",
                 name="summarize_vehicles",
             ),
-            node(
+            Node(
                 func=write_scenario_partition,
                 inputs=["vehicles_evaluated", "params:results_partition"],
                 outputs="vehicles_evaluated_partition",
@@ -102,9 +102,9 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags=["report_vehicles", "scenario_run"],
     )
 
-    report_profiles_scaled_prep_pipe = pipeline(
+    report_profiles_scaled_prep_pipe = Pipeline(
         [
-            node(
+            Node(
                 func=get_merge_params,
                 inputs=[
                     "params:assign_metadata_location",
@@ -116,7 +116,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="merge_params_locations",
                 name="get_merge_params_locations",
             ),
-            node(
+            Node(
                 func=merge_dataframes_node,
                 inputs=[
                     "events_eval",
@@ -126,7 +126,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="events_w_regions",
                 name="assign_metadata_location",
             ),
-            node(
+            Node(
                 func=get_merge_params,
                 inputs=[
                     "params:assign_metadata_vehicle",
@@ -138,7 +138,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="merge_params_vehicles",
                 name="get_merge_params_vehicles",
             ),
-            node(
+            Node(
                 func=merge_dataframes_node,
                 inputs=[
                     "events_w_regions",
@@ -148,13 +148,13 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="events_w_metadata",
                 name="assign_metadata_vehicles_to_events",
             ),
-            node(
+            Node(
                 func=filter_events,  # TODO: Add location filtering to this
                 inputs=["events_w_metadata", "params:filter_events"],
                 outputs="events_filtered",
                 name="filter_events",
             ),
-            node(
+            Node(
                 func=localize_time_from_hexes,
                 inputs=[
                     "events_filtered",
@@ -164,7 +164,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="events_w_local_time",
                 name="localize_time_from_hexes",
             ),
-            node(
+            Node(
                 func=slice_vehicle_windows,
                 inputs=[
                     "events_w_local_time",
@@ -174,19 +174,19 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="slices",
                 name="slice_vehicle_windows",
             ),
-            node(
+            Node(
                 func=filter_slices_time,
                 inputs=["slices", "params:slice_events", "params:eval_columns"],
                 outputs="slices_filtered",
                 name="filter_slices_of_events",
             ),
-            node(
+            Node(
                 func=build_slice_frame,
                 inputs=["vehicles_evaluated", "params:build_slice_frame"],
                 outputs="slice_frame",
                 name="build_slice_frame",
             ),
-            node(
+            Node(
                 func=merge_dataframes_node,
                 inputs=[
                     "slice_frame",
@@ -196,7 +196,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="slice_frame_w_metadata",
                 name="assign_metadata_vehicles_to_slice_frame",
             ),
-            node(
+            Node(
                 func=filter_slices_time,
                 inputs=[
                     "slice_frame_w_metadata",
@@ -206,13 +206,13 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="slice_frame_filtered",
                 name="filter_slices_of_slice_frame",
             ),
-            node(
+            Node(
                 func=build_sampling_totals,
                 inputs=["adoption_scenarios", "params:build_sampling_totals"],
                 outputs="sampling_totals",
                 name="build_sampling_totals",
             ),
-            node(
+            Node(
                 func=start_dask_node,
                 inputs="params:dask_eval",
                 outputs=["dask_cluster_eval", "dask_client_eval"],
@@ -222,15 +222,15 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="scenario_run",
     )
 
-    report_profiles_scaled_pipe = pipeline(
+    report_profiles_scaled_pipe = Pipeline(
         [
-            node(
+            Node(
                 func=build_eval_columns,
                 inputs=["params:eval_columns", "params:group_columns"],
                 outputs="eval_columns",
                 name="build_eval_columns",
             ),
-            node(
+            Node(
                 func=sample_vehicle_windows,
                 inputs=[
                     "slices_filtered",
@@ -244,7 +244,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs=["bootstrap_profiles", "report_by_region_energies"],
                 name="sample_vehicle_windows",
             ),
-            node(
+            Node(
                 func=summarize_vehicle_window_quantiles,
                 inputs=[
                     "bootstrap_profiles",
@@ -255,13 +255,13 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="report_by_region_quantiles",
                 name="summarize_vehicle_window_quantiles",
             ),
-            node(
+            Node(
                 func=write_scenario_partition,
                 inputs=["report_by_region_quantiles", "params:results_partition"],
                 outputs="report_by_region_quantiles_partition",
                 name="write_scenario_partition_hexes_quants",
             ),
-            node(
+            Node(
                 func=write_scenario_partition,
                 inputs=["report_by_region_energies", "params:results_partition"],
                 outputs="report_by_region_energies_partition",
@@ -286,14 +286,14 @@ def create_pipeline(**kwargs) -> Pipeline:
     }
 
     report_profiles_pipes = [
-        pipeline(
+        Pipeline(
             report_profiles_scaled_pipe,
             namespace="substation",
             parameters=profile_group_fixed_params,
             inputs=profile_group_fixed_inputs,
             tags="scenario_run",
         ),
-        pipeline(
+        Pipeline(
             report_profiles_scaled_pipe,
             namespace="state_op_dist",
             parameters=profile_group_fixed_params,

@@ -3,7 +3,7 @@ This is a boilerplate pipeline 'compute_routes'
 generated using Kedro 0.19.3
 """
 
-from kedro.pipeline import Pipeline, node, pipeline
+from kedro.pipeline import Node, Pipeline
 
 from megaPLuG.models.routing.nodes import (
     start_routing_server_node,
@@ -21,9 +21,9 @@ from .nodes import (
 
 
 def create_pipeline(**kwargs) -> Pipeline:
-    import_pipe = pipeline(
+    import_pipe = Pipeline(
         [
-            node(
+            Node(
                 func=import_graph,
                 inputs="params:graphhopper",
                 outputs=None,
@@ -33,21 +33,21 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="import",
     )
 
-    pre_route_pipe = pipeline(
+    pre_route_pipe = Pipeline(
         [
-            node(
+            Node(
                 func=filter_routable_trips,
                 inputs=["trips_formatted", "params:filter_routable_trips"],
                 outputs="trips_routable_filtered",
                 name="filter_routable_trips",
             ),
-            node(
+            Node(
                 func=get_trip_orig_dest_points,
                 inputs=["trips_routable_filtered", "params:get_trip_orig_dest_points"],
                 outputs="trips_to_route_big_partitions",
                 name="get_trip_orig_dest_points",
             ),
-            node(
+            Node(
                 func=partition_trips,
                 inputs=["trips_to_route_big_partitions", "params:partition_trips"],
                 outputs="trips_to_route",
@@ -57,15 +57,15 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="pre_routing",
     )
 
-    route_pipe = pipeline(
+    route_pipe = Pipeline(
         [
-            node(
+            Node(
                 func=start_dask_node,
                 inputs="params:dask_routing",
                 outputs=["dask_cluster_routing", "dask_client_routing"],
                 name="start_dask_routing",
             ),
-            node(
+            Node(
                 func=start_routing_server_node,
                 inputs=[
                     "params:graphhopper",
@@ -73,7 +73,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="routing_server",
                 name="start_routing_server",
             ),
-            node(
+            Node(
                 func=get_routes_node,
                 inputs=[
                     "trips_to_route",
@@ -83,13 +83,13 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="trips_routed",
                 name="get_routes",
             ),
-            node(
+            Node(
                 func=stop_routing_server_node,
                 inputs=["routing_server", "trips_routed"],
                 outputs=None,
                 name="stop_routing_server",
             ),
-            node(
+            Node(
                 func=stop_dask_node,
                 inputs=["dask_cluster_routing", "dask_client_routing", "trips_routed"],
                 outputs=None,

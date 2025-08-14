@@ -34,6 +34,6 @@ CONFIG_LOADER_ARGS = {
 # CONTEXT_CLASS = KedroContext
 
 # Class that manages the Data Catalog.
-from kedro.io import KedroDataCatalog
+from kedro.io import DataCatalog
 
-DATA_CATALOG_CLASS = KedroDataCatalog
+DATA_CATALOG_CLASS = DataCatalog

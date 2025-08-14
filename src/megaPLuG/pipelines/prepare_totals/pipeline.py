@@ -3,7 +3,7 @@ This is a boilerplate pipeline 'prepare_totals'
 generated using Kedro 0.19.11
 """
 
-from kedro.pipeline import Pipeline, node, pipeline
+from kedro.pipeline import Node, Pipeline
 
 from megaPLuG.utils.data import filter_by_vals_in_cols
 from megaPLuG.utils.params import set_entity_params
@@ -19,27 +19,27 @@ from .nodes import (
 
 
 def create_pipeline(**kwargs) -> Pipeline:
-    vius_pipe = pipeline(
+    vius_pipe = Pipeline(
         [
-            node(
+            Node(
                 func=filter_by_vals_in_cols,
                 inputs=["vius_public_use", "params:filter_vius_in_use"],
                 outputs="vius_in_use",
                 name="filter_vius_in_use",
             ),
-            node(
+            Node(
                 func=prepare_for_merging,
                 inputs=["vius_in_use", "params:prepare_for_merging"],
                 outputs="vius_ready_to_merge",
                 name="prepare_for_merging",
             ),
-            node(
+            Node(
                 func=set_entity_params,
                 inputs=["vius_ready_to_merge", "params:vius_classifications"],
                 outputs="vius_classified",
                 name="add_vius_classes",
             ),
-            node(
+            Node(
                 func=aggregate_vius_totals,
                 inputs=["vius_classified", "params:aggregate_vius_totals"],
                 outputs="vius_aggregated",
@@ -48,15 +48,15 @@ def create_pipeline(**kwargs) -> Pipeline:
         ],
     )
 
-    adopt_pipe = pipeline(
+    adopt_pipe = Pipeline(
         [
-            node(
+            Node(
                 func=set_entity_params,
                 inputs=["ledna_adoption", "params:adoption_forecast_classifications"],
                 outputs="adoption_classified",
                 name="add_adoption_classes",
             ),
-            node(
+            Node(
                 func=aggregate_adoption_forecast_totals,
                 inputs=[
                     "adoption_classified",
@@ -68,9 +68,9 @@ def create_pipeline(**kwargs) -> Pipeline:
         ],
     )
 
-    joint_pipe = pipeline(
+    joint_pipe = Pipeline(
         [
-            node(
+            Node(
                 func=create_disaggregated_adoption,
                 inputs=[
                     "adoption_aggregated",
@@ -83,9 +83,9 @@ def create_pipeline(**kwargs) -> Pipeline:
         ],
     )
 
-    mandate_pipe = pipeline(
+    mandate_pipe = Pipeline(
         [
-            node(
+            Node(
                 func=build_mandates_by_group,
                 inputs=[
                     "advanced_clean_fleets_milestones",
@@ -95,7 +95,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="mandate_projections",
                 name="build_mandates_by_group",
             ),
-            node(
+            Node(
                 func=concat_projections_with_mandates,
                 inputs=[
                     "adoption_scenarios_no_mandates",
