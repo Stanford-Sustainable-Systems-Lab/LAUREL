@@ -79,8 +79,9 @@ eval_columns:
 substation.group_columns:
     - substation_id
 
-jurisdiction.group_columns:
+state_op_dist.group_columns:
     - state
+    - primary_op_dist
 
 stratify_columns: ${sample_slices.stratify_cols}
 

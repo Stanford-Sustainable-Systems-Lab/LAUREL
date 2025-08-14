@@ -403,23 +403,23 @@ op_segment.report_by_region_quantiles_partition:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
-jurisdiction.report_by_region_peaks_partition:
+state_op_dist.report_by_region_peaks_partition:
   type: partitions.PartitionedDataset
-  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_peaks/jurisdiction"
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_peaks/state_op_dist"
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
-jurisdiction.report_by_region_quantiles_partition:
+state_op_dist.report_by_region_quantiles_partition:
   type: partitions.PartitionedDataset
-  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_quantiles/jurisdiction"
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_quantiles/state_op_dist"
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
-jurisdiction.report_by_region_energies_partition:
+state_op_dist.report_by_region_energies_partition:
   type: partitions.PartitionedDataset
-  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_energies/jurisdiction"
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_energies/state_op_dist"
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
