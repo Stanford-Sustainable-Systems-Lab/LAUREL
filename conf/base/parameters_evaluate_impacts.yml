@@ -144,7 +144,7 @@ dask_eval:
 
 sample_slices:
     seed_for_seeds: 1
-    n_bootstraps: 5
+    n_bootstraps: 350
     stratify_cols:
       - home_base_state
       - primary_op_dist
