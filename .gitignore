@@ -175,3 +175,6 @@ containers/*
 
 # Graphhopper logs
 logs/*
+
+# Claude code files
+CLAUDE.local.md
