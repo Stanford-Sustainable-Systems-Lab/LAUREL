@@ -3,7 +3,7 @@ This is a boilerplate pipeline 'electrify_trips'
 generated using Kedro 0.19.1
 """
 
-from kedro.pipeline import Pipeline, node, pipeline
+from kedro.pipeline import Node, Pipeline
 
 from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
 from megaPLuG.scenarios.io import write_scenario_partition
@@ -28,39 +28,39 @@ from .nodes import (
 
 
 def create_pipeline(**kwargs) -> Pipeline:
-    pipe = pipeline(
+    pipe = Pipeline(
         [
-            node(
+            Node(
                 func=filter_by_vals_in_cols,
                 inputs=["vehicles_labelled", "params:filter_vehicles"],
                 outputs="vehicles_filtered",
                 name="filter_by_vals_in_cols_vehs",
             ),
-            node(
+            Node(
                 func=set_entity_params,
                 inputs=["vehicles_filtered", "params:vehicles"],
                 outputs="vehicles_with_params",
                 name="set_entity_params_vehicles",
             ),
-            node(
+            Node(
                 func=load_dwell_set,
                 inputs=["dwells_with_locations", "params:load_dwell_set"],
                 outputs="dwell_obj",
                 name="load_dwell_set_electrify_trips",
             ),
-            node(
+            Node(
                 func=filter_vehicles,
                 inputs=["dwell_obj", "vehicles_with_params"],
                 outputs="dwell_obj_filtered_vehs",
                 name="filter_vehicles",
             ),
-            node(
+            Node(
                 func=categorize_columns,
                 inputs="dwell_obj_filtered_vehs",
                 outputs="dwell_obj_filtered_vehs_categorized",
                 name="categorize_columns_electrify_trips",
             ),
-            node(
+            Node(
                 func=merge_dwellset_node,
                 inputs=[
                     "dwell_obj_filtered_vehs_categorized",
@@ -70,7 +70,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="dwell_obj_w_veh_params",
                 name="merge_dwellset_node_veh_params",
             ),
-            node(
+            Node(
                 func=calc_dwell_durations,
                 inputs=[
                     "dwell_obj_w_veh_params",
@@ -80,19 +80,19 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="calc_dwell_durations",
                 tags="frame-spatiotemporal",
             ),
-            node(
+            Node(
                 func=prepare_modes,
                 inputs="params:charging_modes",
                 outputs="charging_modes",
                 name="prepare_modes",
             ),
-            node(
+            Node(
                 func=prepare_mode_loc_corresp,
                 inputs=["charging_modes", "params:mode_location_corresp"],
                 outputs="mode_loc_corresp",
                 name="prepare_mode_loc_corresp",
             ),
-            node(
+            Node(
                 func=merge_dwellset_node,
                 inputs=[
                     "dwell_obj_w_dur",
@@ -102,7 +102,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="dwell_obj_w_avail_modes",
                 name="merge_dwellset_node_avail_modes",
             ),
-            node(
+            Node(
                 func=calc_energy_use,
                 inputs=[
                     "dwell_obj_w_avail_modes",
@@ -112,7 +112,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="calc_energy_use",
                 tags="frame-energy",
             ),
-            node(
+            Node(
                 func=mark_shift_refreshes,
                 inputs=[
                     "dwell_obj_w_energy",
@@ -122,7 +122,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="mark_shift_refreshes",
                 tags="frame-spatiotemporal",
             ),
-            node(
+            Node(
                 func=mark_critical_days,
                 inputs=[
                     "dwell_obj_w_refreshes",
@@ -132,21 +132,21 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="mark_critical_days",
                 tags="frame-spatiotemporal",
             ),
-            node(
+            Node(
                 func=filter_dwells,
                 inputs=["dwell_obj_crit_days", "params:filter_dwells"],
                 outputs="dwell_obj_crit_dwells",
                 name="filter_dwells",
                 tags="frame-spatiotemporal",
             ),
-            node(
+            Node(
                 func=mark_shift_powers,
                 inputs=["dwell_obj_crit_dwells", "params:mark_shift_powers"],
                 outputs="dwell_obj_shift_powers",
                 name="mark_shift_powers",
                 tags="frame-charging_choice",
             ),
-            node(
+            Node(
                 func=simulate_charging_choice,
                 inputs=[
                     "dwell_obj_shift_powers",
@@ -158,7 +158,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="simulate_charging_choice",
                 tags="frame-charging_choice",
             ),
-            node(
+            Node(
                 func=merge_dwellset_node,
                 inputs=[
                     "dwell_obj_w_charging",
@@ -168,13 +168,13 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="dwell_obj_w_modes",
                 name="merge_dwellset_node_chosen_mode",
             ),
-            node(
+            Node(
                 func=apply_delays,
                 inputs=["dwell_obj_w_modes", "params:apply_delays"],
                 outputs="dwell_obj_w_delays",
                 name="apply_delays",
             ),
-            node(
+            Node(
                 func=manage_charging,
                 inputs=[
                     "dwell_obj_w_delays",
@@ -184,25 +184,25 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="manage_charging",
                 tags="frame-charging_management",
             ),
-            node(
+            Node(
                 func=save_dwell_set,
                 inputs="dwell_obj_w_charging",
                 outputs="dwells_with_charging",
                 name="save_dwell_set",
             ),
-            node(
+            Node(
                 func=write_scenario_partition,
                 inputs=["dwells_with_charging", "params:results_partition"],
                 outputs="dwells_with_charging_partition",
                 name="write_scenario_partition_dwells",
             ),
-            node(
+            Node(
                 func=write_scenario_partition,
                 inputs=["events", "params:results_partition"],
                 outputs="events_partition",
                 name="write_scenario_partition_events",
             ),
-            node(
+            Node(
                 func=write_scenario_partition,
                 inputs=["vehicles_with_params", "params:results_partition"],
                 outputs="vehicles_with_params_partition",

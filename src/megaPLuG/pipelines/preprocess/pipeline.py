@@ -3,7 +3,7 @@ This is a boilerplate pipeline 'preprocess'
 generated using Kedro 0.19.1
 """
 
-from kedro.pipeline import Pipeline, node, pipeline
+from kedro.pipeline import Node, Pipeline
 
 from megaPLuG.models.dwell_sets import save_dwell_set
 
@@ -24,15 +24,15 @@ from .nodes import (
 
 
 def create_pipeline(**kwargs) -> Pipeline:
-    format_pipe = pipeline(
+    format_pipe = Pipeline(
         [
-            node(
+            Node(
                 func=format_trips_columns,
                 inputs=["navistar", "params:format_columns"],
                 outputs="trips_formatted_no_derived",
                 name="format_trips_columns",
             ),
-            node(
+            Node(
                 func=calc_derived_trip_cols,
                 inputs=["trips_formatted_no_derived", "params:trip_derived_cols"],
                 outputs="trips_formatted",
@@ -42,9 +42,9 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="format_trips",
     )
 
-    veh_pipe = pipeline(
+    veh_pipe = Pipeline(
         [
-            node(
+            Node(
                 func=strip_vehicle_attrs,
                 inputs=["trips_formatted", "params:strip_vehicle_attrs"],
                 outputs="vehicles_raw",
@@ -54,21 +54,21 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="strip_vehicles",
     )
 
-    opt_stops_pipe = pipeline(
+    opt_stops_pipe = Pipeline(
         [
-            node(
+            Node(
                 func=prepare_stop_locations_public,
                 inputs=["parking_public", "params:prepare_stop_locations_public"],
                 outputs="parking_formatted_public",
                 name="prepare_stop_locations_public",
             ),
-            node(
+            Node(
                 func=prepare_stop_locations_private,
                 inputs=["parking_private", "params:prepare_stop_locations_private"],
                 outputs="parking_formatted_private",
                 name="prepare_stop_locations_private",
             ),
-            node(
+            Node(
                 func=concat_stop_locations,
                 inputs=[
                     "parking_formatted_public",
@@ -78,7 +78,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="parking_formatted",
                 name="concat_stop_locations",
             ),
-            node(
+            Node(
                 func=get_optional_stop_trips,
                 inputs=[
                     "trips_routed",  # Use the `compute_routes` pipeline to get this
@@ -88,7 +88,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="optional_stop_trips_raw",
                 name="get_optional_stop_trips",
             ),
-            node(
+            Node(
                 func=describe_optional_stop_trips,
                 inputs=[
                     "optional_stop_trips_raw",
@@ -97,7 +97,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="optional_stop_trips",
                 name="describe_optional_stop_trips",
             ),
-            node(
+            Node(
                 func=concat_optional_stops,
                 inputs=[
                     "trips_formatted",
@@ -111,25 +111,25 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="create_dwells_optional_stops",
     )
 
-    dwell_pipe = pipeline(
+    dwell_pipe = Pipeline(
         [
             # If you want optional stops, then use "trips_with_optional" as the input.
             # Otherwise, use "trips_formatted". Also, if you want optional stops, run
             # the `optional_stops` and this `create_dwells` pipeline together, using the
             # "create_dwells_optional_stops" tag for convenience.
-            node(
+            Node(
                 func=create_dwells,
                 inputs=["trips_with_optional", "params:create_dwells"],
                 outputs="dwell_obj_preprocess",
                 name="create_dwells",
             ),
-            node(
+            Node(
                 func=coalesce_interrupted_dwells,
                 inputs=["dwell_obj_preprocess", "params:coalesce_interrupted_dwells"],
                 outputs="dwell_obj_coalesced",
                 name="coalesce_interrupted_dwells",
             ),
-            node(
+            Node(
                 func=save_dwell_set,
                 inputs="dwell_obj_coalesced",
                 outputs="dwells",
@@ -139,9 +139,9 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags=["create_dwells", "create_dwells_optional_stops"],
     )
 
-    scale_pipe = pipeline(
+    scale_pipe = Pipeline(
         [
-            node(
+            Node(
                 func=build_vius_scaling_totals,
                 inputs=[
                     "vius_public_use",

@@ -125,7 +125,7 @@ vehicle_location_pairs_labelled:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vehicle_location_pairs_labelled.feather
 
-continental.substations_standard:
+substations_standard_continental:
     type: megaPLuG.datasets.geopackage.GeoPackageDataset
     filepath: data/02_intermediate/substation_geographies/continental.gpkg
     save_args:
@@ -134,7 +134,7 @@ continental.substations_standard:
     load_args:
       layer: substations
 
-pg_and_e.substations_standard:
+substations_standard_pg_and_e:
     type: megaPLuG.datasets.geopackage.GeoPackageDataset
     filepath: data/02_intermediate/substation_geographies/pg_and_e.gpkg
     save_args:
@@ -166,7 +166,7 @@ adoption_scenarios:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/adoption_scenarios.feather
 
-substation.usage:
+substation_usage:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/usage/substation.feather
 
