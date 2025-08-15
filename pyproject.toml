@@ -79,3 +79,7 @@ select = [
     "PL", # Pylint
 ]
 ignore = ["E501", "PLR0913"]  # Don't report line-too-long
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PLR2004"]
+
