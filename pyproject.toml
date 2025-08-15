@@ -52,6 +52,9 @@ dev-dependencies = [
     "pyinstrument>=5.0.1",
     "nbstripout>=0.8.1",
     "memray>=1.17.2",
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+    "pytest-mock>=3.14.1",
 ]
 
 [tool.hatch.metadata]
