@@ -1,21 +1,21 @@
 """Unit tests for megaPLuG.models.summarize module.
 
-This module tests the EventExpander and NonzeroGroupedSummarizer classes using pytest.
+This module tests the IntervalBeginSpreader and NonzeroGroupedSummarizer classes using pytest.
 """
 
 import numpy as np
 import pandas as pd
 import pytest
-from megaPLuG.models.summarize import EventExpander
+from megaPLuG.models.summarize import IntervalBeginSpreader
 
 
-class TestEventExpander:
-    """Test cases for EventExpander class."""
+class TestIntervalBeginSpreader:
+    """Test cases for IntervalBeginSpreader class."""
 
     @pytest.fixture
-    def expander(self):
-        """Fixture for EventExpander instance."""
-        return EventExpander(
+    def spreader(self):
+        """Fixture for IntervalBeginSpreader instance."""
+        return IntervalBeginSpreader(
             time_col="timestamp",
             dur_col="duration",
             value_col="power",
@@ -24,8 +24,8 @@ class TestEventExpander:
         )
 
     @pytest.fixture
-    def sample_events(self):
-        """Fixture for sample events DataFrame."""
+    def sample_obs(self):
+        """Fixture for sample obs DataFrame."""
         return pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
@@ -40,7 +40,7 @@ class TestEventExpander:
 
     def test_init_valid_parameters(self):
         """Test initialization with valid parameters."""
-        expander = EventExpander(
+        spreader = IntervalBeginSpreader(
             time_col="time",
             dur_col="dur",
             value_col="val",
@@ -48,33 +48,33 @@ class TestEventExpander:
             freq="15min",
         )
 
-        assert expander.time_col == "time"
-        assert expander.dur_col == "dur"
-        assert expander.value_col == "val"
-        assert expander.group_cols == ["group1", "group2"]
-        assert expander.freq == "15min"
+        assert spreader.time_col == "time"
+        assert spreader.dur_col == "dur"
+        assert spreader.value_col == "val"
+        assert spreader.group_cols == ["group1", "group2"]
+        assert spreader.freq == "15min"
 
     def test_init_empty_group_cols(self):
         """Test initialization with empty group_cols list."""
-        expander = EventExpander(
+        spreader = IntervalBeginSpreader(
             time_col="time", dur_col="dur", value_col="val", group_cols=[], freq="1h"
         )
 
-        assert expander.group_cols == []
+        assert spreader.group_cols == []
 
-    def test_expand_events_no_expansion_needed(self, expander, sample_events):
-        """Test events that don't cross time boundaries."""
-        result = expander.expand_events(sample_events)
+    def test_expand_obs_no_expansion_needed(self, spreader, sample_obs):
+        """Test obs that don't cross time boundaries."""
+        result = spreader.spread(sample_obs)
 
-        # Should return original events since no expansion is needed
-        expected_cols = expander.group_cols + [expander.time_col, expander.value_col]
+        # Should return original obs since no expansion is needed
+        expected_cols = spreader.group_cols + [spreader.time_col, spreader.value_col]
         assert list(result.columns) == expected_cols
-        assert len(result) == len(sample_events)
+        assert len(result) == len(sample_obs)
 
-    def test_expand_events_single_expansion(self, expander):
+    def test_expand_obs_single_expansion(self, spreader):
         """Test event spanning exactly 2 time periods."""
         # Events with different expansion needs
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -86,18 +86,18 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events)
+        result = spreader.spread(obs)
 
         # Should have more rows due to expansion
-        assert len(result) >= len(events)
+        assert len(result) >= len(obs)
 
         # Check that power value is preserved
-        assert all(result["power"] == 100.0)
+        assert all(result["power"] == np.array([100.0, 100.0, 150.0]))
 
-    def test_expand_events_multiple_expansions(self, expander):
+    def test_expand_obs_multiple_expansions(self, spreader):
         """Test event spanning multiple time periods."""
         # Events with different expansion needs
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -109,15 +109,15 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events)
+        result = spreader.spread(obs)
 
         # Should have expanded rows
         expanded_rows = result[result["power"] == 200.0]
         assert len(expanded_rows) > 1
 
-    def test_expand_events_different_frequencies(self):
+    def test_expand_obs_different_frequencies(self):
         """Test with different frequency settings."""
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -130,7 +130,7 @@ class TestEventExpander:
         )
 
         # Test with 15-minute frequency
-        expander_15min = EventExpander(
+        spreader_15min = IntervalBeginSpreader(
             time_col="timestamp",
             dur_col="duration",
             value_col="power",
@@ -138,15 +138,15 @@ class TestEventExpander:
             freq="15min",
         )
 
-        result = expander_15min.expand_events(events)
+        result = spreader_15min.spread(obs)
 
         # Should have more expanded rows with finer granularity
         expanded_rows = result[result["power"] == 100.0]
         assert len(expanded_rows) > 1
 
-    def test_timezone_naive_input(self, expander):
+    def test_timezone_naive_input(self, spreader):
         """Test DataFrame with timezone-naive timestamps."""
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -158,15 +158,15 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events)
+        result = spreader.spread(obs)
 
         # Should process without errors
         assert isinstance(result, pd.DataFrame)
         assert len(result) > 0
 
-    def test_timezone_utc_input(self, expander):
+    def test_timezone_utc_input(self, spreader):
         """Test DataFrame with UTC timestamps."""
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -178,15 +178,15 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events)
+        result = spreader.spread(obs)
 
         # Should process without errors
         assert isinstance(result, pd.DataFrame)
         assert len(result) > 0
 
-    def test_timezone_other_raises_error(self, expander):
+    def test_timezone_other_raises_error(self, spreader):
         """Test that non-UTC/non-naive timezones raise RuntimeError."""
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -199,11 +199,11 @@ class TestEventExpander:
         )
 
         with pytest.raises(RuntimeError, match="time zone naïve or UTC"):
-            expander.expand_events(events)
+            spreader.spread(obs)
 
-    def test_return_expansions_only_true(self, expander):
-        """Test return_expansions_only=True."""
-        events = pd.DataFrame(
+    def test_return_spreaded_only_true(self, spreader):
+        """Test return_spreaded_only=True."""
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -217,16 +217,16 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events, return_expansions_only=True)
+        result = spreader.spread(obs, return_spreaded_only=True)
 
-        # Should only contain expanded events
+        # Should only contain expanded obs
         assert len(result) > 0
-        # All returned rows should be from expanded events
+        # All returned rows should be from expanded obs
         assert all(result["power"] == 100.0)  # Only first event gets expanded
 
-    def test_return_expansions_only_false(self, expander):
-        """Test return_expansions_only=False (default)."""
-        events = pd.DataFrame(
+    def test_return_spreaded_only_false(self, spreader):
+        """Test return_spreaded_only=False (default)."""
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -240,10 +240,10 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events, return_expansions_only=False)
+        result = spreader.spread(obs, return_spreaded_only=False)
 
-        # Should contain both expanded and non-expanded events
-        assert len(result) >= len(events)
+        # Should contain both expanded and non-expanded obs
+        assert len(result) >= len(obs)
         # Should contain both power values
         power_values = result["power"].unique()
         assert 100.0 in power_values
@@ -256,9 +256,9 @@ class TestEventExpander:
             (float, 100.0),
         ],
     )
-    def test_different_value_types(self, expander, value_type, test_value):
+    def test_different_value_types(self, spreader, value_type, test_value):
         """Test with different value types."""
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -270,13 +270,13 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events)
+        result = spreader.spread(obs)
         assert isinstance(result, pd.DataFrame)
         assert len(result) > 0
 
     def test_multiple_group_columns(self):
         """Test with multiple group columns."""
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 1, 2],
                 "location": ["A", "B", "A"],
@@ -293,7 +293,7 @@ class TestEventExpander:
             }
         )
 
-        expander_multi = EventExpander(
+        spreader_multi = IntervalBeginSpreader(
             time_col="timestamp",
             dur_col="duration",
             value_col="power",
@@ -301,7 +301,7 @@ class TestEventExpander:
             freq="1h",
         )
 
-        result = expander_multi.expand_events(events)
+        result = spreader_multi.spread(obs)
 
         # Should preserve all group columns
         expected_cols = ["vehicle_id", "location", "driver", "timestamp", "power"]
@@ -309,7 +309,7 @@ class TestEventExpander:
 
     def test_single_group_column(self):
         """Test with single group column."""
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "timestamp": pd.to_datetime(
@@ -320,7 +320,7 @@ class TestEventExpander:
             }
         )
 
-        expander_single = EventExpander(
+        spreader_single = IntervalBeginSpreader(
             time_col="timestamp",
             dur_col="duration",
             value_col="power",
@@ -328,15 +328,15 @@ class TestEventExpander:
             freq="1h",
         )
 
-        result = expander_single.expand_events(events)
+        result = spreader_single.spread(obs)
 
         # Should preserve single group column
         expected_cols = ["vehicle_id", "timestamp", "power"]
         assert sorted(result.columns) == sorted(expected_cols)
 
-    def test_zero_duration_events(self, expander):
-        """Test events with zero duration."""
-        events = pd.DataFrame(
+    def test_zero_duration_obs(self, spreader):
+        """Test obs with zero duration."""
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -348,16 +348,16 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events)
+        result = spreader.spread(obs)
 
         # Should handle zero duration gracefully
         assert isinstance(result, pd.DataFrame)
-        expected_cols = expander.group_cols + [expander.time_col, expander.value_col]
+        expected_cols = spreader.group_cols + [spreader.time_col, spreader.value_col]
         assert list(result.columns) == expected_cols
 
-    def test_negative_duration_events(self, expander):
-        """Test events with negative duration."""
-        events = pd.DataFrame(
+    def test_negative_duration_obs(self, spreader):
+        """Test obs with negative duration."""
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -369,31 +369,27 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events)
+        with pytest.raises(ValueError):
+            spreader.spread(obs)
 
-        # Should handle negative duration gracefully
-        assert isinstance(result, pd.DataFrame)
-        expected_cols = expander.group_cols + [expander.time_col, expander.value_col]
-        assert list(result.columns) == expected_cols
-
-    def test_empty_dataframe(self, expander):
+    def test_empty_dataframe(self, spreader):
         """Test empty input DataFrame."""
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             columns=["vehicle_id", "location", "timestamp", "duration", "power"]
         )
-        events["timestamp"] = pd.to_datetime(events["timestamp"])
-        events["duration"] = pd.to_timedelta(events["duration"])
+        obs["timestamp"] = pd.to_datetime(obs["timestamp"])
+        obs["duration"] = pd.to_timedelta(obs["duration"])
 
-        result = expander.expand_events(events)
+        result = spreader.spread(obs)
 
         # Should return empty DataFrame with correct columns
-        expected_cols = expander.group_cols + [expander.time_col, expander.value_col]
+        expected_cols = spreader.group_cols + [spreader.time_col, spreader.value_col]
         assert list(result.columns) == expected_cols
         assert len(result) == 0
 
-    def test_minimal_dataframe(self, expander):
-        """Test DataFrame with minimal events."""
-        events = pd.DataFrame(
+    def test_minimal_dataframe(self, spreader):
+        """Test DataFrame with minimal obs."""
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -405,15 +401,15 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events)
+        result = spreader.spread(obs)
 
         assert isinstance(result, pd.DataFrame)
         assert len(result) > 0
 
-    def test_events_at_time_boundaries(self, expander):
-        """Test events starting/ending exactly on frequency boundaries."""
+    def test_obs_at_time_boundaries(self, spreader):
+        """Test obs starting/ending exactly on frequency boundaries."""
         # Events starting exactly at hour boundaries
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -425,7 +421,7 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events)
+        result = spreader.spread(obs)
 
         assert isinstance(result, pd.DataFrame)
         assert len(result) > 0
@@ -438,7 +434,7 @@ class TestEventExpander:
         grps = np.array([1])
         tstep_ns = 3600000000000  # 1 hour in nanoseconds
 
-        grps_exp, times_exp, vals_exp = EventExpander._expand_events_core(
+        grps_exp, times_exp, vals_exp = IntervalBeginSpreader._spread_core(
             starts, ends, vals, grps, tstep_ns
         )
 
@@ -448,8 +444,8 @@ class TestEventExpander:
         assert len(grps_exp) == len(times_exp)
         assert len(times_exp) == len(vals_exp)
 
-    def test_core_multiple_events(self):
-        """Test core function with multiple events."""
+    def test_core_multiple_obs(self):
+        """Test core function with multiple obs."""
         starts = np.array([0, 3600000000000], dtype=np.int64)
         ends = np.array(
             [7200000000000, 10800000000000], dtype=np.int64
@@ -458,11 +454,11 @@ class TestEventExpander:
         grps = np.array([1, 2])
         tstep_ns = 3600000000000  # 1 hour in nanoseconds
 
-        grps_exp, times_exp, vals_exp = EventExpander._expand_events_core(
+        grps_exp, times_exp, vals_exp = IntervalBeginSpreader._spread_core(
             starts, ends, vals, grps, tstep_ns
         )
 
-        # Should have expanded multiple events
+        # Should have expanded multiple obs
         assert len(grps_exp) > 2
 
         # Values should be preserved correctly
@@ -479,7 +475,7 @@ class TestEventExpander:
         grps = np.array([1])
         tstep_ns = 3600000000000  # 1 hour in nanoseconds
 
-        grps_exp, times_exp, vals_exp = EventExpander._expand_events_core(
+        grps_exp, times_exp, vals_exp = IntervalBeginSpreader._spread_core(
             starts, ends, vals, grps, tstep_ns
         )
 
@@ -495,21 +491,21 @@ class TestEventExpander:
         grps = np.array([1])
         tstep_ns = 3600000000000
 
-        grps_exp, times_exp, vals_exp = EventExpander._expand_events_core(
+        grps_exp, times_exp, vals_exp = IntervalBeginSpreader._spread_core(
             starts, ends, vals, grps, tstep_ns
         )
 
         assert isinstance(vals_exp, np.ndarray)
         assert vals_exp.dtype == dtype
 
-    def test_wrapper_function(self, expander, mocker):
+    def test_wrapper_function(self, spreader, mocker):
         """Test the wrapper function with mocked dependencies."""
         # Mock the utility functions
         mock_get_dtype = mocker.patch("megaPLuG.models.summarize.get_basic_dtype_ser")
         mock_get_dtype.side_effect = lambda x: x  # Return the series as-is
 
         # Create test data that would normally require expansion
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "timestamp": pd.to_datetime(
                     ["2024-01-01 10:30:00", "2024-01-01 14:00:00"], utc=True
@@ -520,18 +516,18 @@ class TestEventExpander:
             }
         )
 
-        result_df = expander._expand_events_wrapper(events)
+        result_df = spreader._spread_wrapper(obs)
 
         # Should return a DataFrame
         assert isinstance(result_df, pd.DataFrame)
         assert "codes" in result_df.columns
-        assert expander.time_col in result_df.columns
-        assert expander.value_col in result_df.columns
+        assert spreader.time_col in result_df.columns
+        assert spreader.value_col in result_df.columns
 
-    def test_missing_required_columns(self, expander):
+    def test_missing_required_columns(self, spreader):
         """Test behavior with missing required columns."""
         # Missing duration column
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -544,11 +540,11 @@ class TestEventExpander:
         )
 
         with pytest.raises(KeyError):
-            expander.expand_events(events)
+            spreader.spread(obs)
 
-    def test_indexed_dataframe_input(self, expander):
+    def test_indexed_dataframe_input(self, spreader):
         """Test with pre-indexed DataFrames."""
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -561,17 +557,17 @@ class TestEventExpander:
         )
 
         # Set a custom index
-        events = events.set_index(["vehicle_id", "location"])
+        obs = obs.set_index(["vehicle_id", "location"])
 
-        result = expander.expand_events(events)
+        result = spreader.spread(obs)
 
         # Should handle indexed input gracefully
         assert isinstance(result, pd.DataFrame)
         assert len(result) > 0
 
-    def test_output_column_preservation(self, expander):
+    def test_output_column_preservation(self, spreader):
         """Test that output contains correct columns."""
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -583,15 +579,15 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events)
+        result = spreader.spread(obs)
 
-        expected_cols = expander.group_cols + [expander.time_col, expander.value_col]
+        expected_cols = spreader.group_cols + [spreader.time_col, spreader.value_col]
         assert sorted(result.columns) == sorted(expected_cols)
 
-    def test_output_row_count_logic(self, expander):
+    def test_output_row_count_logic(self, spreader):
         """Test expected number of rows in output."""
         # Events that should expand to multiple time periods
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -605,14 +601,14 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events)
+        result = spreader.spread(obs)
 
         # Should have at least the original row, likely more due to expansion
         assert len(result) >= 1
 
-    def test_value_propagation(self, expander):
+    def test_value_propagation(self, spreader):
         """Test that values are correctly propagated to expanded timestamps."""
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -626,15 +622,15 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events)
+        result = spreader.spread(obs)
 
         # All power values should be 100.0 for this vehicle/location
         vehicle_data = result[(result["vehicle_id"] == 1) & (result["location"] == "A")]
         assert all(vehicle_data["power"] == 100.0)
 
-    def test_group_preservation(self, expander):
+    def test_group_preservation(self, spreader):
         """Test that group values are maintained correctly."""
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -646,7 +642,7 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events)
+        result = spreader.spread(obs)
 
         # Each expanded row should maintain its group values
         vehicle_1_data = result[result["vehicle_id"] == 1]
@@ -660,10 +656,10 @@ class TestEventExpander:
         assert all(vehicle_2_data["location"] == "B")
         assert all(vehicle_2_data["power"] == 200.0)
 
-    def test_real_world_scenario(self, expander):
+    def test_real_world_scenario(self, spreader):
         """Test with realistic vehicle telematics data."""
-        # Simulate realistic charging events
-        events = pd.DataFrame(
+        # Simulate realistic charging obs
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1001, 1002, 1001],
                 "location": ["depot_A", "depot_B", "depot_A"],
@@ -679,44 +675,44 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events)
+        result = spreader.spread(obs)
 
         # Should handle realistic scenario without errors
         assert isinstance(result, pd.DataFrame)
-        assert len(result) >= len(events)
+        assert len(result) >= len(obs)
 
         # Check that all original power values are preserved
-        original_powers = set(events["power"])
+        original_powers = set(obs["power"])
         result_powers = set(result["power"])
         assert original_powers.issubset(result_powers)
 
     @pytest.mark.performance
-    def test_large_dataset_performance(self, expander):
+    def test_large_dataset_performance(self, spreader):
         """Test performance with large datasets."""
         # Create a larger dataset
-        n_events = 1000
-        events = pd.DataFrame(
+        n_obs = 1000
+        obs = pd.DataFrame(
             {
-                "vehicle_id": np.random.randint(1, 101, n_events),
-                "location": [f"location_{i%10}" for i in range(n_events)],
-                "timestamp": pd.date_range("2024-01-01", periods=n_events, freq="1h"),
+                "vehicle_id": np.random.randint(1, 101, n_obs),
+                "location": [f"location_{i%10}" for i in range(n_obs)],
+                "timestamp": pd.date_range("2024-01-01", periods=n_obs, freq="1h"),
                 "duration": pd.to_timedelta(
-                    np.random.randint(30, 180, n_events), unit="min"
+                    np.random.randint(30, 180, n_obs), unit="min"
                 ),
-                "power": np.random.uniform(50, 200, n_events),
+                "power": np.random.uniform(50, 200, n_obs),
             }
         )
 
         # Should complete without errors (performance is measured externally)
-        result = expander.expand_events(events)
+        result = spreader.spread(obs)
 
         assert isinstance(result, pd.DataFrame)
-        assert len(result) >= len(events)
+        assert len(result) >= len(obs)
 
-    def test_timezone_conversion_consistency(self, expander):
+    def test_timezone_conversion_consistency(self, spreader):
         """Test that output timezone matches input timezone format."""
         # Test with timezone-naive input
-        events_naive = pd.DataFrame(
+        obs_naive = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -728,13 +724,13 @@ class TestEventExpander:
             }
         )
 
-        result_naive = expander.expand_events(events_naive)
+        result_naive = spreader.spread(obs_naive)
 
         # Output should also be timezone-naive
         assert result_naive["timestamp"].dt.tz is None
 
         # Test with UTC input
-        events_utc = pd.DataFrame(
+        obs_utc = pd.DataFrame(
             {
                 "vehicle_id": [1, 2],
                 "location": ["A", "B"],
@@ -746,14 +742,14 @@ class TestEventExpander:
             }
         )
 
-        result_utc = expander.expand_events(events_utc)
+        result_utc = spreader.spread(obs_utc)
 
         # Output should maintain UTC timezone
         assert result_utc["timestamp"].dt.tz is not None
 
-    def test_combined_output_structure(self, expander):
+    def test_combined_output_structure(self, spreader):
         """Test structure of combined expanded/non-expanded output."""
-        events = pd.DataFrame(
+        obs = pd.DataFrame(
             {
                 "vehicle_id": [1, 2, 3],
                 "location": ["A", "B", "C"],
@@ -769,12 +765,12 @@ class TestEventExpander:
             }
         )
 
-        result = expander.expand_events(events, return_expansions_only=False)
+        result = spreader.spread(obs, return_spreaded_only=False)
 
         # Should contain all original power values
-        original_powers = set(events["power"])
+        original_powers = set(obs["power"])
         result_powers = set(result["power"])
         assert original_powers.issubset(result_powers)
 
         # Should have at least as many rows as original
-        assert len(result) >= len(events)
+        assert len(result) >= len(obs)

@@ -9,14 +9,15 @@ from tqdm import tqdm
 from megaPLuG.utils.data import IndexIntegerizer, get_basic_dtype_ser
 
 
-class EventExpander:
-    """Expand a dataframe of events with durations so that the value column is copied
-    to one timestamp in each time block (defined by frequency) which it intersects.
+class IntervalBeginSpreader:
+    """Spread time-interval observations onto the interval beginnings of a given
+    frequency which they cover. This is achieved by creating new observations with the
+    same value as the original observation at these covered interval-beginnings.
 
     Attributes:
         time_col (str): Name of the column containing timestamps.
-        dur_col (str): Name of the column containing event durations.
-        value_col (str): Name of the column containing values to be expanded.
+        dur_col (str): Name of the column containing observation durations.
+        value_col (str): Name of the column containing values to be spread.
         group_cols (list[str]): List of column names to group by.
         freq (str): Frequency string for time block definition (e.g., '1H', '1D').
     """
@@ -35,7 +36,7 @@ class EventExpander:
         group_cols: list[str],
         freq: str,
     ) -> None:
-        """Initialize the EventExpander.
+        """Initialize the IntervalBeginSpreader.
 
         Args:
             time_col (str): Name of the column containing timestamps.
@@ -50,27 +51,27 @@ class EventExpander:
         self.group_cols = group_cols
         self.freq = freq
 
-    def expand_events(
-        self: Self, events: pd.DataFrame, return_expansions_only: bool = False
+    def spread(
+        self: Self, obs: pd.DataFrame, return_spreaded_only: bool = False
     ) -> pd.DataFrame:
-        """Expand out events to cover all intermediate time units given their start and
-        end timestamps.
+        """Spread observations to cover all intermediate time units given their start
+        times and durations.
 
         Args:
-            events (pd.DataFrame): DataFrame containing events with time, duration, and
+            obs (pd.DataFrame): DataFrame containing observations with time, duration, and
                 value columns.
-            return_expansions_only (bool, optional): If True, return only the rows \
-                corresponding to expanded events. If False, return rows for both
-                expanded and non-expanded events. Defaults to False.
+            return_spreaded_only (bool, optional): If True, return only the rows \
+                corresponding to the "spreaded" observations. If False, return rows for both
+                original and spreaded observations. Defaults to False.
 
         Returns:
-            pd.DataFrame: DataFrame with expanded events, containing group columns,
+            pd.DataFrame: DataFrame with expanded observations, containing group columns,
                 time column, and value column.
 
         Raises:
             RuntimeError: If the source time column is not timezone-naive or UTC.
         """
-        source_tz = events[self.time_col].dt.tz
+        source_tz = obs[self.time_col].dt.tz
         if source_tz == datetime.UTC:
             send_to_utc = False  # If source time is UTC, then it is already compatible
         elif source_tz is None:
@@ -78,40 +79,52 @@ class EventExpander:
         else:
             raise RuntimeError("The source time column must be time zone naïve or UTC.")
 
-        end_of_time_group = events[self.time_col].dt.ceil(self.freq)
-        end_of_event = events[self.time_col] + events[self.dur_col]
+        if np.any(obs[self.dur_col] < pd.Timedelta(0)):
+            raise ValueError(
+                "The duration column must have all non-negative durations."
+            )
+
+        end_of_time_group = obs[self.time_col].dt.ceil(self.freq)
+        end_of_event = obs[self.time_col] + obs[self.dur_col]
         is_overflow = end_of_time_group < end_of_event
-        need_expansion = events.loc[is_overflow]
+        need_spreading = obs.loc[is_overflow]
 
-        if need_expansion.index.names != [None]:
-            need_expansion = need_expansion.reset_index()
-        need_expansion = need_expansion.set_index(self.group_cols)
-        group_inter = IndexIntegerizer(int_col="codes")
-        need_expansion = group_inter.integerize(need_expansion)
-        need_expansion = need_expansion.reset_index()
-        if send_to_utc:
-            need_expansion[self.time_col] = need_expansion[
-                self.time_col
-            ].dt.tz_localize(datetime.UTC)
+        do_spreading = len(need_spreading) > 0
+        if do_spreading:
+            orig_idx = need_spreading.index.names
+            if orig_idx != [None]:
+                need_spreading = need_spreading.reset_index()
+            need_spreading = need_spreading.set_index(self.group_cols)
+            group_inter = IndexIntegerizer(int_col="codes")
+            need_spreading = group_inter.integerize(need_spreading)
+            need_spreading = need_spreading.reset_index()
+            if send_to_utc:
+                need_spreading[self.time_col] = need_spreading[
+                    self.time_col
+                ].dt.tz_localize(datetime.UTC)
 
-        expanded = self._expand_events_wrapper(need_expansion)
+            spreaded = self._spread_wrapper(need_spreading)
 
-        if send_to_utc:
-            expanded[self.time_col] = expanded[self.time_col].dt.tz_localize(None)
-        expanded = expanded.set_index("codes")
-        expanded = group_inter.deintegerize(expanded)
-        expanded = expanded.reset_index()
-
-        if return_expansions_only:
-            return expanded
+            if send_to_utc:
+                spreaded[self.time_col] = spreaded[self.time_col].dt.tz_localize(None)
+            spreaded = spreaded.set_index("codes")
+            spreaded = group_inter.deintegerize(spreaded)
+            spreaded = spreaded.reset_index()
         else:
-            keep_cols = self.group_cols + [self.time_col, self.value_col]
-            not_expanded = events.loc[:, keep_cols]
-            all_nonzero = pd.concat([expanded, not_expanded], axis=0, ignore_index=True)
-            return all_nonzero
+            spreaded = need_spreading
+            spreaded = spreaded.drop(columns=self.dur_col)
 
-    def _expand_events_wrapper(self: Self, df: pd.DataFrame) -> pd.DataFrame:
-        """Convert pandas Series to numpy arrays and set dtypes for self._expand_events_core().
+        if not return_spreaded_only:
+            keep_cols = self.group_cols + [self.time_col, self.value_col]
+            not_spread = obs.reset_index().loc[:, keep_cols]
+            result = pd.concat([spreaded, not_spread], axis=0, ignore_index=True)
+        else:
+            result = spreaded
+
+        return result
+
+    def _spread_wrapper(self: Self, df: pd.DataFrame) -> pd.DataFrame:
+        """Convert pandas Series to numpy arrays and set dtypes for self._spread_core().
 
         Args:
             df (pd.DataFrame): DataFrame with events that need expansion, must contain
@@ -125,7 +138,7 @@ class EventExpander:
         starts = df[self.time_col].dt.floor(self.freq)
         ends = (df[self.time_col] + df[self.dur_col]).dt.floor(self.freq)
 
-        out_grps, out_times, out_vals = self._expand_events_core(
+        out_grps, out_times, out_vals = self._spread_core(
             starts=starts.values.astype(np.int64),
             ends=ends.values.astype(np.int64),
             vals=get_basic_dtype_ser(df[self.value_col]).values,
@@ -142,12 +155,11 @@ class EventExpander:
                 self.value_col: out_vals,
             }
         )
-        out = out.convert_dtypes()
         return out
 
     @staticmethod
     @jit
-    def _expand_events_core(
+    def _spread_core(
         starts: np.ndarray[np.int64],
         ends: np.ndarray[np.int64],
         vals: np.ndarray,

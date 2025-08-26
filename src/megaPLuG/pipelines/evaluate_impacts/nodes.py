@@ -14,7 +14,7 @@ from tqdm.auto import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.group_times import AdaptiveTimeGrouper, HourOfWeekdayGrouper
-from megaPLuG.models.summarize import EventExpander, NonzeroGroupedSummarizer
+from megaPLuG.models.summarize import IntervalBeginSpreader, NonzeroGroupedSummarizer
 from megaPLuG.utils.data import IndexIntegerizer, filter_by_vals_in_cols
 from megaPLuG.utils.h3 import cells_to_region_polygons
 from megaPLuG.utils.logging import SuppressLogs
@@ -322,19 +322,19 @@ def discretize_sparse_profiles(
     is_zero_prof = profs[prof_col] == 0
     nonzero = profs.loc[~is_na_dur & ~is_zero_prof, :]
 
-    logger.info("Expand events to cover all groups across their duration")
+    logger.info("Spread observations to cover all intervals across their duration")
     if tz_col is not None:
         grp_cols = group_cols + [tz_col]
     else:
         grp_cols = group_cols
-    expander = EventExpander(
+    spreader = IntervalBeginSpreader(
         time_col=time_col,
         dur_col=dur_col,
         value_col=prof_col,
         group_cols=grp_cols,
         freq=freq,
     )
-    nonzero_exp = expander.expand_events(nonzero)
+    nonzero_exp = spreader.spread(nonzero)
 
     logger.info("Group events")
     grouper = grp_cols + [pd.Grouper(key=time_col, freq=freq)]
@@ -526,24 +526,24 @@ def slice_vehicle_windows(
     drop_idx = nonzero.loc[nonzero[PROF_COL] == 0].index
     nonzero = nonzero.drop(index=drop_idx)
 
-    logger.info("Expand events to cover all slices across their duration")
+    logger.info("Spread observations to cover all slices across their duration")
     grp_cols = [
         pcols["veh_col"],
         pcols["hex_col"],
     ]  # Including hex col so that it stays integer
-    expander = EventExpander(
+    spreader = IntervalBeginSpreader(
         time_col=src_time_col,
         dur_col=DUR_COL,
         value_col=PROF_COL,
         group_cols=grp_cols,
         freq=params["slice_freq"],
     )
-    inits = expander.expand_events(nonzero, return_expansions_only=True)
+    inits = spreader.spread(nonzero, return_spreaded_only=True)
     inits = inits.rename(columns={PROF_COL: params["power_col"]})
     inits["is_init"] = True
 
     logger.info(
-        "Concatenating and sorting original observations and initialization 'observations'."
+        "Concatenating and sorting original observations and initialization observations."
     )
     events_concat = events_mod.drop(columns=[PROF_COL, DUR_COL])
     events_concat["is_init"] = False
