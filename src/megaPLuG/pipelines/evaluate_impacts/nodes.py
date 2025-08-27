@@ -213,7 +213,8 @@ def filter_events(events: pd.DataFrame, params: dict) -> pd.DataFrame:
 
     any_nonzero = (events.loc[:, params["profile_cols"]] != 0).any(axis=1)
     vehicle_feasible = ~events[params["drop_events_col"]]
-    events = events.loc[any_nonzero & vehicle_feasible, :]
+    duplic_events = events.duplicated(subset=params["duplic_check_cols"], keep=False)
+    events = events.loc[any_nonzero & vehicle_feasible & ~duplic_events, :]
     events = events.dropna(subset=params["drop_na_cols"])
     events = events.drop(columns=[params["drop_events_col"]])
 
