@@ -510,15 +510,14 @@ def slice_vehicle_windows(
     if events[src_time_col].dt.tz is not None:
         raise RuntimeError("The source time column must be time zone naïve.")
 
-    # Descending sorting on power_col ensures that zero-time events will not create negative charging.
-    logger.info("Sort by vehicle and time")
-    sort_cols = [pcols["veh_col"], src_time_col, params["power_col"]]
-    events_mod = events_mod.sort_values(sort_cols, ascending=[True, True, False])
+    logger.info("Sort by vehicle and UTC time")
+    sort_cols = [pcols["veh_col"], pcols["time_col"]]
+    events_mod = events_mod.sort_values(sort_cols, ascending=[True, True])
 
     logger.info("Build profile and duration columns for internal use (will be dropped)")
     events_grp = events_mod.groupby(pcols["veh_col"], sort=False, observed=True)
     events_mod[PROF_COL] = events_grp[params["power_col"]].cumsum()
-    events_mod[DUR_COL] = events_grp[src_time_col].transform(
+    events_mod[DUR_COL] = events_grp[pcols["time_col"]].transform(
         lambda ser: ser.shift(-1) - ser
     )
 
@@ -527,7 +526,9 @@ def slice_vehicle_windows(
     drop_idx = nonzero.loc[nonzero[PROF_COL] == 0].index
     nonzero = nonzero.drop(index=drop_idx)
 
-    logger.info("Spread observations to cover all slices across their duration")
+    logger.info(
+        "Spread observations to cover all local-time slices across their duration"
+    )
     grp_cols = [
         pcols["veh_col"],
         pcols["hex_col"],
