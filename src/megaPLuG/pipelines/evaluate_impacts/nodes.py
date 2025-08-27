@@ -211,9 +211,9 @@ def filter_events(events: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Filter events down to only include the ones we want to summarize."""
     old_len = len(events)
 
-    nonzero_power = events[params["power_col"]] != 0
+    any_nonzero = (events.loc[:, params["profile_cols"]] != 0).any(axis=1)
     vehicle_feasible = ~events[params["drop_events_col"]]
-    events = events.loc[nonzero_power & vehicle_feasible, :]
+    events = events.loc[any_nonzero & vehicle_feasible, :]
     events = events.dropna(subset=params["drop_na_cols"])
     events = events.drop(columns=[params["drop_events_col"]])
 

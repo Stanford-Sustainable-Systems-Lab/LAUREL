@@ -51,7 +51,9 @@ localize_time_from_hexes:
     - time_local
 
 filter_events:
-  power_col: hex_kw_diff
+  profile_cols:
+    - hex_kw_diff
+    - plugged_diff
   drop_events_col: drop_events_all_reasons
   drop_na_cols:
     - substation_id
