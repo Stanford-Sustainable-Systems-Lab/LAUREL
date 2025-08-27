@@ -17,14 +17,14 @@ class IntervalBeginSpreader:
     Attributes:
         time_col (str): Name of the column containing timestamps.
         dur_col (str): Name of the column containing observation durations.
-        value_col (str): Name of the column containing values to be spread.
+        value_cols (list[str]): List of column names containing values to be spread.
         group_cols (list[str]): List of column names to group by.
         freq (str): Frequency string for time block definition (e.g., '1H', '1D').
     """
 
     time_col: str
     dur_col: str
-    value_col: str
+    value_cols: list[str]
     group_cols: list[str]
     freq: str
 
@@ -32,7 +32,7 @@ class IntervalBeginSpreader:
         self: Self,
         time_col: str,
         dur_col: str,
-        value_col: str,
+        value_cols: list[str] | str,
         group_cols: list[str],
         freq: str,
     ) -> None:
@@ -41,13 +41,14 @@ class IntervalBeginSpreader:
         Args:
             time_col (str): Name of the column containing timestamps.
             dur_col (str): Name of the column containing event durations.
-            value_col (str): Name of the column containing values to be expanded.
+            value_cols (list[str] | str): Name(s) of column(s) containing values to be expanded.
+                Can be a single string for backwards compatibility.
             group_cols (list[str]): List of column names to group by.
             freq (str): Frequency string for time block definition (e.g., '1H', '1D').
         """
         self.time_col = time_col
         self.dur_col = dur_col
-        self.value_col = value_col
+        self.value_cols = [value_cols] if isinstance(value_cols, str) else value_cols
         self.group_cols = group_cols
         self.freq = freq
 
@@ -66,7 +67,7 @@ class IntervalBeginSpreader:
 
         Returns:
             pd.DataFrame: DataFrame with expanded observations, containing group columns,
-                time column, and value column.
+                time column, and all value columns with original data types preserved.
 
         Raises:
             RuntimeError: If the source time column is not timezone-naive or UTC.
@@ -115,7 +116,7 @@ class IntervalBeginSpreader:
             spreaded = spreaded.drop(columns=self.dur_col)
 
         if not return_spreaded_only:
-            keep_cols = self.group_cols + [self.time_col, self.value_col]
+            keep_cols = self.group_cols + [self.time_col] + self.value_cols
             not_spread = obs.reset_index().loc[:, keep_cols]
             result = pd.concat([spreaded, not_spread], axis=0, ignore_index=True)
         else:
@@ -128,34 +129,63 @@ class IntervalBeginSpreader:
 
         Args:
             df (pd.DataFrame): DataFrame with events that need expansion, must contain
-                time_col, dur_col, value_col, and 'codes' columns.
+                time_col, dur_col, value_cols, and 'codes' columns.
 
         Returns:
             pd.DataFrame: DataFrame with expanded events containing 'codes', time_col,
-                and value_col columns.
+                and all value_cols with original data types preserved.
         """
         orig_time_type = df[self.time_col].dtype
         starts = df[self.time_col].dt.floor(self.freq)
         ends = (df[self.time_col] + df[self.dur_col]).dt.floor(self.freq)
 
-        out_grps, out_times, out_vals = self._spread_core(
-            starts=starts.values.astype(np.int64),
-            ends=ends.values.astype(np.int64),
-            vals=get_basic_dtype_ser(df[self.value_col]).values,
-            grps=get_basic_dtype_ser(df["codes"]).values,
-            tstep_ns=pd.Timedelta(self.freq).value,
-        )
+        # Common arrays for all columns
+        starts_int64 = starts.values.astype(np.int64)
+        ends_int64 = ends.values.astype(np.int64)
+        grps_array = get_basic_dtype_ser(df["codes"]).values
+        tstep_ns = pd.Timedelta(self.freq).value
 
+        # Process each value column separately
+        all_results = {}
+        for col in self.value_cols:
+            original_dtype = df[col].dtype
+            vals_array = get_basic_dtype_ser(df[col]).values
+
+            out_grps, out_times, out_vals = self._spread_core(
+                starts=starts_int64,
+                ends=ends_int64,
+                vals=vals_array,
+                grps=grps_array,
+                tstep_ns=tstep_ns,
+            )
+
+            # Convert back to original dtype
+            out_vals_typed = out_vals.astype(original_dtype)
+
+            all_results[col] = {
+                "values": out_vals_typed,
+                "groups": out_grps,
+                "times": out_times,
+            }
+
+        # Use first column's groups and times (should be identical across columns)
+        first_col = next(iter(all_results.keys()))
+        out_grps = all_results[first_col]["groups"]
+        out_times = all_results[first_col]["times"]
         out_times = pd.to_datetime(out_times.astype("datetime64[ns]"), utc=True)
         out_times = out_times.astype(orig_time_type)
-        out = pd.DataFrame(
-            {
-                "codes": out_grps,
-                self.time_col: out_times,
-                self.value_col: out_vals,
-            }
-        )
-        return out
+
+        # Build output DataFrame
+        result_dict = {
+            "codes": out_grps,
+            self.time_col: out_times,
+        }
+        for col_name, results in all_results.items():
+            result_dict[col_name] = results["values"]
+
+        result_df = pd.DataFrame(result_dict)
+
+        return result_df
 
     @staticmethod
     @jit
@@ -175,7 +205,7 @@ class IntervalBeginSpreader:
         Args:
             starts (np.ndarray[np.int64]): Array of start timestamps as integers.
             ends (np.ndarray[np.int64]): Array of end timestamps as integers.
-            vals (np.ndarray): Array of values to be expanded.
+            vals (np.ndarray): Array of values to be expanded (single column).
             grps (np.ndarray): Array of group identifiers.
             tstep_ns (int): Time step in nanoseconds.
 
@@ -183,7 +213,7 @@ class IntervalBeginSpreader:
             tuple[np.ndarray, np.ndarray, np.ndarray]: Tuple containing:
                 - grps_exp: Expanded group identifiers
                 - times_exp: Expanded timestamps
-                - vals_exp: Expanded values
+                - vals_exp: Expanded values (single column)
         """
         n_periods = starts.shape[0]
         ends_plus = ends + tstep_ns

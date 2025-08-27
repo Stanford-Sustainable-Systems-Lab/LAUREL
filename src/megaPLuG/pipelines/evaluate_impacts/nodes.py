@@ -330,7 +330,7 @@ def discretize_sparse_profiles(
     spreader = IntervalBeginSpreader(
         time_col=time_col,
         dur_col=dur_col,
-        value_col=prof_col,
+        value_cols=prof_col,
         group_cols=grp_cols,
         freq=freq,
     )
@@ -534,7 +534,7 @@ def slice_vehicle_windows(
     spreader = IntervalBeginSpreader(
         time_col=src_time_col,
         dur_col=DUR_COL,
-        value_col=PROF_COL,
+        value_cols=PROF_COL,
         group_cols=grp_cols,
         freq=params["slice_freq"],
     )

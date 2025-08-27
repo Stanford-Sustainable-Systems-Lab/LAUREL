@@ -84,3 +84,8 @@ ignore = ["E501", "PLR0913"]  # Don't report line-too-long
 "tests/*" = ["PLR2004"]
 "src/megaPLuG/settings.py" = ["I001", "F401", "E402"]
 
+[tool.pytest.ini_options]
+markers = [
+    "performance: marks tests as performance tests (may be slow)",
+]
+
