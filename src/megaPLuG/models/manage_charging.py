@@ -178,12 +178,13 @@ class MinPowerChargingManager(IndependentDwellChargingManager):
             / self.dw.data.loc[good_div, self.duration]
         )
 
-        self.dw.data[plg_cols[0]] = 1
+        nonzero_pwr = self.dw.data[pwr_cols[0]] != 0
+        self.dw.data[plg_cols[0]] = 1 * nonzero_pwr
 
         # Set values at dwell_end
         self.dw.data[time_cols[-1]] = self.dw.data[self.dw.end]
         self.dw.data[pwr_cols[-1]] = -self.dw.data[pwr_cols[0]]
-        self.dw.data[plg_cols[-1]] = -1
+        self.dw.data[plg_cols[-1]] = -1 * nonzero_pwr
         return self
 
 
@@ -200,7 +201,9 @@ class ImmediateChargingManager(IndependentDwellChargingManager):
         # Set units at dwell_start
         self.dw.data[time_cols[0]] = self.dw.data[self.dw.start]
         self.dw.data[pwr_cols[0]] = self.dw.data[self.max_power]
-        self.dw.data[plg_cols[0]] = 1
+
+        nonzero_pwr = self.dw.data[pwr_cols[0]] != 0
+        self.dw.data[plg_cols[0]] = 1 * nonzero_pwr
 
         # Set values at charge_end
         # Assumes that units are kWh, kW, and hours
@@ -219,7 +222,7 @@ class ImmediateChargingManager(IndependentDwellChargingManager):
 
         self.dw.data[time_cols[-1]] = charge_end
         self.dw.data[pwr_cols[-1]] = -self.dw.data[self.max_power]
-        self.dw.data[plg_cols[-1]] = -1
+        self.dw.data[plg_cols[-1]] = -1 * nonzero_pwr
 
         self.dw.data = self.dw.data.drop(columns=["charge_hrs"])
         return self
