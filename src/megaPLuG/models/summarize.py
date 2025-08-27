@@ -33,7 +33,7 @@ class IntervalBeginSpreader:
         time_col: str,
         dur_col: str,
         value_cols: list[str] | str,
-        group_cols: list[str],
+        group_cols: list[str] | str,
         freq: str,
     ) -> None:
         """Initialize the IntervalBeginSpreader.
@@ -41,15 +41,14 @@ class IntervalBeginSpreader:
         Args:
             time_col (str): Name of the column containing timestamps.
             dur_col (str): Name of the column containing event durations.
-            value_cols (list[str] | str): Name(s) of column(s) containing values to be expanded.
-                Can be a single string for backwards compatibility.
-            group_cols (list[str]): List of column names to group by.
+            value_cols (list[str] | str): Name(s) of column(s) containing values to be spread.
+            group_cols (list[str]): Name(s) of column(s) to group by.
             freq (str): Frequency string for time block definition (e.g., '1H', '1D').
         """
         self.time_col = time_col
         self.dur_col = dur_col
         self.value_cols = [value_cols] if isinstance(value_cols, str) else value_cols
-        self.group_cols = group_cols
+        self.group_cols = [group_cols] if isinstance(group_cols, str) else group_cols
         self.freq = freq
 
     def spread(
