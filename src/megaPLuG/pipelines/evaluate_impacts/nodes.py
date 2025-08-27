@@ -380,7 +380,7 @@ def report_by_region_quantiles(
     )
     quantiles = summer.summarize(
         events=grped_nonzero,
-        value_col=pcols["profile_col"],
+        value_cols=pcols["profile_col"],
         possible_count_col="possible_count",
     )
     return quantiles
@@ -863,7 +863,7 @@ def summarize_vehicle_window_quantiles(
     )
     quantiles = summer.summarize(
         events=profs,
-        value_col=pcols["profile_col"],
+        value_cols=pcols["profile_col"],
         possible_count_col="possible_count",
     )
     return quantiles

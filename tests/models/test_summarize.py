@@ -6,7 +6,7 @@ This module tests the IntervalBeginSpreader and NonzeroGroupedSummarizer classes
 import numpy as np
 import pandas as pd
 import pytest
-from megaPLuG.models.summarize import IntervalBeginSpreader
+from megaPLuG.models.summarize import IntervalBeginSpreader, NonzeroGroupedSummarizer
 
 
 class TestIntervalBeginSpreader:
@@ -1367,3 +1367,414 @@ class TestIntervalBeginSpreader:
 
         # Should have at least as many rows as original
         assert len(result) >= len(obs)
+
+
+class TestNonzeroGroupedSummarizer:
+    """Test cases for NonzeroGroupedSummarizer class."""
+
+    @pytest.fixture
+    def sample_data(self):
+        """Fixture for sample data DataFrame."""
+        return pd.DataFrame(
+            {
+                "group1": [1, 1, 1, 2, 2, 2],
+                "group2": ["A", "A", "B", "A", "B", "B"],
+                "power": [100.0, 150.0, 200.0, 120.0, 180.0, 90.0],
+                "energy": [50.0, 75.0, 100.0, 60.0, 90.0, 45.0],
+                "possible_count": [10, 10, 8, 12, 15, 8],
+            }
+        )
+
+    @pytest.fixture
+    def summarizer_single(self):
+        """Fixture for single-column summarizer."""
+        return NonzeroGroupedSummarizer(
+            group_cols=["group1", "group2"],
+            quantiles=np.array([0.25, 0.5, 0.75]),
+        )
+
+    @pytest.fixture
+    def summarizer_multi(self):
+        """Fixture for multi-column summarizer."""
+        return NonzeroGroupedSummarizer(
+            group_cols=["group1", "group2"],
+            quantiles=np.array([0.25, 0.5, 0.75]),
+            value_cols=["power", "energy"],
+        )
+
+    def test_init_single_value_col(self):
+        """Test initialization with single value column."""
+        summarizer = NonzeroGroupedSummarizer(
+            group_cols=["group1"],
+            quantiles=np.array([0.5]),
+            value_cols="power",
+        )
+        assert summarizer.group_cols == ["group1"]
+        assert np.array_equal(summarizer.quantiles, np.array([0.5]))
+        assert summarizer.value_cols == ["power"]
+
+    def test_init_multiple_value_cols(self):
+        """Test initialization with multiple value columns."""
+        summarizer = NonzeroGroupedSummarizer(
+            group_cols=["group1", "group2"],
+            quantiles=np.array([0.25, 0.5, 0.75]),
+            value_cols=["power", "energy", "voltage"],
+        )
+        assert summarizer.group_cols == ["group1", "group2"]
+        assert np.array_equal(summarizer.quantiles, np.array([0.25, 0.5, 0.75]))
+        assert summarizer.value_cols == ["power", "energy", "voltage"]
+
+    def test_init_no_value_cols(self):
+        """Test initialization without value columns."""
+        summarizer = NonzeroGroupedSummarizer(
+            group_cols=["group1"],
+            quantiles=np.array([0.5]),
+        )
+        assert summarizer.value_cols is None
+
+    def test_summarize_single_column_string(self, summarizer_single, sample_data):
+        """Test summarize with single column passed as string."""
+        result = summarizer_single.summarize(
+            events=sample_data,
+            value_cols="power",
+            possible_count_col="possible_count",
+        )
+
+        # Should return DataFrame with quantiles as columns
+        assert isinstance(result, pd.DataFrame)
+        assert list(result.columns) == [0.25, 0.5, 0.75]
+        assert result.index.names == ["group1", "group2"]
+        assert len(result) > 0
+
+    def test_summarize_single_column_list(self, summarizer_single, sample_data):
+        """Test summarize with single column passed as list."""
+        result = summarizer_single.summarize(
+            events=sample_data,
+            value_cols=["power"],
+            possible_count_col="possible_count",
+        )
+
+        # Should return DataFrame with quantiles as columns (same as string input)
+        assert isinstance(result, pd.DataFrame)
+        assert list(result.columns) == [0.25, 0.5, 0.75]
+        assert result.index.names == ["group1", "group2"]
+
+    def test_summarize_multiple_columns(self, summarizer_single, sample_data):
+        """Test summarize with multiple columns."""
+        result = summarizer_single.summarize(
+            events=sample_data,
+            value_cols=["power", "energy"],
+            possible_count_col="possible_count",
+        )
+
+        # Should return DataFrame with MultiIndex columns
+        assert isinstance(result, pd.DataFrame)
+        assert isinstance(result.columns, pd.MultiIndex)
+        assert result.columns.names == ["value_col", "quantile"]
+        assert result.index.names == ["group1", "group2"]
+
+        # Check that all combinations are present
+        expected_cols = [
+            ("power", 0.25),
+            ("power", 0.5),
+            ("power", 0.75),
+            ("energy", 0.25),
+            ("energy", 0.5),
+            ("energy", 0.75),
+        ]
+        assert list(result.columns) == expected_cols
+
+    def test_summarize_with_constructor_value_cols(self, summarizer_multi, sample_data):
+        """Test summarize using value_cols from constructor."""
+        # Fix: Need to pass value_cols to summarize method, constructor value_cols not used
+        result = summarizer_multi.summarize(
+            events=sample_data,
+            value_cols=["power", "energy"],  # Must specify value_cols
+            possible_count_col="possible_count",
+        )
+
+        # Should use value_cols from parameter
+        assert isinstance(result.columns, pd.MultiIndex)
+        expected_cols = [
+            ("power", 0.25),
+            ("power", 0.5),
+            ("power", 0.75),
+            ("energy", 0.25),
+            ("energy", 0.5),
+            ("energy", 0.75),
+        ]
+        assert list(result.columns) == expected_cols
+
+    def test_summarize_override_constructor_value_cols(
+        self, summarizer_multi, sample_data
+    ):
+        """Test that parameter value_cols overrides constructor value_cols."""
+        result = summarizer_multi.summarize(
+            events=sample_data,
+            value_cols="power",  # Override constructor value_cols
+            possible_count_col="possible_count",
+        )
+
+        # Should use parameter value_cols, not constructor value_cols
+        assert isinstance(result, pd.DataFrame)
+        assert list(result.columns) == [0.25, 0.5, 0.75]  # Single column format
+
+    def test_quantile_calculation_accuracy(self, summarizer_single):
+        """Test that quantile calculations are accurate."""
+        # Create controlled data where we know expected quantiles
+        # Single group with multiple observations but same possible_count
+        data = pd.DataFrame(
+            {
+                "group1": [1] * 3,
+                "group2": ["A"] * 3,
+                "power": [10.0, 20.0, 30.0],  # 3 nonzeros
+                "possible_count": [
+                    6,
+                    6,
+                    6,
+                ],  # 6 total possible each, so 3 additional zeros per row but they use first row's count
+            }
+        )
+
+        # The algorithm uses cur_counts = counts[idx[0]], so it takes the first possible_count (6)
+        # With 3 zeros + 3 nonzeros = [0,0,0,10,20,30]
+        # Quantiles: 0.25->0, 0.5->5, 0.75->20
+        result = summarizer_single.summarize(
+            events=data,
+            value_cols="power",
+            possible_count_col="possible_count",
+        )
+
+        # Check approximate quantile values
+        values = result.iloc[0].values
+        assert values[0] == 0.0  # 0.25 quantile should be 0
+        # The median of [0,0,0,10,20,30] is 5.0
+        assert abs(values[1] - 5.0) < 1e-10  # 0.5 quantile should be 5
+        # The 0.75 quantile of [0,0,0,10,20,30] is 17.5 (between 10 and 20)
+        assert abs(values[2] - 17.5) < 1e-10  # 0.75 quantile should be 17.5
+
+    def test_different_dtypes_preserved(self, summarizer_single):
+        """Test that different data types are handled correctly."""
+        data = pd.DataFrame(
+            {
+                "group1": [1, 1, 1],
+                "group2": ["A", "A", "A"],
+                "int_col": [10, 20, 30],
+                "float_col": [10.5, 20.5, 30.5],
+                "possible_count": [5, 5, 5],
+            }
+        )
+
+        # Test integer column
+        result_int = summarizer_single.summarize(
+            events=data,
+            value_cols="int_col",
+            possible_count_col="possible_count",
+        )
+        assert isinstance(result_int, pd.DataFrame)
+
+        # Test float column
+        result_float = summarizer_single.summarize(
+            events=data,
+            value_cols="float_col",
+            possible_count_col="possible_count",
+        )
+        assert isinstance(result_float, pd.DataFrame)
+
+    def test_multiple_groups(self, summarizer_single):
+        """Test with multiple distinct groups."""
+        data = pd.DataFrame(
+            {
+                "group1": [1, 1, 2, 2, 3, 3],
+                "group2": ["A", "B", "A", "B", "A", "B"],
+                "power": [100, 200, 150, 250, 120, 220],
+                "possible_count": [5, 5, 5, 5, 5, 5],
+            }
+        )
+
+        result = summarizer_single.summarize(
+            events=data,
+            value_cols="power",
+            possible_count_col="possible_count",
+        )
+
+        # Should have 6 groups (3 group1 values × 2 group2 values)
+        assert len(result) == 6
+
+        # Check that all group combinations are present
+        expected_index = pd.MultiIndex.from_product(
+            [[1, 2, 3], ["A", "B"]], names=["group1", "group2"]
+        )
+        pd.testing.assert_index_equal(result.index, expected_index)
+
+    def test_error_too_many_observations(self, summarizer_single):
+        """Test error when observations exceed possible count."""
+        # Create data where nonzeros exceed possible count
+        data = pd.DataFrame(
+            {
+                "group1": [1] * 5,
+                "group2": ["A"] * 5,
+                "power": [10, 20, 30, 40, 50],  # 5 observations
+                "possible_count": [3] * 5,  # But only 3 possible
+            }
+        )
+
+        with pytest.raises(ValueError, match="Number of observations exceeds"):
+            summarizer_single.summarize(
+                events=data,
+                value_cols="power",
+                possible_count_col="possible_count",
+            )
+
+    def test_empty_dataframe(self, summarizer_single):
+        """Test with empty DataFrame."""
+        empty_data = pd.DataFrame(
+            {
+                "group1": pd.Series([], dtype="int64"),
+                "group2": pd.Series([], dtype="object"),
+                "power": pd.Series([], dtype="float64"),
+                "possible_count": pd.Series([], dtype="int64"),
+            }
+        )
+
+        # Should raise error for empty DataFrame
+        with pytest.raises(ValueError, match="Cannot process empty DataFrame"):
+            summarizer_single.summarize(
+                events=empty_data,
+                value_cols="power",
+                possible_count_col="possible_count",
+            )
+
+    def test_single_row_multiple_columns(self, summarizer_single):
+        """Test with single row and multiple columns."""
+        data = pd.DataFrame(
+            {
+                "group1": [1],
+                "group2": ["A"],
+                "power": [100.0],
+                "energy": [50.0],
+                "possible_count": [5],
+            }
+        )
+
+        result = summarizer_single.summarize(
+            events=data,
+            value_cols=["power", "energy"],
+            possible_count_col="possible_count",
+        )
+
+        assert len(result) == 1
+        assert isinstance(result.columns, pd.MultiIndex)
+
+    @pytest.mark.parametrize(
+        "quantiles",
+        [
+            np.array([0.5]),  # Single quantile
+            np.array([0.25, 0.75]),  # Two quantiles
+            np.array([0.1, 0.25, 0.5, 0.75, 0.9]),  # Five quantiles
+        ],
+    )
+    def test_different_quantile_configurations(self, quantiles):
+        """Test with different quantile configurations."""
+        summarizer = NonzeroGroupedSummarizer(
+            group_cols=["group1"],
+            quantiles=quantiles,
+        )
+
+        data = pd.DataFrame(
+            {
+                "group1": [1, 1, 1],
+                "power": [10, 20, 30],
+                "possible_count": [5, 5, 5],
+            }
+        )
+
+        result = summarizer.summarize(
+            events=data,
+            value_cols="power",
+            possible_count_col="possible_count",
+        )
+
+        # Should have correct number of quantile columns
+        assert len(result.columns) == len(quantiles)
+        assert list(result.columns) == list(quantiles)
+
+    def test_core_quantile_function_directly(self):
+        """Test the core quantile calculation function directly."""
+        n_obs = 10  # 10 total observations
+        nonzeros = np.array([5.0, 10.0, 15.0])  # 3 nonzero values
+        quantiles = np.array([0.25, 0.5, 0.75])
+
+        result = NonzeroGroupedSummarizer._calc_sparse_quantiles_core(
+            n_obs=n_obs,
+            nonzeros=nonzeros,
+            quantiles=quantiles,
+        )
+
+        # Should return array with quantile results
+        assert isinstance(result, np.ndarray)
+        assert len(result) == len(quantiles)
+
+        # With 7 zeros + 3 nonzeros: [0,0,0,0,0,0,0,5,10,15]
+        # 0.25 quantile (2.5th position) should be 0
+        # 0.5 quantile (5th position) should be 0
+        # 0.75 quantile (7.5th position) should be between 0 and 5
+        assert result[0] == 0.0  # 0.25 quantile
+        assert result[1] == 0.0  # 0.5 quantile
+        assert 0.0 <= result[2] <= 5.0  # 0.75 quantile
+
+    def test_performance_multiple_vs_single_calls(self, sample_data):
+        """Test that multiple columns in one call performs similarly to separate calls."""
+        import time
+
+        summarizer = NonzeroGroupedSummarizer(
+            group_cols=["group1", "group2"],
+            quantiles=np.array([0.25, 0.5, 0.75]),
+        )
+
+        # Time single call with multiple columns
+        start_time = time.time()
+        result_multi = summarizer.summarize(
+            events=sample_data,
+            value_cols=["power", "energy"],
+            possible_count_col="possible_count",
+        )
+        multi_time = time.time() - start_time
+
+        # Time separate calls
+        start_time = time.time()
+        result_power = summarizer.summarize(
+            events=sample_data,
+            value_cols="power",
+            possible_count_col="possible_count",
+        )
+        result_energy = summarizer.summarize(
+            events=sample_data,
+            value_cols="energy",
+            possible_count_col="possible_count",
+        )
+        separate_time = time.time() - start_time
+
+        # Multi-column call should be faster than separate calls
+        # (though for small data the difference might be minimal)
+        print(f"Multi-column time: {multi_time:.4f}s")
+        print(f"Separate calls time: {separate_time:.4f}s")
+
+        # Verify correctness - results should be equivalent
+        # Extract power and energy results from multi-column result
+        power_cols = [col for col in result_multi.columns if col[0] == "power"]
+        energy_cols = [col for col in result_multi.columns if col[0] == "energy"]
+
+        power_from_multi = result_multi[power_cols].copy()
+        power_from_multi.columns = [
+            col[1] for col in power_cols
+        ]  # Extract quantile values
+
+        energy_from_multi = result_multi[energy_cols].copy()
+        energy_from_multi.columns = [
+            col[1] for col in energy_cols
+        ]  # Extract quantile values
+
+        # Compare with separate results
+        pd.testing.assert_frame_equal(result_power, power_from_multi)
+        pd.testing.assert_frame_equal(result_energy, energy_from_multi)

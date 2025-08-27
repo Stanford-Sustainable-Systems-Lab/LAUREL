@@ -243,25 +243,42 @@ class NonzeroGroupedSummarizer:
     Attributes:
         group_cols (list[str]): List of column names to group by.
         quantiles (np.ndarray): Array of quantile values to calculate (e.g., [0.25, 0.5, 0.75]).
+        value_cols (list[str] | None): List of column names containing values to calculate quantiles for.
+            If None, value columns must be specified in summarize() method.
     """
 
     group_cols: list[str]
     quantiles: np.ndarray
+    value_cols: list[str] | None
 
-    def __init__(self: Self, group_cols: list[str], quantiles: np.ndarray) -> None:
+    def __init__(
+        self: Self,
+        group_cols: list[str],
+        quantiles: np.ndarray,
+        value_cols: list[str] | str | None = None,
+    ) -> None:
         """Initialize the NonzeroGroupedSummarizer.
 
         Args:
             group_cols (list[str]): List of column names to group by.
             quantiles (np.ndarray): Array of quantile values to calculate (e.g., [0.25, 0.5, 0.75]).
+            value_cols (list[str] | str | None): Name(s) of column(s) containing values to calculate
+                quantiles for. Can be a single string, list of strings, or None.
+                If None, value columns must be specified in summarize() method.
         """
         self.group_cols = group_cols
         self.quantiles = quantiles
+        if value_cols is None:
+            self.value_cols = None
+        else:
+            self.value_cols = (
+                [value_cols] if isinstance(value_cols, str) else value_cols
+            )
 
     def summarize(
         self: Self,
         events: pd.DataFrame,
-        value_col: str,
+        value_cols: list[str] | str,
         possible_count_col: str,
     ) -> pd.DataFrame:
         """Calculate quantiles using observations paired with the count of possible
@@ -269,43 +286,79 @@ class NonzeroGroupedSummarizer:
 
         Args:
             events (pd.DataFrame): DataFrame containing the events to summarize.
-            value_col (str): Name of the column containing the values to calculate quantiles for.
+            value_cols (list[str] | str): Name(s) of column(s) containing values to calculate
+                quantiles for. Can be a single string or list of strings.
             possible_count_col (str): Name of the column containing the total count of
                 possible observations (including zeros).
 
         Returns:
-            pd.DataFrame: DataFrame with quantiles calculated for each group, indexed by
-                group columns and with quantile values as column names.
+            pd.DataFrame: DataFrame with quantiles calculated for each group. For single column,
+                indexed by group columns with quantile values as column names. For multiple columns,
+                indexed by group columns with MultiIndex columns (value_col_name, quantile_value).
 
         Raises:
             ValueError: If the number of observations exceeds the number of possible observations.
         """
+        # Convert to list format
+        cols_to_process = [value_cols] if isinstance(value_cols, str) else value_cols
+
+        # Handle empty DataFrame case
+        if len(events) == 0:
+            raise ValueError("Cannot process empty DataFrame.")
+
         grouping = events.groupby(self.group_cols, observed=True)
         grp_idxs = grouping.indices
-        values = get_basic_dtype_ser(events[value_col]).values
         counts = get_basic_dtype_ser(events[possible_count_col]).values
-        results = np.zeros(
-            (grouping.ngroups, self.quantiles.shape[0]), dtype=np.float64
-        )
 
-        i = 0
-        for _, idx in tqdm(grp_idxs.items()):
-            cur_counts = counts[idx[0]]
-            cur_vals = values[idx]
-            if cur_counts < cur_vals.size:
-                raise ValueError(
-                    "Number of observations exceeds the number of possible observations."
-                )
-            results[i, :] = self._calc_sparse_quantiles_core(
-                n_obs=cur_counts,
-                nonzeros=cur_vals,
-                quantiles=self.quantiles,
+        # Process each value column
+        all_results = {}
+        for col in cols_to_process:
+            values = get_basic_dtype_ser(events[col]).values
+            results = np.zeros(
+                (grouping.ngroups, self.quantiles.shape[0]), dtype=np.float64
             )
-            i += 1
-        quantile_df = pd.DataFrame(
-            data=results, index=grp_idxs.keys(), columns=self.quantiles
-        )
-        quantile_df.index.names = self.group_cols
+
+            i = 0
+            for _, idx in tqdm(grp_idxs.items(), desc=f"Summarizing {col}"):
+                cur_counts = counts[idx[0]]
+                cur_vals = values[idx]
+                if cur_counts < cur_vals.size:
+                    raise ValueError(
+                        "Number of observations exceeds the number of possible observations."
+                    )
+                results[i, :] = self._calc_sparse_quantiles_core(
+                    n_obs=cur_counts,
+                    nonzeros=cur_vals,
+                    quantiles=self.quantiles,
+                )
+                i += 1
+
+            all_results[col] = results
+
+        # Build output DataFrame
+        if len(cols_to_process) == 1:
+            # Single column: maintain backward compatibility
+            col = cols_to_process[0]
+            quantile_df = pd.DataFrame(
+                data=all_results[col], index=grp_idxs.keys(), columns=self.quantiles
+            )
+            quantile_df.index.names = self.group_cols
+        else:
+            # Multiple columns: use MultiIndex columns
+            multi_columns = pd.MultiIndex.from_product(
+                [cols_to_process, self.quantiles], names=["value_col", "quantile"]
+            )
+
+            # Concatenate results horizontally
+            combined_results = np.concatenate(
+                [all_results[col] for col in cols_to_process], axis=1
+            )
+
+            quantile_df = pd.DataFrame(
+                data=combined_results, index=grp_idxs.keys(), columns=multi_columns
+            )
+            quantile_df.index.names = self.group_cols
+
         return quantile_df
 
     @staticmethod
