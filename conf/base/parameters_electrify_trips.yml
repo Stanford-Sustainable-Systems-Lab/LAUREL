@@ -98,7 +98,7 @@ vehicles:
     beta: 5
   soc_buffer_low: 0.1
   soc_buffer_high: 0.8
-  min_soc_charge: 0.05
+  min_soc_charge: 0.01 # No charging session is allowed which fills less than this fraction of the battery, even if this results in death
   max_delay_recoverable_hrs: ${summarize_vehicles.thresholds.delay_hrs_max}
   random_seed:
     master_seed: 42 # Each vehicle gets their own seed based on this one and their ID
@@ -237,7 +237,7 @@ apply_delays:
   delay_unit: hour
 
 manage_charging:
-  charging_manager: MinPowerChargingManager
+  charging_manager: ImmediateChargingManager
   drop_na_cols:
     - charge_kwh
   input_cols: # keys should match the keyword arguments of the charging manager

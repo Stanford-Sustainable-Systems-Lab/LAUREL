@@ -385,10 +385,12 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
 
         # Option 3: Charge for next trip
         buff = veh["soc_buffer_low"] * veh["batt_cap"]
-        e[2, :] = np.maximum(dwl["consumed_kwh_next"] + buff - cur_energy, 0)
+        e[2, :] = np.maximum(dwl["consumed_kwh_next"] + buff - cur_energy, min_e_chg)
 
         # Option 4: Charge for full shift
-        nrg_needed_shift = np.maximum(dwl["consumed_kwh_shift"] + buff - cur_energy, 0)
+        nrg_needed_shift = np.maximum(
+            dwl["consumed_kwh_shift"] + buff - cur_energy, min_e_chg
+        )
         e[3, :] = nrg_needed_shift
 
         # Option 5: Charge to optimal SoC, with a minimum level charged to avoid tiny
@@ -398,7 +400,7 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         )
 
         # Option 6: Charge to fill battery
-        e[5, :] = np.maximum(veh["batt_cap"] - cur_energy, 0)
+        e[5, :] = np.maximum(veh["batt_cap"] - cur_energy, min_e_chg)
 
         # Zero out charging on unavailable modes
         e = e * (caster * dwl["modes_avail"])
