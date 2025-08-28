@@ -237,7 +237,7 @@ apply_delays:
   delay_unit: hour
 
 manage_charging:
-  charging_manager: ImmediateChargingManager
+  charging_manager: MinPowerChargingManager
   drop_na_cols:
     - charge_kwh
   input_cols: # keys should match the keyword arguments of the charging manager
