@@ -216,8 +216,9 @@ class ImmediateChargingManager(IndependentDwellChargingManager):
             / self.dw.data.loc[good_div, self.max_power]
         )
         charge_time = pd.to_timedelta(self.dw.data["charge_hrs"], unit="hour")
+        charge_time = charge_time.dt.ceil(freq="s")  # To avoid messy near-second values
 
-        charge_end = (self.dw.data[self.dw.start] + charge_time).dt.round(freq="s")
+        charge_end = self.dw.data[self.dw.start] + charge_time
         charge_end = charge_end.clip(upper=self.dw.data[self.dw.end])
 
         self.dw.data[time_cols[-1]] = charge_end
