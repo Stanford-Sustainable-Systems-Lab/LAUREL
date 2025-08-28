@@ -207,11 +207,12 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     return vehs
 
 
-def filter_events(events: pd.DataFrame, params: dict) -> pd.DataFrame:
+def filter_events(events: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFrame:
     """Filter events down to only include the ones we want to summarize."""
     old_len = len(events)
 
-    any_nonzero = (events.loc[:, params["profile_cols"]] != 0).any(axis=1)
+    prof_cols = list(pcols["diff_cols"].values())
+    any_nonzero = (events.loc[:, prof_cols] != 0).any(axis=1)
     vehicle_feasible = ~events[params["drop_events_col"]]
     duplic_events = events.duplicated(subset=params["duplic_check_cols"], keep=False)
     events = events.loc[any_nonzero & vehicle_feasible & ~duplic_events, :]
@@ -311,7 +312,7 @@ def discretize_sparse_profiles(
     profs: pd.DataFrame,
     time_col: str,
     dur_col: str,
-    prof_col: str,
+    prof_cols: list[str],
     group_cols: list[str],
     tz_col: str | None = None,
     freq: str = "1h",
@@ -320,8 +321,8 @@ def discretize_sparse_profiles(
     logger.info("Remove all observations with unknown duration or zero power.")
     # First drop the observations with no duration or zero power
     is_na_dur = profs[dur_col].isna()
-    is_zero_prof = profs[prof_col] == 0
-    nonzero = profs.loc[~is_na_dur & ~is_zero_prof, :]
+    any_nonzero = (profs.loc[:, prof_cols] != 0).any(axis=1)
+    nonzero = profs.loc[~is_na_dur & any_nonzero, :]
 
     logger.info("Spread observations to cover all intervals across their duration")
     if tz_col is not None:
@@ -331,7 +332,7 @@ def discretize_sparse_profiles(
     spreader = IntervalBeginSpreader(
         time_col=time_col,
         dur_col=dur_col,
-        value_cols=prof_col,
+        value_cols=prof_cols,
         group_cols=grp_cols,
         freq=freq,
     )
@@ -340,7 +341,7 @@ def discretize_sparse_profiles(
     logger.info("Group events")
     grouper = grp_cols + [pd.Grouper(key=time_col, freq=freq)]
     gpby = nonzero_exp.groupby(grouper, sort=False, observed=True)
-    grped_nonzero = gpby[prof_col].max()
+    grped_nonzero = gpby[prof_cols].max()
     grped_nonzero = grped_nonzero.reset_index()
     return grped_nonzero
 
@@ -518,7 +519,7 @@ def slice_vehicle_windows(
     events_mod[DUR_COL] = events_grp[pcols["time_col"]].transform(
         lambda ser: ser.shift(-1) - ser
     )
-    cum_renamer = {f"{col}_cum": col for col in params["profile_cols"]}
+    cum_renamer = {f"{col}_cum": col for col in pcols["diff_cols"].values()}
     cum_cols = list(cum_renamer.keys())
     for cum, raw in cum_renamer.items():
         events_mod[cum] = events_grp[raw].cumsum()
@@ -709,13 +710,18 @@ def process_sample(
         samps["samp_wgt"] = 1.0
 
     # Calculate profiles and energies
-    samps["weighted_power"] = samps[params_slice["power_col"]] * samps["samp_wgt"]
+    for val_name, diff_col in pcols["diff_cols"].items():
+        samps[f"weighted_{val_name}"] = samps[diff_col] * samps["samp_wgt"]
+
     samps_grp = samps.groupby(pcols["group_cols"], sort=False, observed=True)
-    samps[pcols["profile_col"]] = samps_grp["weighted_power"].cumsum()
+
+    for val_name, prof_col in pcols["profile_cols"].items():
+        samps[prof_col] = samps_grp[f"weighted_{val_name}"].cumsum()
+
     del samps_grp
     gc.collect()
 
-    samps["energy_kwh"] = samps[pcols["profile_col"]] * samps["dur_hrs"]
+    samps["energy_kwh"] = samps[pcols["profile_cols"]["power"]] * samps["dur_hrs"]
     samps_grp = samps.groupby(pcols["group_cols"], sort=False, observed=True)
     energies = samps_grp["energy_kwh"].sum()
     del samps_grp
@@ -726,7 +732,7 @@ def process_sample(
             profs=samps,
             time_col=params_slice["slice_time_col"],
             dur_col=pcols["duration_col"],
-            prof_col=pcols["profile_col"],
+            prof_cols=list(pcols["profile_cols"].values()),
             group_cols=pcols["group_cols"],
             freq=discrete_freq,
         )
@@ -747,6 +753,11 @@ def sample_vehicle_windows(
     client: Client,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Sample vehicle windows in different categories up to desired numbers."""
+    if set(pcols["profile_cols"].keys()) != set(pcols["diff_cols"].keys()):
+        raise ValueError(
+            "The profile_cols and diff_cols dictionary keys must be the same set."
+        )
+
     slice_time_col = params_slice["slice_time_col"]
 
     logger.info("Sort and set index for vehicle windows")
@@ -774,12 +785,12 @@ def sample_vehicle_windows(
     )
     smpler.prepare(sources=winds, frame=frame, targets=targets)
 
-    keep_cols = pcols["group_cols"] + [
-        slice_time_col,
-        params_slice["power_col"],
-        pcols["duration_col"],
-        "dur_hrs",
-    ]
+    keep_cols = (
+        pcols["group_cols"]
+        + [slice_time_col]
+        + list(pcols["diff_cols"].values())
+        + [pcols["duration_col"], "dur_hrs"]
+    )
     drop_cols = set(winds.columns).difference(keep_cols)
     winds_mini = winds.drop(columns=drop_cols)
     del winds
@@ -866,7 +877,7 @@ def summarize_vehicle_window_quantiles(
     )
     quantiles = summer.summarize(
         events=profs,
-        value_cols=pcols["profile_col"],
+        value_cols=list(pcols["profile_cols"].values()),
         possible_count_col="possible_count",
     )
     return quantiles

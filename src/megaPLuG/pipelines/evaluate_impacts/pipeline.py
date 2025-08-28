@@ -150,7 +150,11 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             Node(
                 func=filter_events,  # TODO: Add location filtering to this
-                inputs=["events_w_metadata", "params:filter_events"],
+                inputs=[
+                    "events_w_metadata",
+                    "params:filter_events",
+                    "params:eval_columns",
+                ],
                 outputs="events_filtered",
                 name="filter_events",
             ),
