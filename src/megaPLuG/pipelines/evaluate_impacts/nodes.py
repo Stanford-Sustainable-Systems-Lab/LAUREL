@@ -559,7 +559,7 @@ def slice_vehicle_windows(
         events_windows[src_time_col] - events_windows[slice_begin_col] + pd.Timestamp(0)
     )
     events_windows = events_windows.sort_values(
-        sort_cols, ascending=[True, True, False]
+        [pcols["veh_col"], src_time_col], ascending=[True, True]
     )
     events_windows = events_windows.ffill()
 
