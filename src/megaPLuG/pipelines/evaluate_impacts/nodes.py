@@ -747,11 +747,9 @@ def sample_vehicle_windows(
     slice_time_col = params_slice["slice_time_col"]
 
     logger.info("Sort and set index for vehicle windows")
-    # Sorting on impulse value is essential to keep all power levels positive, in the
-    # case of zero-time events
     winds = windows.reset_index()
-    sort_cols = pcols["group_cols"] + [slice_time_col, params_slice["power_col"]]
-    sort_ord = [True] * (len(sort_cols) - 1) + [False]
+    sort_cols = pcols["group_cols"] + [slice_time_col]
+    sort_ord = [True] * len(sort_cols)
     winds = winds.sort_values(sort_cols, ascending=sort_ord)
 
     winds = winds.set_index([pcols["veh_col"], params_slice["slice_id_col"]])
