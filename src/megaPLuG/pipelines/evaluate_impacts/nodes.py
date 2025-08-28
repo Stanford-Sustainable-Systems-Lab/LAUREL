@@ -498,7 +498,6 @@ def slice_vehicle_windows(
     in time.
 
     """
-    PROF_COL = "veh_prof"
     DUR_COL = "duration"
     slice_begin_col = params["slice_id_col"]
     slice_time_col = params["slice_time_col"]
@@ -516,15 +515,19 @@ def slice_vehicle_windows(
 
     logger.info("Build profile and duration columns for internal use (will be dropped)")
     events_grp = events_mod.groupby(pcols["veh_col"], sort=False, observed=True)
-    events_mod[PROF_COL] = events_grp[params["power_col"]].cumsum()
     events_mod[DUR_COL] = events_grp[pcols["time_col"]].transform(
         lambda ser: ser.shift(-1) - ser
     )
+    cum_renamer = {f"{col}_cum": col for col in params["profile_cols"]}
+    cum_cols = list(cum_renamer.keys())
+    for cum, raw in cum_renamer.items():
+        events_mod[cum] = events_grp[raw].cumsum()
 
-    nonzero = events_mod.dropna(subset=[DUR_COL])
-    nonzero = nonzero.reset_index()
-    drop_idx = nonzero.loc[nonzero[PROF_COL] == 0].index
-    nonzero = nonzero.drop(index=drop_idx)
+    events_clean_idx = events_mod.reset_index()
+    any_nonzero = (events_clean_idx.loc[:, cum_cols] != 0).any(axis=1)
+    dur_isna = events_clean_idx[DUR_COL].isna()
+    drop_idx = events_clean_idx.loc[~any_nonzero | dur_isna].index
+    nonzero = events_clean_idx.drop(index=drop_idx)
 
     logger.info(
         "Spread observations to cover all local-time slices across their duration"
@@ -536,18 +539,18 @@ def slice_vehicle_windows(
     spreader = IntervalBeginSpreader(
         time_col=src_time_col,
         dur_col=DUR_COL,
-        value_cols=PROF_COL,
+        value_cols=cum_cols,
         group_cols=grp_cols,
         freq=params["slice_freq"],
     )
     inits = spreader.spread(nonzero, return_spreaded_only=True)
-    inits = inits.rename(columns={PROF_COL: params["power_col"]})
+    inits = inits.rename(columns=cum_renamer)
     inits["is_init"] = True
 
     logger.info(
         "Concatenating and sorting original observations and initialization observations."
     )
-    events_concat = events_mod.drop(columns=[PROF_COL, DUR_COL])
+    events_concat = events_mod.drop(columns=[DUR_COL] + cum_cols)
     events_concat["is_init"] = False
     events_windows = pd.concat([events_concat, inits], axis=0, ignore_index=True)
     events_windows[slice_begin_col] = events_windows[src_time_col].dt.floor(

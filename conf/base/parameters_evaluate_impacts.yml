@@ -133,7 +133,9 @@ assign_metadata_vehicle:
 
 slice_events:
     slice_freq: 1d
-    power_col: hex_kw_diff
+    profile_cols:
+      - hex_kw_diff
+      - plugged_diff
     slice_id_col: slice_time_start
     slice_time_col: slice_time_relative
     source_time_col: time_local
