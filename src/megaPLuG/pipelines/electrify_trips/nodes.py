@@ -241,7 +241,11 @@ def mark_shift_powers(dw: DwellSet, params: dict) -> DwellSet:
     dw.data[params["max_power_col_shift"]] = dw.data.groupby(dw.veh)[acc_col].shift(
         -1, fill_value=params["fill_value"]
     )
-    dw.data.drop(columns=acc_col, inplace=True)
+
+    if dw.is_dask:
+        dw.data = dw.data.drop(columns=acc_col)
+    else:
+        dw.data.drop(columns=acc_col, inplace=True)
     return dw
 
 
