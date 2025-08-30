@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 
+import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 from numba import jit
@@ -271,6 +272,26 @@ class AbstractChargingChoiceStrategy(ABC):
             cur_delay += dly_lim
 
         return outs
+
+    @classmethod
+    def get_output_schema(cls, input: pd.DataFrame | dd.DataFrame) -> pd.DataFrame:
+        """Generate empty DataFrame with correct output schema for dask meta.
+
+        Args:
+            input_columns: List of column names from the input DwellSet data
+            input_index: Index from the input DwellSet data (optional)
+
+        Returns:
+            Empty DataFrame with correct dtypes and column names for the output
+        """
+        # Create empty DataFrame with input columns (these pass through unchanged)
+        schema_df = dd.utils.make_meta(input)
+
+        # Add output columns from the charging algorithm using _output_records_dtype
+        for name in cls._output_records_dtype.names:
+            field_dtype = cls._output_records_dtype.fields[name][0]
+            schema_df[name] = pd.Series([], dtype=field_dtype)
+        return schema_df
 
     @staticmethod
     @abstractmethod
