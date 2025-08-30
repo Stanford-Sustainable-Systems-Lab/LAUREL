@@ -54,18 +54,27 @@ def merge_dataframes_node(
     mrg = right.reset_index()
     mrg = mrg.loc[:, params["keep_right_columns"]]
 
-    if not is_dask:
+    def _merge_dataframe(
+        left: pd.DataFrame, right: pd.DataFrame, mrg_kws: dict
+    ) -> pd.DataFrame:
         orig_idx = left.index.names
         left = left.reset_index()
 
-        merged = left.merge(right=mrg, **params["merge_kwargs"])
+        merged = left.merge(right=right, **mrg_kws)
 
         if orig_idx != [None]:
             merged = merged.set_index(orig_idx)
         else:
             merged = merged.drop(columns=["index"])
+        return merged
+
+    if not is_dask:
+        merged = _merge_dataframe(left=left, right=mrg, mrg_kws=params["merge_kwargs"])
     else:
-        raise NotImplementedError("Dask features not yet implemented.")
+        # For dask DataFrames, we need to preserve the index without expensive set_index operations
+        merged = left.map_partitions(
+            _merge_dataframe, right=mrg, mrg_kws=params["merge_kwargs"]
+        )
 
     return merged
 
