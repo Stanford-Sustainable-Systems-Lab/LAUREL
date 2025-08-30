@@ -22,20 +22,20 @@ logger = logging.getLogger(__name__)
 def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
     """Filter out vehicles that we're not considering."""
     logger.info("Filter by vehicles by direct dropping")
-    old_len = len(dw.data)
+    if not dw.is_dask:
+        old_len = len(dw.data)
 
-    keep_idx = np.intersect1d(dw.data.index.values, vehs.index.values)
-    num_no_dwell_vehs = np.setdiff1d(vehs.index.values, keep_idx).size
-    if num_no_dwell_vehs > 0:
-        logger.warning(
-            f"{num_no_dwell_vehs} vehicles were not found in the dwell data."
-        )
-    dw.data = dw.data.loc[keep_idx]
+    if not dw.is_dask:
+        num_no_dwell_vehs = np.setdiff1d(vehs.index.values, keep_idx).size
+        if num_no_dwell_vehs > 0:
+            logger.warning(
+                f"{num_no_dwell_vehs} vehicles were not found in the dwell data."
+            )
 
-    new_len = len(dw.data)
-    abs_diff = old_len - new_len
-    pct_diff = round(abs_diff / old_len * 100, 1)
-    logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
+        new_len = len(dw.data)
+        abs_diff = old_len - new_len
+        pct_diff = round(abs_diff / old_len * 100, 1)
+        logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
     return dw
 
 
@@ -171,7 +171,8 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
         - AND which have a duration longer than the plug_in + plug_out time
     """
     logger.info("Filter by dwells by accumulating through")
-    old_len = len(dw.data)
+    if not dw.is_dask:
+        old_len = len(dw.data)
 
     flt_cols = params["filter_cols"]
     is_critical = dw.data[flt_cols["refresh"]] | dw.data[flt_cols["crit"]]
@@ -196,10 +197,13 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     dw.data = dw.data.rename(columns=renamer)
     dw.data[dw.reset] = dw.data[dw.reset].astype(bool)
 
-    new_len = len(dw.data)
-    abs_diff = old_len - new_len
-    pct_diff = round(abs_diff / old_len * 100, 1)
-    logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
+    if not dw.is_dask:
+        new_len = len(dw.data)
+        abs_diff = old_len - new_len
+        pct_diff = round(abs_diff / old_len * 100, 1)
+        logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
+    else:
+        logger.info("Rows dropped: not calculated for Dask-backed DwellSets.")
     return dw
 
 
