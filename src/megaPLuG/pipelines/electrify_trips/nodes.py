@@ -239,7 +239,12 @@ def simulate_charging_choice(
     dw: DwellSet, vehs: pd.DataFrame, modes: pd.DataFrame, params: dict
 ) -> DwellSet:
     """Simulate the charging choices of each vehicle."""
-    dw.sort_by_veh_time()
+    if dw.is_dask:
+        logger.info(
+            "For Dask-backed DwellSets, we assume that sorting has been preserved."
+        )
+    else:
+        dw.sort_by_veh_time()
     strat = ForwardLookingChargingChoiceStrategy(**params["input_cols"])
     dw.data = strat.run(dwells=dw, vehs=vehs, modes=modes)
     dw.data = dw.data.drop(columns=params["drop_cols"])
