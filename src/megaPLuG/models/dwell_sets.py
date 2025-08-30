@@ -325,9 +325,15 @@ class DwellSet:
         for col in accum_cols:
             new_col = _get_new_col_name(col)
             df[new_col] = outs[col]
-            df[new_col] = df[new_col].convert_dtypes()
+            is_float_col = np.issubdtype(df[new_col].dtype, np.floating)
+            if not is_float_col:
+                df[new_col] = df[new_col].convert_dtypes()
+                null_val = pd.NA
+            else:
+                null_val = np.nan
+
             if not write_all:
-                df.loc[~df[keep_mask_col], new_col] = pd.NA
+                df.loc[~df[keep_mask_col], new_col] = null_val
 
         return df
 
