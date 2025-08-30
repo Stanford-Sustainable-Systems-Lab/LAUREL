@@ -246,7 +246,26 @@ def simulate_charging_choice(
     else:
         dw.sort_by_veh_time()
     strat = ForwardLookingChargingChoiceStrategy(**params["input_cols"])
-    dw.data = strat.run(dwells=dw, vehs=vehs, modes=modes)
+
+    if dw.is_dask:
+
+        def _run_charging_on_partition(partition_df: pd.DataFrame, dw_empty: DwellSet):
+            # Create a temporary DwellSet for this partition
+            dw_part = dw_empty.copy_without_data()
+            dw_part.data = partition_df
+            result = strat.run(
+                dwells=dw_part, vehs=vehs, modes=modes, show_progress=False
+            )
+            return result
+
+        # Create meta DataFrame to define output structure using schema generation
+        meta = strat.get_output_schema(input=dw.data)
+        dw.data = dw.data.map_partitions(
+            _run_charging_on_partition, dw_empty=dw.copy_without_data(), meta=meta
+        )
+    else:
+        dw.data = strat.run(dwells=dw, vehs=vehs, modes=modes)
+
     dw.data = dw.data.drop(columns=params["drop_cols"])
     return dw
 
