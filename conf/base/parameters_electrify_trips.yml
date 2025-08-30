@@ -14,6 +14,13 @@ load_dwell_set:
   reset: reset_state_before
   verify_sorting: False
 
+dask_electrify_trips:
+  cluster:
+    n_workers: 4
+    processes: True
+    threads_per_worker: 1 # Must stay at 1, since our code is not thread safe
+    memory_limit: 8GiB
+
 filter_vehicles:
   filters:
     vin_gvw:

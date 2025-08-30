@@ -8,6 +8,7 @@ from kedro.pipeline import Node, Pipeline
 from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
 from megaPLuG.scenarios.io import write_scenario_partition
 from megaPLuG.utils.data import categorize_columns, filter_by_vals_in_cols
+#from megaPLuG.utils.distributed import start_dask_node
 from megaPLuG.utils.params import set_entity_params
 
 from .nodes import (
@@ -30,6 +31,12 @@ from .nodes import (
 def create_pipeline(**kwargs) -> Pipeline:
     pipe = Pipeline(
         [
+            # Node(
+            #     func=start_dask_node,
+            #     inputs=["params:dask_electrify_trips"],
+            #     outputs=["dask_cluster_elect", "dask_client_elect"],
+            #     name="start_dask_node_electrify_trips",
+            # ),
             Node(
                 func=filter_by_vals_in_cols,
                 inputs=["vehicles_labelled", "params:filter_vehicles"],
