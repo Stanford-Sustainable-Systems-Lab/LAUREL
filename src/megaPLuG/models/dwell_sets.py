@@ -251,7 +251,9 @@ class DwellSet:
             write_all=write_all,
         )
         if self.is_dask:
-            new.data = new.data.map_partitions(self._accum_masked_df, **kws)
+            new.data = new.data.map_partitions(
+                self._accum_masked_df, show_progress=False, **kws
+            )
         else:
             new.data = self._accum_masked_df(df=new.data, **kws)
 
@@ -271,6 +273,7 @@ class DwellSet:
         reverse: bool | list[bool],
         agg_func: CumAggFunc | list[CumAggFunc],
         write_all: bool = False,
+        show_progress: bool = True,
     ) -> pd.DataFrame:
         if isinstance(accum_cols, str):
             accum_cols = [accum_cols]
@@ -299,7 +302,12 @@ class DwellSet:
         # Using pandas groupby indices to move over dwell recarray
         grp_idxs = df.groupby(veh_col).indices
         col_rev = list(zip(accum_cols, reverse, agg_func))
-        for grp, idxs in tqdm(grp_idxs.items()):
+
+        itr = grp_idxs.items()
+        if show_progress:
+            itr = tqdm(itr)
+
+        for grp, idxs in itr:
             logics = logic_recs[idxs]
             for col, rev, fnc in col_rev:
                 outs[col][idxs] = DwellSet._accum_masked_core(

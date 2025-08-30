@@ -154,6 +154,7 @@ class AbstractChargingChoiceStrategy(ABC):
         dwells: DwellSet,
         vehs: pd.DataFrame,
         modes: pd.DataFrame,
+        show_progress: bool = True,
     ) -> pd.DataFrame:
         """Run the simulation for a single vehicle by calling the sub-class-specific JIT-ed simulator."""
         if np.any(vehs.index.duplicated()):
@@ -191,9 +192,13 @@ class AbstractChargingChoiceStrategy(ABC):
         veh_idxr = pd.Series(data=np.arange(len(vehs)), index=vehs.index)
         grp_idxs = dwells.data.groupby(dwells.veh).indices
         outs = np.recarray((dwl_recs.shape[0],), dtype=self._output_records_dtype)
-        for grp, idxs in tqdm(
-            grp_idxs.items()
-        ):  # Using pandas groupby indices to move over dwell recarray
+
+        itr = grp_idxs.items()
+        if show_progress:
+            itr = tqdm(itr)
+
+        # Using pandas groupby indices to move over dwell recarray
+        for grp, idxs in itr:
             outs[idxs] = self._simulate(
                 choice_func=self._choose_charging,
                 dwls=dwl_recs[idxs],
