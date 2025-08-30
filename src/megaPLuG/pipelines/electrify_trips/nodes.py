@@ -5,6 +5,7 @@ generated using Kedro 0.19.1
 
 import logging
 
+import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 
@@ -41,8 +42,12 @@ def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
 def calc_dwell_durations(dw: DwellSet, params: dict) -> DwellSet:
     """Mark dwells which could provide substantial SoC to each vehicle."""
     iocols = params["in_out_time_cols"]
+    iounit = params["in_out_time_unit"]
     for col in iocols.values():
-        dw.data[col] = pd.to_timedelta(dw.data[col], unit=params["in_out_time_unit"])
+        if dw.is_dask:
+            dw.data[col] = dd.to_timedelta(dw.data[col], unit=iounit)
+        else:
+            dw.data[col] = pd.to_timedelta(dw.data[col], unit=iounit)
 
     # Adjust dwell start and end times to allow time for vehicle to plug in and out
     # If the stop is optional (proxied by identical start and end times), then leave
@@ -242,7 +247,10 @@ def apply_delays(dw: DwellSet, params: dict) -> DwellSet:
     tdelt_cols = {}
     for prm_key, col in dly_cols.items():
         td_col = f"{col}_tdelta"
-        dw.data[td_col] = pd.to_timedelta(dw.data[col], unit=params["delay_unit"])
+        if dw.is_dask:
+            dw.data[td_col] = dd.to_timedelta(dw.data[col], unit=params["delay_unit"])
+        else:
+            dw.data[td_col] = pd.to_timedelta(dw.data[col], unit=params["delay_unit"])
         tdelt_cols.update({prm_key: td_col})
 
     cum_dly = dw.data[tdelt_cols["cumul_hrs"]]
