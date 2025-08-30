@@ -159,7 +159,11 @@ def mark_critical_days(dw: DwellSet, params: dict) -> DwellSet:
     dw.data[crcol] = dw.data[crcol].groupby(dw.veh, sort=False).ffill()
     dw.data[crcol] = dw.data[crcol].fillna(True).astype(bool)
     # dw.data[refr_col] = dw.data[refr_col].fillna(False).astype(bool)
-    dw.data.drop(columns=[crit_bnd_col], inplace=True)
+    if dw.is_dask:
+        dw.data = dw.data.drop(columns=[crit_bnd_col])
+    else:
+        dw.data.drop(columns=[crit_bnd_col], inplace=True)
+
     return dw
 
 
@@ -189,7 +193,10 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
 
     dw.data[mask_col] = dw.data[mask_col].astype("boolean")
     dw.data[mask_col] = dw.data[mask_col].replace(False, pd.NA)
-    dw.data.dropna(subset=mask_col, inplace=True)
+    if dw.is_dask:
+        dw.data = dw.data.dropna(subset=mask_col)
+    else:
+        dw.data.dropna(subset=mask_col, inplace=True)
     dw.data[mask_col] = dw.data[mask_col].astype(bool)
     drop_cols = [mask_col] + params["drop_cols"] + accum_cols
     dw.data = dw.data.drop(columns=drop_cols)
