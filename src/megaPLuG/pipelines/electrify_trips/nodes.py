@@ -143,10 +143,15 @@ def mark_critical_days(dw: DwellSet, params: dict) -> DwellSet:
 
     nrg_col_next = params["energy_col_next_trip"]
     nrg_col_shift = params["energy_col_remain_shift"]
-    fill_val = dw.data[params["energy_col"]].mean()  # Imputing shifted values
-    dw.data[nrg_col_next] = dw.data.groupby(dw.veh)[params["energy_col"]].shift(
-        -1, fill_value=fill_val
-    )
+    nrg_col_cur = params["energy_col"]
+
+    kws = {}
+    if dw.is_dask:
+        kws.update({"meta": ("x", "f8")})
+    # Using no "fill_value" in shift is okay here because the column is NaN-able (float)
+    dw.data[nrg_col_next] = dw.data.groupby(dw.veh)[nrg_col_cur].shift(-1, **kws)
+    dw.data[nrg_col_next] = dw.data.groupby(dw.veh)[nrg_col_next].ffill()
+
     dw.accum_masked(
         crit_bnd_col,
         accum_cols=nrg_col_next,
