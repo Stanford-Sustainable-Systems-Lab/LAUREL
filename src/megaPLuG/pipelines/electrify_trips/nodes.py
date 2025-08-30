@@ -237,7 +237,9 @@ def mark_shift_powers(dw: DwellSet, params: dict) -> DwellSet:
         inplace=True,
     )
     acc_col = f"{max_pow_col}_{refr_col}"
-    dw.data.loc[dw.data[refr_col], acc_col] = params["final_value"]
+    dw.data[acc_col] = dw.data[acc_col].where(
+        ~dw.data[refr_col], other=params["final_value"]
+    )
 
     kws = {"fill_value": params["fill_value"]}
     if dw.is_dask:
