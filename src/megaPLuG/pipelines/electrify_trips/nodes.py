@@ -26,6 +26,16 @@ def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
         old_len = len(dw.data)
 
     if not dw.is_dask:
+        keep_idx = np.intersect1d(dw.data.index.values, vehs.index.values)
+        dw.data = dw.data.loc[keep_idx]
+    else:
+        veh_idx = vehs.index.to_frame(index=False)
+        dw.data = dw.data.merge(
+            veh_idx, left_index=True, right_on=vehs.index.name, how="inner"
+        )
+        dw.data = dw.data.drop(columns=[vehs.index.name])
+
+    if not dw.is_dask:
         num_no_dwell_vehs = np.setdiff1d(vehs.index.values, keep_idx).size
         if num_no_dwell_vehs > 0:
             logger.warning(
