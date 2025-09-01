@@ -6,9 +6,9 @@ generated using Kedro 0.19.1
 from kedro.pipeline import Node, Pipeline
 
 from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
-from megaPLuG.scenarios.io import write_scenario_partition
+from megaPLuG.scenarios.io import read_scenario_partition, write_scenario_partition
 from megaPLuG.utils.data import categorize_columns, filter_by_vals_in_cols
-#from megaPLuG.utils.distributed import start_dask_node
+from megaPLuG.utils.distributed import start_dask_node
 from megaPLuG.utils.params import set_entity_params
 
 from .nodes import (
@@ -29,14 +29,14 @@ from .nodes import (
 
 
 def create_pipeline(**kwargs) -> Pipeline:
-    pipe = Pipeline(
+    charge_pipe = Pipeline(
         [
-            # Node(
-            #     func=start_dask_node,
-            #     inputs=["params:dask_electrify_trips"],
-            #     outputs=["dask_cluster_elect", "dask_client_elect"],
-            #     name="start_dask_node_electrify_trips",
-            # ),
+            Node(
+                func=start_dask_node,
+                inputs=["params:dask_electrify_trips"],
+                outputs=["dask_cluster_elect", "dask_client_elect"],
+                name="start_dask_node_electrify_trips",
+            ),
             Node(
                 func=filter_by_vals_in_cols,
                 inputs=["vehicles_labelled", "params:filter_vehicles"],
@@ -51,7 +51,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             Node(
                 func=load_dwell_set,
-                inputs=["dwells_with_locations", "params:load_dwell_set"],
+                inputs=["dwells_with_locations_dask", "params:load_dwell_set"],
                 outputs="dwell_obj",
                 name="load_dwell_set_electrify_trips",
             ),
@@ -176,8 +176,47 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="merge_dwellset_node_chosen_mode",
             ),
             Node(
+                func=save_dwell_set,
+                inputs="dwell_obj_w_charging",
+                outputs="dwells_with_charging",
+                name="save_dwell_set",
+            ),
+            Node(
+                func=write_scenario_partition,
+                inputs=["dwells_with_charging", "params:results_partition"],
+                outputs="dwells_with_charging_partition_dask",
+                name="write_scenario_partition_dwells",
+            ),
+            Node(
+                func=write_scenario_partition,
+                inputs=["vehicles_with_params", "params:results_partition"],
+                outputs="vehicles_with_params_partition",
+                name="write_scenario_partition_vehs",
+            ),
+        ],
+        tags=["scenario_run", "choose_charging"],
+    )
+
+    manage_pipe = Pipeline(
+        [
+            Node(
+                func=read_scenario_partition,
+                inputs=[
+                    "dwells_with_charging_partition_dask",
+                    "params:results_partition",
+                ],
+                outputs="dwells_with_charging_manage",
+                name="collate_partitions_dwells_with_charging_manage",
+            ),
+            Node(
+                func=load_dwell_set,
+                inputs=["dwells_with_charging_manage", "params:load_dwell_set"],
+                outputs="dwell_obj_manage",
+                name="load_dwell_set_manage_charging",
+            ),
+            Node(
                 func=apply_delays,
-                inputs=["dwell_obj_w_modes", "params:apply_delays"],
+                inputs=["dwell_obj_manage", "params:apply_delays"],
                 outputs="dwell_obj_w_delays",
                 name="apply_delays",
             ),
@@ -192,30 +231,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 tags="frame-charging_management",
             ),
             Node(
-                func=save_dwell_set,
-                inputs="dwell_obj_w_charging",
-                outputs="dwells_with_charging",
-                name="save_dwell_set",
-            ),
-            Node(
-                func=write_scenario_partition,
-                inputs=["dwells_with_charging", "params:results_partition"],
-                outputs="dwells_with_charging_partition",
-                name="write_scenario_partition_dwells",
-            ),
-            Node(
                 func=write_scenario_partition,
                 inputs=["events", "params:results_partition"],
-                outputs="events_partition",
+                outputs="events_partition_dask",
                 name="write_scenario_partition_events",
             ),
-            Node(
-                func=write_scenario_partition,
-                inputs=["vehicles_with_params", "params:results_partition"],
-                outputs="vehicles_with_params_partition",
-                name="write_scenario_partition_vehs",
-            ),
         ],
-        tags="scenario_run",
+        tags=["scenario_run", "manage_charging"],
     )
-    return pipe
+    return charge_pipe + manage_pipe
