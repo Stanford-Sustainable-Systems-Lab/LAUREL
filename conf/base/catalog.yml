@@ -188,7 +188,7 @@ dwells_with_charging_partition:
   filename_suffix: ".feather"
 
 # dwells_with_charging_partition_dask:
-#   type: partitions.PartitionedDataset
+#   type: megaPLuG.datasets.directory_partitioned.DirectoryPartitionedDataset
 #   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/dwells_with_charging"
 #   dataset:
 #     type: dask.ParquetDataset
