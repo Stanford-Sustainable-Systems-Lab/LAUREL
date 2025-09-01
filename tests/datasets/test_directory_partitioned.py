@@ -505,6 +505,221 @@ class TestDirectoryPartitionedDatasetEdgeCases:
         # The paths should be equivalent
         assert PurePath(partitions[0]) == PurePath(recovered_path)
 
+
+class TestDirectoryPartitionedDatasetHierarchicalPartitioning:
+    """Test hierarchical partitioning functionality."""
+
+    def test_hierarchical_date_partitioning(self, tmp_path):
+        """Test hierarchical date-based partitioning."""
+        # Create hierarchical date structure
+        partitions = [
+            "year=2023/month=01/day=01/data",
+            "year=2023/month=01/day=02/data",
+            "year=2023/month=02/day=01/data",
+            "year=2024/month=01/day=01/data",
+        ]
+
+        for partition in partitions:
+            partition_path = tmp_path / partition
+            partition_path.mkdir(parents=True)
+            (partition_path / "file.txt").write_text("test data")
+
+        dataset = DirectoryPartitionedDataset(
+            path=str(tmp_path), dataset="text.TextDataset"
+        )
+
+        # Should find all leaf directories
+        found_partitions = dataset._list_partitions()
+        assert len(found_partitions) == 4
+
+        # Extract partition IDs
+        partition_ids = [dataset._path_to_partition(p) for p in found_partitions]
+        expected_ids = [
+            "year=2023/month=01/day=01/data",
+            "year=2023/month=01/day=02/data",
+            "year=2023/month=02/day=01/data",
+            "year=2024/month=01/day=01/data",
+        ]
+
+        assert set(partition_ids) == set(expected_ids)
+
+    def test_mixed_depth_partitions(self, tmp_path):
+        """Test partitions at different depths."""
+        # Create partitions at various depths
+        shallow_partition = tmp_path / "shallow_data"
+        deep_partition = tmp_path / "region=US/state=CA/city=SF/data"
+        medium_partition = tmp_path / "category=A/subcategory=1/files"
+
+        shallow_partition.mkdir(parents=True)
+        deep_partition.mkdir(parents=True)
+        medium_partition.mkdir(parents=True)
+
+        # Add files to make them leaf directories
+        (shallow_partition / "file1.txt").write_text("data1")
+        (deep_partition / "file2.txt").write_text("data2")
+        (medium_partition / "file3.txt").write_text("data3")
+
+        dataset = DirectoryPartitionedDataset(
+            path=str(tmp_path), dataset="text.TextDataset"
+        )
+
+        partitions = dataset._list_partitions()
+        assert len(partitions) == 3
+
+        # Check partition IDs
+        partition_ids = set(dataset._path_to_partition(p) for p in partitions)
+        expected_ids = {
+            "shallow_data",
+            "region=US/state=CA/city=SF/data",
+            "category=A/subcategory=1/files",
+        }
+
+        assert partition_ids == expected_ids
+
+    def test_ignores_intermediate_directories(self, tmp_path):
+        """Test that intermediate directories (non-leaf) are ignored."""
+        # Create structure where only leaf directories should be partitions
+        structure = {
+            "country=US/state=CA": False,  # Intermediate directory
+            "country=US/state=CA/city=SF/data": True,  # Leaf partition
+            "country=US/state=NY": False,  # Intermediate directory
+            "country=US/state=NY/city=NYC/data": True,  # Leaf partition
+            "country=UK": False,  # Intermediate directory
+            "country=UK/region=London/data": True,  # Leaf partition
+        }
+
+        for path, is_leaf in structure.items():
+            dir_path = tmp_path / path
+            dir_path.mkdir(parents=True)
+            if is_leaf:
+                (dir_path / "file.txt").write_text("data")
+
+        dataset = DirectoryPartitionedDataset(
+            path=str(tmp_path), dataset="text.TextDataset"
+        )
+
+        partitions = dataset._list_partitions()
+
+        # Should only find the 3 leaf directories
+        assert len(partitions) == 3
+
+        partition_ids = set(dataset._path_to_partition(p) for p in partitions)
+        expected_leaf_ids = {
+            "country=US/state=CA/city=SF/data",
+            "country=US/state=NY/city=NYC/data",
+            "country=UK/region=London/data",
+        }
+
+        assert partition_ids == expected_leaf_ids
+
+    def test_hierarchical_path_conversion_roundtrip(self, tmp_path):
+        """Test that hierarchical path conversion is symmetric."""
+        dataset = DirectoryPartitionedDataset(
+            path=str(tmp_path), dataset="text.TextDataset"
+        )
+
+        # Test various hierarchical partition IDs
+        test_partitions = [
+            "simple",
+            "level1/level2",
+            "year=2023/month=01/day=15/hour=12/data",
+            "country=US/state=CA/city=SF/district=SOMA/block=1",
+        ]
+
+        for partition_id in test_partitions:
+            # Convert partition ID to path and back
+            path = dataset._partition_to_path(partition_id)
+            recovered_partition = dataset._path_to_partition(path)
+
+            assert recovered_partition == partition_id
+
+    def test_hierarchical_with_special_characters(self, tmp_path):
+        """Test hierarchical partitions with special characters."""
+        # Create partition with special characters in hierarchy
+        partition_structure = (
+            "region=North-America/country=US/state=New_York/city=New.York/data"
+        )
+        partition_path = tmp_path / partition_structure
+        partition_path.mkdir(parents=True)
+        (partition_path / "file.txt").write_text("test")
+
+        dataset = DirectoryPartitionedDataset(
+            path=str(tmp_path), dataset="text.TextDataset"
+        )
+
+        partitions = dataset._list_partitions()
+        assert len(partitions) == 1
+
+        partition_id = dataset._path_to_partition(partitions[0])
+        assert partition_id == partition_structure
+
+    def test_empty_intermediate_directories_ignored(self, tmp_path):
+        """Test that empty intermediate directories don't affect partition discovery."""
+        # Create structure with some empty directories
+        (tmp_path / "year=2023").mkdir()
+        (tmp_path / "year=2023/month=01").mkdir()
+        (tmp_path / "year=2023/month=01/day=01").mkdir()  # Empty intermediate
+
+        # Create actual partition with data
+        partition_dir = tmp_path / "year=2023/month=01/day=02/data"
+        partition_dir.mkdir(parents=True)
+        (partition_dir / "file.txt").write_text("data")
+
+        dataset = DirectoryPartitionedDataset(
+            path=str(tmp_path), dataset="text.TextDataset"
+        )
+
+        partitions = dataset._list_partitions()
+
+        # Should only find the one partition with actual data
+        assert len(partitions) == 1
+        partition_id = dataset._path_to_partition(partitions[0])
+        assert partition_id == "year=2023/month=01/day=02/data"
+
+    def test_multiple_files_in_leaf_directory(self, tmp_path):
+        """Test leaf directories with multiple files."""
+        partition_dir = tmp_path / "year=2023/month=01/data"
+        partition_dir.mkdir(parents=True)
+
+        # Add multiple files to the leaf directory
+        (partition_dir / "file1.txt").write_text("data1")
+        (partition_dir / "file2.txt").write_text("data2")
+        (partition_dir / "file3.parquet").write_bytes(b"parquet_data")
+
+        dataset = DirectoryPartitionedDataset(
+            path=str(tmp_path), dataset="text.TextDataset"
+        )
+
+        partitions = dataset._list_partitions()
+        assert len(partitions) == 1
+
+        partition_id = dataset._path_to_partition(partitions[0])
+        assert partition_id == "year=2023/month=01/data"
+
+    def test_performance_with_deep_hierarchy(self, tmp_path):
+        """Test performance with deeply nested hierarchical structure."""
+        # Create a moderately deep structure (5 levels)
+        base_structure = "level1/level2/level3/level4/level5"
+        num_partitions = 20
+
+        for i in range(num_partitions):
+            partition_dir = tmp_path / base_structure / f"partition_{i}"
+            partition_dir.mkdir(parents=True)
+            (partition_dir / "data.txt").write_text(f"data_{i}")
+
+        dataset = DirectoryPartitionedDataset(
+            path=str(tmp_path), dataset="text.TextDataset"
+        )
+
+        partitions = dataset._list_partitions()
+        assert len(partitions) == num_partitions
+
+        # Verify all partitions are at the expected depth
+        for partition in partitions:
+            partition_id = dataset._path_to_partition(partition)
+            assert partition_id.startswith(f"{base_structure}/partition_")
+            assert partition_id.count("/") == 5  # 5 levels deep
+
     def test_overwrite_behavior(self, tmp_path):
         """Test overwrite behavior."""
         # Create initial data
