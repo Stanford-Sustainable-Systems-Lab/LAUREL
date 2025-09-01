@@ -105,14 +105,14 @@ dwells_with_locations:
   type: pandas.FeatherDataset
   filepath: "${runtime_params:partition_data_dir, 'data/02_intermediate'}/dwells_with_locations.feather"
 
-# dwells_with_locations_dask:
-#   type: dask.ParquetDataset
-#   filepath: "${runtime_params:partition_data_dir, 'data/02_intermediate'}/dwells_with_locations/"
-#   save_args:
-#     write_index: True
-#     write_metadata_file: True
-#   load_args:
-#     calculate_divisions: True
+dwells_with_locations_dask:
+  type: dask.ParquetDataset
+  filepath: "${runtime_params:partition_data_dir, 'data/02_intermediate'}/dwells_with_locations/"
+  save_args:
+    write_index: True
+    write_metadata_file: True
+  load_args:
+    calculate_divisions: True
 
 vehicles_raw:
   type: pandas.FeatherDataset
@@ -187,16 +187,16 @@ dwells_with_charging_partition:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
-# dwells_with_charging_partition_dask:
-#   type: megaPLuG.datasets.directory_partitioned.DirectoryPartitionedDataset
-#   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/dwells_with_charging"
-#   dataset:
-#     type: dask.ParquetDataset
-#     save_args:
-#       write_index: True
-#       write_metadata_file: True
-#     load_args:
-#       calculate_divisions: True
+dwells_with_charging_partition_dask:
+  type: megaPLuG.datasets.directory_partitioned.DirectoryPartitionedDataset
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/dwells_with_charging"
+  dataset:
+    type: dask.ParquetDataset
+    save_args:
+      write_index: True
+      write_metadata_file: True
+    load_args:
+      calculate_divisions: True
 
 events_partition:
   type: partitions.PartitionedDataset
@@ -204,6 +204,17 @@ events_partition:
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
+
+events_partition_dask:
+  type: megaPLuG.datasets.directory_partitioned.DirectoryPartitionedDataset
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/events"
+  dataset:
+    type: dask.ParquetDataset
+    save_args:
+      write_index: True
+      write_metadata_file: True
+    load_args:
+      calculate_divisions: True
 
 vehicles_with_params_partition:
   type: partitions.PartitionedDataset
@@ -464,6 +475,10 @@ dwell_obj_w_charging:
   copy_mode: assign
 
 dwell_obj_w_modes:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_manage:
   type: MemoryDataset
   copy_mode: assign
 
