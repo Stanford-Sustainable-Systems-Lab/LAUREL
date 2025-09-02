@@ -3,6 +3,8 @@ from abc import ABC, abstractmethod
 from itertools import product
 from typing import Self
 
+import dask.dataframe as dd
+import numpy as np
 import pandas as pd
 
 from megaPLuG.models.dwell_sets import DwellSet
@@ -171,12 +173,11 @@ class MinPowerChargingManager(IndependentDwellChargingManager):
         zero_energy = self.dw.data[self.energy] == 0.0
         zero_dur = self.dw.data[self.duration] == 0.0
         good_div = ~(zero_energy | zero_dur)
-
-        self.dw.data[pwr_cols[0]] = 0.0
-        self.dw.data.loc[good_div, pwr_cols[0]] = (
-            self.dw.data.loc[good_div, self.energy]
-            / self.dw.data.loc[good_div, self.duration]
-        )
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            self.dw.data[pwr_cols[0]] = (
+                self.dw.data[self.energy] / self.dw.data[self.duration]
+            )
+            self.dw.data[pwr_cols[0]] = self.dw.data[pwr_cols[0]].where(good_div, 0.0)
 
         nonzero_pwr = self.dw.data[pwr_cols[0]] != 0
         self.dw.data[plg_cols[0]] = 1 * nonzero_pwr
@@ -210,12 +211,16 @@ class ImmediateChargingManager(IndependentDwellChargingManager):
         zero_energy = self.dw.data[self.energy] == 0.0
         zero_power = self.dw.data[self.max_power] == 0.0
         good_div = ~(zero_energy | zero_power)
-        self.dw.data["charge_hrs"] = 0.0
-        self.dw.data.loc[good_div, "charge_hrs"] = (
-            self.dw.data.loc[good_div, self.energy]
-            / self.dw.data.loc[good_div, self.max_power]
-        )
-        charge_time = pd.to_timedelta(self.dw.data["charge_hrs"], unit="hour")
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            self.dw.data["charge_hrs"] = (
+                self.dw.data[self.energy] / self.dw.data[self.max_power]
+            )
+            self.dw.data["charge_hrs"] = self.dw.data["charge_hrs"].where(good_div, 0.0)
+
+        if self.dw.is_dask:
+            charge_time = dd.to_timedelta(self.dw.data["charge_hrs"], unit="hour")
+        else:
+            charge_time = pd.to_timedelta(self.dw.data["charge_hrs"], unit="hour")
         charge_time = charge_time.dt.ceil(freq="s")  # To avoid messy near-second values
 
         charge_end = self.dw.data[self.dw.start] + charge_time
