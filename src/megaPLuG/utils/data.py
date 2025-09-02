@@ -397,6 +397,194 @@ def to_arrays(  # noqa: PLR0912
     return (arrays, names, formats)
 
 
+def generate_mock_data(  #  noqa: PLR0912, PLR0915
+    meta_df: pd.DataFrame, n_rows: int = 3, seed: int = 42
+) -> pd.DataFrame:
+    """Generate a small DataFrame with mock data from a Dask DataFrame's _meta attribute.
+
+    Takes an empty DataFrame with proper schema (typically from dask_df._meta) and
+    populates it with realistic mock data for testing or JIT pre-warming purposes.
+
+    Args:
+        meta_df: Empty DataFrame with correct dtypes and column structure
+        n_rows: Number of rows to generate (default: 3)
+        seed: Random seed for reproducible mock data (default: 42)
+
+    Returns:
+        DataFrame with same schema as meta_df but populated with mock data
+
+    Examples:
+        >>> import dask.dataframe as dd
+        >>> ddf = dd.from_pandas(some_dataframe, npartitions=4)
+        >>> mock_df = generate_mock_data(ddf._meta, n_rows=5)
+        >>> # Use mock_df to pre-warm JIT functions before processing real data
+
+    or:
+
+        >>> dw_mock = dw.copy_without_data()
+        >>> dw_mock.data = generate_mock_data(dw.data._meta if dw.is_dask else dw.data)
+        >>> col_idx = dw_mock.data.columns.get_loc(params["input_cols"]["modes_avail"])
+        >>> for i in range(len(dw_mock.data)):
+        >>>    dw_mock.data.iat[i, col_idx] = np.array([True] * len(modes))
+        >>>
+        >>> vehs_mock = generate_mock_data(vehs)
+        >>> _ = strat.run(dwells=dw_mock, vehs=vehs_mock, modes=modes, show_progress=False)
+    """
+    if len(meta_df.columns) == 0:
+        logger.warning("Empty meta DataFrame provided, returning empty DataFrame")
+        return meta_df.copy()
+
+    np.random.seed(seed)
+
+    # Generate mock data for each column based on dtype
+    mock_data = {}
+    MASK_THRESH = 0.1
+
+    for col in meta_df.columns:
+        dtype = meta_df[col].dtype
+        dtype_name = dtype.name
+
+        try:
+            if pd.api.types.is_integer_dtype(dtype):
+                # Handle nullable integer types
+                if dtype_name.startswith("Int"):
+                    values = np.random.randint(0, 100, size=n_rows)
+                    # Include some NaN values for nullable types
+                    mask = np.random.random(n_rows) < MASK_THRESH
+                    # Create array with NaN values for nullable types
+                    values_with_na = values.astype(
+                        float
+                    )  # Convert to float to allow NaN
+                    values_with_na[mask] = np.nan
+                    mock_data[col] = pd.array(values_with_na, dtype=dtype)
+                else:
+                    mock_data[col] = np.random.randint(0, 100, size=n_rows).astype(
+                        dtype
+                    )
+
+            elif pd.api.types.is_float_dtype(dtype):
+                # Handle nullable float types
+                if dtype_name.startswith("Float"):
+                    values = np.random.uniform(0.0, 100.0, size=n_rows)
+                    # Include some NaN values for nullable types
+                    mask = np.random.random(n_rows) < MASK_THRESH
+                    values[mask] = np.nan
+                    mock_data[col] = pd.array(values, dtype=dtype)
+                else:
+                    mock_data[col] = np.random.uniform(0.0, 100.0, size=n_rows).astype(
+                        dtype
+                    )
+
+            elif pd.api.types.is_bool_dtype(dtype):
+                if dtype_name == "boolean":
+                    # Nullable boolean type - use None for missing values
+                    values = np.random.choice(
+                        [True, False, None], size=n_rows, p=[0.45, 0.45, 0.1]
+                    )
+                    mock_data[col] = pd.array(values, dtype=dtype)
+                else:
+                    mock_data[col] = np.random.choice([True, False], size=n_rows)
+
+            elif pd.api.types.is_datetime64_any_dtype(dtype):
+                # Generate recent datetime values
+                start_date = pd.Timestamp("2024-01-01")
+                days_range = 365
+                random_days = np.random.randint(0, days_range, size=n_rows)
+                hours = np.random.uniform(0, 24, size=n_rows)
+                datetime_values = (
+                    start_date
+                    + pd.to_timedelta(random_days, unit="D")
+                    + pd.to_timedelta(hours, unit="h")
+                )
+
+                # Handle timezone-aware datetime types
+                if hasattr(dtype, "tz") and dtype.tz is not None:
+                    # For timezone-aware dtypes, localize to the timezone
+                    # Convert to Series first, then apply timezone operations
+                    mock_series = pd.Series(datetime_values)
+                    mock_data[col] = mock_series.dt.tz_localize("UTC").dt.tz_convert(
+                        dtype.tz
+                    )
+                else:
+                    # For timezone-naive dtypes, use astype
+                    mock_data[col] = datetime_values.astype(dtype)
+
+            elif pd.api.types.is_timedelta64_dtype(dtype):
+                # Generate timedelta values in hours
+                hours = np.random.uniform(0.5, 24.0, size=n_rows)
+                mock_data[col] = pd.to_timedelta(hours, unit="h").astype(dtype)
+
+            elif isinstance(dtype, pd.CategoricalDtype):
+                # Use existing categories if available, otherwise create defaults
+                if len(dtype.categories) > 0:
+                    mock_data[col] = pd.Categorical(
+                        np.random.choice(dtype.categories, size=n_rows), dtype=dtype
+                    )
+                else:
+                    # Create default categories
+                    categories = [f"category_{i}" for i in range(min(5, n_rows))]
+                    values = np.random.choice(categories, size=n_rows)
+                    mock_data[col] = pd.Categorical(values)
+
+            elif dtype_name == "string":
+                # Nullable string type - use None for missing values
+                values = []
+                for i in range(n_rows):
+                    if np.random.random() < MASK_THRESH:
+                        values.append(None)
+                    else:
+                        values.append(f"string_{i}")
+                mock_data[col] = pd.array(values, dtype=dtype)
+
+            elif dtype == np.dtype("O"):
+                # Object dtype - assume strings
+                mock_data[col] = [f"item_{i}" for i in range(n_rows)]
+
+            else:
+                # Fallback for unknown dtypes
+                logger.warning(
+                    f"Unknown dtype {dtype} for column {col}, using default values"
+                )
+                mock_data[col] = [f"default_{i}" for i in range(n_rows)]
+
+        except Exception as e:
+            logger.warning(
+                f"Failed to generate mock data for column {col} with dtype {dtype}: {e}"
+            )
+            # Fallback to simple default values
+            mock_data[col] = [f"fallback_{i}" for i in range(n_rows)]
+
+    # Create the mock DataFrame
+    mock_df = pd.DataFrame(mock_data)
+
+    # Handle index generation based on meta_df index
+    if isinstance(meta_df.index, pd.MultiIndex):
+        # Generate mock MultiIndex
+        index_levels = []
+        for level_name in meta_df.index.names:
+            lname = level_name if level_name is None else "level"
+            index_levels.append([f"{lname}_{i}" for i in range(n_rows)])
+        mock_df.index = pd.MultiIndex.from_arrays(
+            index_levels, names=meta_df.index.names
+        )
+    else:
+        # Generate simple index matching the meta index type
+        if meta_df.index.dtype == np.dtype("O"):
+            mock_df.index = [f"idx_{i}" for i in range(n_rows)]
+        elif pd.api.types.is_integer_dtype(meta_df.index.dtype):
+            mock_df.index = range(n_rows)
+        elif pd.api.types.is_datetime64_any_dtype(meta_df.index.dtype):
+            mock_df.index = pd.date_range("2024-01-01", periods=n_rows, freq="h")
+        else:
+            # Default to integer index
+            mock_df.index = range(n_rows)
+
+        # Set index name to match meta
+        mock_df.index.name = meta_df.index.name
+
+    return mock_df
+
+
 def categorize_columns(df: pd.DataFrame | DwellSet) -> pd.DataFrame:
     """Categorize object-typed columns to save memory."""
     if isinstance(df, DwellSet):
