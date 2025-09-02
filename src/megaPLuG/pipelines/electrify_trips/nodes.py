@@ -272,7 +272,7 @@ def simulate_charging_choice(
         dw.sort_by_veh_time()
     strat = ForwardLookingChargingChoiceStrategy(**params["input_cols"])
 
-    if params["precompile"]:
+    if params["precompile"]:  # Note: Pre-compilation does not help distributed workers
         logger.info("Pre-compiling charging choice JIT-compiled functions.")
         dw_mock = dw.copy_without_data()
         dw_mock.data = generate_mock_data(dw.data._meta if dw.is_dask else dw.data)
