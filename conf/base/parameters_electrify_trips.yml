@@ -199,6 +199,7 @@ mark_shift_powers:
   fill_value: ${charging_modes.enroute.max_power_kw}
 
 simulate_charging_choice:
+  precompile: False
   input_cols:
     consumed_kwh: energy_use_kwh
     consumed_kwh_next: energy_use_kwh_next

@@ -12,7 +12,7 @@ import pandas as pd
 from megaPLuG.models.charging_algorithms import ForwardLookingChargingChoiceStrategy
 from megaPLuG.models.dwell_sets import CumAggFunc, DwellSet
 from megaPLuG.models.manage_charging import _MANAGER_MAP
-from megaPLuG.utils.data import merge_dataframes_node
+from megaPLuG.utils.data import generate_mock_data, merge_dataframes_node
 from megaPLuG.utils.params import build_df_from_dict
 from megaPLuG.utils.time import total_hours
 
@@ -272,6 +272,18 @@ def simulate_charging_choice(
         dw.sort_by_veh_time()
     strat = ForwardLookingChargingChoiceStrategy(**params["input_cols"])
 
+    if params["precompile"]:
+        logger.info("Pre-compiling charging choice JIT-compiled functions.")
+        dw_mock = dw.copy_without_data()
+        dw_mock.data = generate_mock_data(dw.data._meta if dw.is_dask else dw.data)
+        col_idx = dw_mock.data.columns.get_loc(params["input_cols"]["modes_avail"])
+        for i in range(len(dw_mock.data)):
+            dw_mock.data.iat[i, col_idx] = np.array([True] * len(modes))
+
+        vehs_mock = generate_mock_data(vehs)
+        _ = strat.run(dwells=dw_mock, vehs=vehs_mock, modes=modes, show_progress=False)
+
+    logger.info("Run charging choice simulation.")
     if dw.is_dask:
 
         def _run_charging_on_partition(partition_df: pd.DataFrame, dw_empty: DwellSet):
