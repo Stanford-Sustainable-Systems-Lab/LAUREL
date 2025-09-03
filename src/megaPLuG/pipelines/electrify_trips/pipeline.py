@@ -51,7 +51,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             Node(
                 func=load_dwell_set,
-                inputs=["dwells_with_locations", "params:load_dwell_set"],
+                inputs=["dwells_with_locations_dask", "params:load_dwell_set"],
                 outputs="dwell_obj",
                 name="load_dwell_set_electrify_trips",
             ),
@@ -184,13 +184,13 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=write_scenario_partition,
                 inputs=["dwells_with_charging", "params:results_partition"],
-                outputs="dwells_with_charging_partition",
+                outputs=["dwells_with_charging_partition_dask", "order_ensurer_elect"],
                 name="write_scenario_partition_dwells",
             ),
             Node(
                 func=write_scenario_partition,
                 inputs=["vehicles_with_params", "params:results_partition"],
-                outputs="vehicles_with_params_partition",
+                outputs=["vehicles_with_params_partition", "order_ensurer_veh_params"],
                 name="write_scenario_partition_vehs",
             ),
         ],
@@ -202,8 +202,9 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=read_scenario_partition,
                 inputs=[
-                    "dwells_with_charging_partition",
+                    "dwells_with_charging_partition_dask",
                     "params:results_partition",
+                    "order_ensurer_elect",
                 ],
                 outputs="dwells_with_charging_manage",
                 name="collate_partitions_dwells_with_charging_manage",
@@ -233,7 +234,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=write_scenario_partition,
                 inputs=["events", "params:results_partition"],
-                outputs="events_partition",
+                outputs=["events_partition_dask", "order_ensurer_event"],
                 name="write_scenario_partition_events",
             ),
         ],

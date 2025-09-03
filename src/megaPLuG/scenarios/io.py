@@ -3,7 +3,7 @@ from pathlib import Path
 from .read import ScenarioReader
 
 
-def write_scenario_partition(obj: object, params: dict) -> dict[str:object]:
+def write_scenario_partition(obj: object, params: dict) -> tuple[dict[str:object], str]:
     """Write out the partition for this scenario and dataset.
 
     Insert this into a kedro pipeline to enable saving out of data files to different
@@ -16,10 +16,12 @@ def write_scenario_partition(obj: object, params: dict) -> dict[str:object]:
     Returns: A kedro partition dictionary, with the directory as the key and the object
     to save as the value. The mode of saving should be managed from the catalog.yml
     """
-    return {params["dir"]: obj}
+    return {params["dir"]: obj}, "order_ensurer"
 
 
-def read_scenario_partition(partitions: dict, params: dict) -> object:
+def read_scenario_partition(
+    partitions: dict, params: dict, order_ensurer: str = None
+) -> object:
     """Read in a single partition for this scenario and dataset.
 
     Insert this into a kedro pipeline to enable loading in of a file from a partition

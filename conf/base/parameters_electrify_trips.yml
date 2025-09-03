@@ -15,7 +15,7 @@ load_dwell_set:
   verify_sorting: False
 
 dask_electrify_trips:
-  use_dask: False
+  use_dask: True
   cluster:
     n_workers: 8
     processes: True
