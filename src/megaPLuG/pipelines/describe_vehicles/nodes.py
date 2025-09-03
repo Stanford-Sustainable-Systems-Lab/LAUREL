@@ -37,24 +37,6 @@ def filter_substantial_dwells(dw: DwellSet, params: dict) -> DwellSet:
     return dw
 
 
-def get_vehicle_observation_frames(
-    vehs: pd.DataFrame, dw: DwellSet, params: dict
-) -> pd.DataFrame:
-    """Get the total time and mileage over which each vehicle is observed."""
-    dw.sort_by_veh_time()
-    veh_obs = dw.data.groupby(dw.veh).agg(
-        obs_time_first=pd.NamedAgg(dw.start, "first"),
-        obs_hex_first=pd.NamedAgg(dw.hex, "first"),
-        obs_time_last=pd.NamedAgg(dw.end, "last"),
-        obs_hex_last=pd.NamedAgg(dw.hex, "last"),
-        dist_traveled_col=pd.NamedAgg(dw.trip_dist, "sum"),
-    )
-    veh_obs["obs_time_col"] = veh_obs["obs_time_last"] - veh_obs["obs_time_first"]
-    veh_obs = veh_obs.rename(columns=params["column_namer"])
-    vehs = vehs.merge(veh_obs, how="left", on=dw.veh)
-    return vehs
-
-
 def calc_inter_visit_stats(dw: DwellSet) -> DwellSet:
     """Describe vehicle-location pairs by inter-visit summary statistics."""
     tqdm.pandas()
@@ -204,37 +186,6 @@ def label_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
     return veh_locs
 
 
-def classify_vehicles(
-    vehs: pd.DataFrame, veh_locs: pd.DataFrame, params: dict
-) -> pd.DataFrame:
-    """Classify vehicles by their route type, home base status, etc."""
-    veh_loc_cts = veh_locs.groupby(params["veh_col"], sort=False)[
-        params["loc_col"]
-    ].value_counts()
-    veh_loc_cts = veh_loc_cts.unstack(params["loc_col"])
-    veh_loc_cts["has_home_base"] = veh_loc_cts[params["base_location_type"]] > 0
-    vehs = vehs.merge(
-        veh_loc_cts.loc[:, ["has_home_base"]], how="left", on=params["veh_col"]
-    )
-    vehs.loc[vehs["has_home_base"].isna(), "has_home_base"] = False
-    vehs["has_home_base"] = vehs["has_home_base"].astype(bool)
-    return vehs
-
-
-def mark_weight_class_group(vehs: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Mark the vehicles with VIUS weight class groups."""
-    wgt_corresp = build_df_from_dict(
-        params["values"],
-        id_cols=params["id_columns"],
-        value_col=params["value_col"],
-    )
-    orig_idx = vehs.index.names
-    vehs = vehs.reset_index()
-    vehs = vehs.merge(wgt_corresp, how="left", on=params["id_columns"])
-    vehs = vehs.set_index(orig_idx)
-    return vehs
-
-
 def mark_vehicle_centers(
     vehs: pd.DataFrame, veh_locs: pd.DataFrame, params: dict, dwell_params: dict
 ) -> pd.DataFrame:
@@ -326,6 +277,55 @@ def get_operating_segment(
     segs[params["segment_col"]] = segs.idxmax(axis=1)
 
     vehs = vehs.merge(segs.loc[:, params["segment_col"]], how="left", on=dw.veh)
+    return vehs
+
+
+def classify_vehicles(
+    vehs: pd.DataFrame, veh_locs: pd.DataFrame, params: dict
+) -> pd.DataFrame:
+    """Classify vehicles by their route type, home base status, etc."""
+    veh_loc_cts = veh_locs.groupby(params["veh_col"], sort=False)[
+        params["loc_col"]
+    ].value_counts()
+    veh_loc_cts = veh_loc_cts.unstack(params["loc_col"])
+    veh_loc_cts["has_home_base"] = veh_loc_cts[params["base_location_type"]] > 0
+    vehs = vehs.merge(
+        veh_loc_cts.loc[:, ["has_home_base"]], how="left", on=params["veh_col"]
+    )
+    vehs.loc[vehs["has_home_base"].isna(), "has_home_base"] = False
+    vehs["has_home_base"] = vehs["has_home_base"].astype(bool)
+    return vehs
+
+
+def get_vehicle_observation_frames(
+    vehs: pd.DataFrame, dw: DwellSet, params: dict
+) -> pd.DataFrame:
+    """Get the total time and mileage over which each vehicle is observed."""
+    dw.sort_by_veh_time()
+    veh_obs = dw.data.groupby(dw.veh).agg(
+        obs_time_first=pd.NamedAgg(dw.start, "first"),
+        obs_hex_first=pd.NamedAgg(dw.hex, "first"),
+        obs_time_last=pd.NamedAgg(dw.end, "last"),
+        obs_hex_last=pd.NamedAgg(dw.hex, "last"),
+        dist_traveled_col=pd.NamedAgg(dw.trip_dist, "sum"),
+    )
+    veh_obs["obs_time_col"] = veh_obs["obs_time_last"] - veh_obs["obs_time_first"]
+    veh_obs = veh_obs.rename(columns=params["column_namer"])
+    vehs = vehs.merge(veh_obs, how="left", on=dw.veh)
+    return vehs
+
+
+def mark_weight_class_group(vehs: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Mark the vehicles with VIUS weight class groups."""
+    wgt_corresp = build_df_from_dict(
+        params["values"],
+        id_cols=params["id_columns"],
+        value_col=params["value_col"],
+    )
+    orig_idx = vehs.index.names
+    vehs = vehs.reset_index()
+    vehs = vehs.merge(wgt_corresp, how="left", on=params["id_columns"])
+    vehs = vehs.set_index(orig_idx)
     return vehs
 
 
