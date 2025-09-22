@@ -70,6 +70,10 @@ def _cells_to_geom_wrapper(
         raise RuntimeError(f"'{hex_col}' not found in DataFrame columns or index.")
 
     geoms = f(hexes)
+    if "geometry" not in gdf.columns.names:
+        geoms.name = "geometry"
+    else:
+        raise RuntimeError("'geometry' is already used as a column name.")
     gdf = gdf.set_geometry(geoms)
     return gdf
 
