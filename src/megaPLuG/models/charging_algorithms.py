@@ -213,7 +213,7 @@ class AbstractChargingChoiceStrategy(ABC):
         return dwells_w_charging
 
     @staticmethod
-    @jit
+    @jit(cache=True)
     def _simulate(
         choice_func: Callable,
         dwls: np.recarray,
@@ -320,7 +320,7 @@ class SoCThreshChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         super().__init__(**kwargs)
 
     @staticmethod
-    @jit
+    @jit(cache=True)
     def _choose_charging(
         cur_energy: float,
         dwl: np.recarray,
@@ -376,7 +376,7 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         super().__init__(**kwargs)
 
     @staticmethod
-    @jit
+    @jit(cache=True)
     def _choose_charging(
         cur_energy: float,
         dwl: np.recarray,

@@ -282,6 +282,7 @@ def simulate_charging_choice(
 
         vehs_mock = generate_mock_data(vehs)
         _ = strat.run(dwells=dw_mock, vehs=vehs_mock, modes=modes, show_progress=False)
+        logger.warning(strat._simulate.signatures)
 
     logger.info("Run charging choice simulation.")
     if dw.is_dask:
@@ -293,6 +294,7 @@ def simulate_charging_choice(
             result = strat.run(
                 dwells=dw_part, vehs=vehs, modes=modes, show_progress=False
             )
+            logger.warning(strat._simulate.signatures)
             return result
 
         # Create meta DataFrame to define output structure using schema generation

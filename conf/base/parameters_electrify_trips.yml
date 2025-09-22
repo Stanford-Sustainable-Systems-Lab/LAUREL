@@ -20,7 +20,7 @@ dask_electrify_trips:
     n_workers: 8
     processes: True
     threads_per_worker: 1 # Must stay at 1, since our code is not thread safe
-    memory_limit: 4GiB
+    memory_limit: 6GiB
 
 filter_vehicles:
   filters:
@@ -200,7 +200,7 @@ mark_shift_powers:
   fill_value: ${charging_modes.enroute.max_power_kw}
 
 simulate_charging_choice:
-  precompile: False
+  precompile: True
   input_cols:
     consumed_kwh: energy_use_kwh
     consumed_kwh_next: energy_use_kwh_next
