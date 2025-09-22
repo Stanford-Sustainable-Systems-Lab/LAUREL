@@ -69,7 +69,36 @@ parking_private:
   type: pandas.CSVDataset
   filepath: data/01_raw/Data_Axle_Establishments/from_Redivis/truck_stops_by_naics_output.csv
 
+establishments_location:
+  type: dask.CSVDataset
+  filepath: data/01_raw/Data_Axle_Establishments/establishments/location.csv
+
+establishments_name_naics_employees:
+  type: dask.CSVDataset
+  filepath: data/01_raw/Data_Axle_Establishments/establishments/name_naics_employees.csv
+
+establishments_parent_bus_status:
+  type: dask.CSVDataset
+  filepath: data/01_raw/Data_Axle_Establishments/establishments/parent_bus_status.csv
+  load_args:
+    dtype:
+      PARENT_NUMBER: float64
+
+naics_descriptions:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/Data_Axle_Establishments/metadata/naics_descriptions.csv
+
+naics_focus_leaves:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/Data_Axle_Establishments/naics_tree_focus_leaves.csv
+
 # Preprocessed datasets
+establishments_formatted:
+  type: megaPLuG.datasets.geoparquet.GeoParquetDataset
+  filepath: data/02_intermediate/establishments_formatted/
+  save_args:
+    write_index: False
+
 trips_formatted:
   type: dask.ParquetDataset
   filepath: data/02_intermediate/trips_formatted/
@@ -151,6 +180,10 @@ substations_standard_pg_and_e:
       layer: substations
     load_args:
       layer: substations
+
+hex_cluster_corresp:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/hex_cluster_corresp.feather
 
 continental.hex_region_corresp:
   type: pandas.FeatherDataset
