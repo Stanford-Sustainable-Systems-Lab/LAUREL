@@ -143,9 +143,14 @@ def calc_time_attrs(df: pd.DataFrame, time_col: str, attrs: list[str]) -> pd.Dat
     return df
 
 
+def total_time_units(s: pd.Series, unit: str) -> pd.Series:
+    """Get the total number of time units from a series of timedeltas."""
+    return s.dt.total_seconds() / pd.Timedelta(value=unit).total_seconds()
+
+
 def total_hours(s: pd.Series) -> pd.Series:
     """Get the total number of hours from a series of timedeltas."""
-    return s.dt.total_seconds() / SECS_PER_HOUR
+    return total_time_units(s, unit="1h")
 
 
 @jit
