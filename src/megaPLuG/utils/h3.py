@@ -4,6 +4,7 @@ import dask.dataframe as dd
 import dask_geopandas
 import geopandas as gpd
 import h3.api.numpy_int as h3
+import numpy as np
 import pandas as pd
 from shapely import Polygon
 
@@ -124,3 +125,20 @@ def region_polygons_to_cells(
     hexes.name = hex_col
     hexes = hexes.to_frame()
     return hexes
+
+
+def coords_to_cells(lat: np.ndarray, lng: np.ndarray, res: int) -> np.ndarray:
+    """Creates a like-indexed GeoSeries of points from a series of h3 cells."""
+    assert lat.shape == lng.shape
+    assert lat.ndim == 1
+    assert lng.ndim == 1
+    out = np.empty_like(lat, dtype=np.uint64)
+    for i in range(out.size):
+        out[i] = h3.latlng_to_cell(lat=lat[i], lng=lng[i], res=res)
+    return out
+
+
+def coords_to_cells_wrapper(
+    part: pd.DataFrame, lat_col: str, lng_col: str, res: int
+) -> np.ndarray:
+    return coords_to_cells(lat=part[lat_col].values, lng=part[lng_col].values, res=res)
