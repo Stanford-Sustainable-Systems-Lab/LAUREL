@@ -13,6 +13,7 @@ from .nodes import (
     # build_land_use_areas,
     build_substation_polygons,
     describe_substation_usage,
+    format_estabs,
     format_govt_areas,
     format_highways,
     format_substation_boundaries_contin,
@@ -210,4 +211,27 @@ def create_pipeline(**kwargs) -> Pipeline:
         ),
     ]
 
-    return ca_subs_pipe + continental_subs_pipe + format_allied_pipe + sum(geo_pipes)
+    estab_pipe = Pipeline(
+        [
+            Node(
+                func=format_estabs,
+                inputs=[
+                    "establishments_name_naics_employees",
+                    "establishments_location",
+                    "establishments_parent_bus_status",
+                    "params:format_estabs",
+                ],
+                outputs="establishments_formatted",
+                name="format_estabs",
+            ),
+        ],
+        tags="establishments",
+    )
+
+    return (
+        ca_subs_pipe
+        + continental_subs_pipe
+        + format_allied_pipe
+        + sum(geo_pipes)
+        + estab_pipe
+    )

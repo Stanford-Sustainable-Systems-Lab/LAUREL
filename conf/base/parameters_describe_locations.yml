@@ -166,3 +166,19 @@ get_hexes_by_area:
 
 get_timezones:
   hex_col: hex_id
+
+format_estabs:
+  col_renamer:
+    estab_id: ESTAB_ID
+    name: COMPANY
+    naics_8: PRIMARY_NAICS_CODE
+    n_employees: EMPLOYEE_SIZE__5____LOCATION
+    business_status_code: BUSINESS_STATUS_CODE
+    parent_id: PARENT_NUMBER
+    state: STATE
+    lat: LATITUDE
+    lon: LONGITUDE
+  default_naics: 99999001
+  calculated_keep_cols:
+    - hex_id
+    - geometry

@@ -5,12 +5,18 @@ generated using Kedro 0.19.3
 
 import logging
 
-import dask_geopandas
+import dask.dataframe as dd
+import dask_geopandas as dgpd
 import geopandas as gpd
 import pandas as pd
 from tqdm import tqdm
 
-from megaPLuG.utils.h3 import region_polygons_to_cells
+from megaPLuG.utils.h3 import (
+    H3_CRS,
+    H3_DEFAULT_RESOLUTION,
+    coords_to_cells_wrapper,
+    region_polygons_to_cells,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +112,7 @@ def build_substation_polygons(
     subs_polys.set_geometry("substation_polygons", inplace=True)
 
     # Clip the substation polygons at the bounds
-    ddf = dask_geopandas.from_geopandas(subs_polys, npartitions=params["n_partitions"])
+    ddf = dgpd.from_geopandas(subs_polys, npartitions=params["n_partitions"])
     bounds = states.geometry.union_all()
     subs_polys[params["poly_col_out"]] = ddf.intersection(bounds).compute()
     subs_polys.set_geometry(params["poly_col_out"], inplace=True)
@@ -219,3 +225,52 @@ def get_hexes_by_area(areas: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame
     hexes = hexes.drop_duplicates(subset=params["hex_col"])
     hexes = hexes.set_index(params["hex_col"])
     return hexes
+
+
+def format_estabs(
+    estabs_core: dd.DataFrame,
+    estabs_geo: dd.DataFrame,
+    estabs_rels: dd.DataFrame,
+    params: dict,
+) -> dgpd.GeoDataFrame:
+    """Format the establishment dataset by merging together disparate raw datasets."""
+    rnmr = {v: k for k, v in params["col_renamer"].items()}
+    estabs_core = estabs_core.rename(columns=rnmr)
+    estabs_geo = estabs_geo.rename(columns=rnmr)
+    estabs_rels = estabs_rels.rename(columns=rnmr)
+
+    estabs_core = estabs_core.set_index("estab_id")
+    estabs_geo = estabs_geo.set_index("estab_id")
+    estabs_rels = estabs_rels.set_index("estab_id")
+
+    estabs_geo = estabs_geo.dropna(subset=["lon", "lat"])
+    # estabs_geo = estabs_geo.categorize(columns=["state"])
+    estabs_geo["geometry"] = dgpd.points_from_xy(
+        df=estabs_geo, x="lon", y="lat", crs=H3_CRS
+    )
+    estabs_geo["hex_id"] = estabs_geo.map_partitions(
+        coords_to_cells_wrapper,
+        lat_col="lat",
+        lng_col="lon",
+        res=H3_DEFAULT_RESOLUTION,
+        meta=("x", "uint64"),
+    )
+    estabs_geo = dgpd.from_dask_dataframe(df=estabs_geo, geometry="geometry")
+    estabs_geo = estabs_geo.drop(columns=["lon", "lat"])
+
+    estabs_core["naics_8"] = (
+        estabs_core["naics_8"].fillna(params["default_naics"]).astype(int)
+    )
+
+    # Order matters here to preserve geometry-awareness
+    estabs_mrg = estabs_geo.merge(
+        estabs_core, how="inner", left_index=True, right_index=True
+    )
+    estabs_mrg = estabs_mrg.merge(
+        estabs_rels, how="inner", left_index=True, right_index=True
+    )
+
+    out_cols = [col for col in list(rnmr.values()) if col in estabs_mrg.columns]
+    out_cols.extend(params["calculated_keep_cols"])
+
+    return estabs_mrg[out_cols]
