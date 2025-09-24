@@ -6,18 +6,16 @@ generated using Kedro 0.19.1
 from kedro.pipeline import Node, Pipeline
 
 from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
-from megaPLuG.scenarios.io import read_scenario_partition, write_scenario_partition
+from megaPLuG.scenarios.io import write_scenario_partition
 from megaPLuG.utils.data import categorize_columns, filter_by_vals_in_cols
 from megaPLuG.utils.distributed import start_dask_node
 from megaPLuG.utils.params import set_entity_params
 
 from .nodes import (
-    apply_delays,
     calc_dwell_durations,
     calc_energy_use,
     filter_dwells,
     filter_vehicles,
-    manage_charging,
     mark_critical_days,
     mark_shift_powers,
     mark_shift_refreshes,
@@ -197,46 +195,4 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags=["scenario_run", "choose_charging"],
     )
 
-    manage_pipe = Pipeline(
-        [
-            Node(
-                func=read_scenario_partition,
-                inputs=[
-                    "dwells_with_charging_partition",
-                    "params:results_partition",
-                ],
-                outputs="dwells_with_charging_manage",
-                name="collate_partitions_dwells_with_charging_manage",
-            ),
-            Node(
-                func=load_dwell_set,
-                inputs=["dwells_with_charging_manage", "params:load_dwell_set"],
-                outputs="dwell_obj_manage",
-                name="load_dwell_set_manage_charging",
-            ),
-            Node(
-                func=apply_delays,
-                inputs=["dwell_obj_manage", "params:apply_delays"],
-                outputs="dwell_obj_w_delays",
-                name="apply_delays",
-            ),
-            Node(
-                func=manage_charging,
-                inputs=[
-                    "dwell_obj_w_delays",
-                    "params:manage_charging",
-                ],
-                outputs="events",
-                name="manage_charging",
-                tags="frame-charging_management",
-            ),
-            Node(
-                func=write_scenario_partition,
-                inputs=["events", "params:results_partition"],
-                outputs="events_partition",
-                name="write_scenario_partition_events",
-            ),
-        ],
-        tags=["scenario_run", "manage_charging"],
-    )
-    return charge_pipe + manage_pipe
+    return charge_pipe

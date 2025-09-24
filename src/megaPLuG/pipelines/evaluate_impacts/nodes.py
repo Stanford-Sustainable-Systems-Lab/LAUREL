@@ -6,6 +6,7 @@ generated using Kedro 0.19.1
 import gc
 import logging
 
+import dask.dataframe as dd
 import geopandas as gpd
 import numpy as np
 import pandas as pd
@@ -14,6 +15,7 @@ from tqdm.auto import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.group_times import AdaptiveTimeGrouper, HourOfWeekdayGrouper
+from megaPLuG.models.manage_charging import _MANAGER_MAP
 from megaPLuG.models.summarize import IntervalBeginSpreader, NonzeroGroupedSummarizer
 from megaPLuG.utils.data import IndexIntegerizer, filter_by_vals_in_cols
 from megaPLuG.utils.h3 import cells_to_region_polygons
@@ -205,6 +207,51 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
     ]
     logger.info(np.round(vehs.loc[:, reasons].sum(axis=0) / len(vehs) * 100, 2))
     return vehs
+
+
+def apply_delays(dw: DwellSet, params: dict) -> DwellSet:
+    """Apply the delays found in charging choice to dwell duration, start time, and end
+    time.
+
+    We apply the cumulative delay up to the present time to the beginning and end times
+    of each dwell. Then we additionally reduce the dwell period by the delay reduction
+    and increase the end time by the new delay added at this dwell.
+    """
+    dly_cols = params["delay_columns"]
+    tdelt_cols = {}
+    for prm_key, col in dly_cols.items():
+        td_col = f"{col}_tdelta"
+        if dw.is_dask:
+            dw.data[td_col] = dd.to_timedelta(dw.data[col], unit=params["delay_unit"])
+        else:
+            dw.data[td_col] = pd.to_timedelta(dw.data[col], unit=params["delay_unit"])
+        tdelt_cols.update({prm_key: td_col})
+
+    cum_dly = dw.data[tdelt_cols["cumul_hrs"]]
+    dw.data[dw.start] += cum_dly
+    dw.data[dly_cols["dwell_hrs"]] = total_hours(
+        dw.data[tdelt_cols["dwell_hrs"]]
+        - dw.data[tdelt_cols["decrease_hrs"]]
+        + dw.data[tdelt_cols["increase_hrs"]]
+    )
+    dw.data[dw.end] += cum_dly + dw.data[tdelt_cols["increase_hrs"]]
+
+    dw.data = dw.data.drop(columns=list(tdelt_cols.values()))
+    return dw
+
+
+def manage_charging(dw: DwellSet, params: dict) -> pd.DataFrame:
+    """Manage the charging of vehicles within each dwell to create charging events."""
+    # Drop dwells with NaN charging energy, which probably resulted from vehicle deaths
+    dw.data = dw.data.dropna(subset=params["drop_na_cols"])
+
+    # Manage charging energy into power
+    manager_cls = _MANAGER_MAP[params["charging_manager"]]
+    manager = manager_cls(dw=dw, **params["input_cols"])
+    events = manager.get_events()
+    pow_col = manager_cls.suffixes["power"]
+    events[pow_col] = events[pow_col].round(params["round_decimals"])
+    return events
 
 
 def filter_events(events: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFrame:

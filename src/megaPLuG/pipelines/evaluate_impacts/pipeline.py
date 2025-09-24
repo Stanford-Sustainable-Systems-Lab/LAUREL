@@ -18,12 +18,14 @@ from megaPLuG.utils.data import (
 from megaPLuG.utils.distributed import start_dask_node
 
 from .nodes import (
+    apply_delays,
     build_eval_columns,
     build_sampling_totals,
     build_slice_frame,
     filter_events,
     filter_slices_time,
     localize_time_from_hexes,
+    manage_charging,
     sample_vehicle_windows,
     slice_vehicle_windows,
     summarize_vehicle_window_quantiles,
@@ -57,12 +59,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs="vehicles_with_params_eval",
                 outputs="vehicles_with_params_eval_categorized",
                 name="categorize_vehicles_with_params_eval",
-            ),
-            Node(
-                func=read_scenario_partition,
-                inputs=["events_partition", "params:results_partition"],
-                outputs="events_eval",
-                name="collate_partitions_events",
             ),
             Node(
                 func=read_scenario_partition,
@@ -102,6 +98,28 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags=["report_vehicles", "scenario_run"],
     )
 
+    manage_pipe = Pipeline(
+        [
+            Node(
+                func=apply_delays,
+                inputs=["dwell_obj_eval", "params:apply_delays"],
+                outputs="dwell_obj_w_delays",
+                name="apply_delays",
+            ),
+            Node(
+                func=manage_charging,
+                inputs=[
+                    "dwell_obj_w_delays",
+                    "params:manage_charging",
+                ],
+                outputs="events",
+                name="manage_charging",
+                tags="frame-charging_management",
+            ),
+        ],
+        tags=["scenario_run", "manage_charging"],
+    )
+
     report_profiles_scaled_prep_pipe = Pipeline(
         [
             Node(
@@ -119,7 +137,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=merge_dataframes_node,
                 inputs=[
-                    "events_eval",
+                    "events",
                     "hex_region_corresp_categorized",
                     "merge_params_locations",
                 ],
@@ -309,6 +327,7 @@ def create_pipeline(**kwargs) -> Pipeline:
     return (
         read_pipe
         + report_vehicles_pipe
+        + manage_pipe
         + report_profiles_scaled_prep_pipe
         + sum(report_profiles_pipes)
     )
