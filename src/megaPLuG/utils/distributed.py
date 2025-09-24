@@ -1,3 +1,5 @@
+import dask.dataframe as dd
+import pandas as pd
 from dask.distributed import Client, LocalCluster
 
 
@@ -22,3 +24,8 @@ def stop_dask_node(cluster: LocalCluster, client: Client, result: object) -> Non
 
     if cluster != "None" and isinstance(cluster, LocalCluster):
         cluster.close()
+
+
+def load_in_memory_node(ddf: dd.DataFrame) -> pd.DataFrame:
+    """Force computation to bring the input dataframe into memory."""
+    return ddf.compute()
