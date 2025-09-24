@@ -29,8 +29,6 @@
             "console": "integratedTerminal",
             "module": "kedro",
             "args": ["run", "--async", "--pipeline=preprocess", "--env=scenarios/test/task_0"]
-            // Any other arguments should be passed as a comma-seperated-list
-            // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },        
         {
             "name": "Kedro: Compute Routes",
@@ -39,8 +37,6 @@
             "console": "integratedTerminal",
             "module": "kedro",
             "args": ["run", "--async", "--pipeline=compute_routes", "--tags=route", "--env=scenarios/test/task_0"]
-            // Any other arguments should be passed as a comma-seperated-list
-            // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
         {
             "name": "Kedro: Prepare Totals",
@@ -49,8 +45,6 @@
             "console": "integratedTerminal",
             "module": "kedro",
             "args": ["run", "--async", "--pipeline=prepare_totals", "--env=scenarios/test/task_0"]
-            // Any other arguments should be passed as a comma-seperated-list
-            // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
         {
             "name": "Kedro: Describe Vehicles",
@@ -59,8 +53,6 @@
             "console": "integratedTerminal",
             "module": "kedro",
             "args": ["run", "--async", "--pipeline=describe_vehicles", "--env=scenarios/test/task_0"]
-            // Any other arguments should be passed as a comma-seperated-list
-            // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
         {
             "name": "Kedro: Describe Locations",
@@ -69,8 +61,6 @@
             "console": "integratedTerminal",
             "module": "kedro",
             "args": ["run", "--async", "--pipeline=describe_locations", "--env=scenarios/test/task_0"]
-            // Any other arguments should be passed as a comma-seperated-list
-            // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
         {
             "name": "Kedro: Electrify Trips",
@@ -79,8 +69,6 @@
             "console": "integratedTerminal",
             "module": "kedro",
             "args": ["run", "--async", "--pipeline=electrify_trips", "--env=scenarios/test/task_0"]
-            // Any other arguments should be passed as a comma-seperated-list
-            // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
         {
             "name": "Kedro: Evaluate Impacts",
@@ -89,8 +77,6 @@
             "console": "integratedTerminal",
             "module": "kedro",
             "args": ["run", "--async", "--pipeline=evaluate_impacts", "--env=scenarios/test/task_0"]
-            // Any other arguments should be passed as a comma-seperated-list
-            // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },
     ]
 }
