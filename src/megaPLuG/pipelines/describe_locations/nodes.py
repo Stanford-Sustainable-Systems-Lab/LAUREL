@@ -8,7 +8,10 @@ import logging
 import dask.dataframe as dd
 import dask_geopandas as dgpd
 import geopandas as gpd
+import numpy as np
 import pandas as pd
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
 from megaPLuG.utils.h3 import (
@@ -17,6 +20,8 @@ from megaPLuG.utils.h3 import (
     coords_to_cells_wrapper,
     region_polygons_to_cells,
 )
+from megaPLuG.utils.hex_neighbors import get_neighbor_embeddings
+from megaPLuG.utils.naics import get_naics_leaf_class
 
 logger = logging.getLogger(__name__)
 
@@ -274,3 +279,140 @@ def format_estabs(
     out_cols.extend(params["calculated_keep_cols"])
 
     return estabs_mrg[out_cols]
+
+
+def reassign_hqs(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
+    """Re-assign headquarters establishments to a headquarters NAICS code.
+
+    This allows us to avoid seeing a headquarters for a truck stop company, for instance,
+    as the world's biggest truck stop.
+    """
+    pcols = params["columns"]
+    parents = estabs.groupby(pcols["parent_id"]).agg(
+        n_estabs_in_parent=pd.NamedAgg(pcols["naics"], "count"),
+        n_emps_in_parent=pd.NamedAgg(pcols["n_employees"], "sum"),
+        med_emps_in_parent=pd.NamedAgg(pcols["n_employees"], "median"),
+    )
+
+    estab_context = estabs.reset_index()
+    estab_context = estab_context.merge(parents, how="left", on=pcols["parent_id"])
+    estab_context = estab_context.set_index(pcols["estab_id"])
+
+    estab_context["emp_ratio_to_med"] = (
+        estab_context[pcols["n_employees"]] / estab_context["med_emps_in_parent"]
+    )
+
+    hqs = estab_context.loc[
+        (estab_context["emp_ratio_to_med"] > params["emp_ratio_min"])
+        & (estab_context[pcols["buss_status"]].isin(params["hq_bus_codes"]))
+        & (estab_context["n_estabs_in_parent"] > params["n_estabs_big"])
+        & (estab_context[pcols["naics"]] >= params["naics_window"]["lower"])
+        & (estab_context[pcols["naics"]] < params["naics_window"]["upper"])
+    ]
+
+    estabs[pcols["naics"]] = estabs[pcols["naics"]].where(
+        ~estabs.index.isin(hqs.index), params["hq_naics"]
+    )
+
+    return estabs
+
+
+def collapse_naics_classes(
+    estabs: gpd.GeoDataFrame, naics_leaves: pd.DataFrame, params: dict
+) -> gpd.GeoDataFrame:
+    """Collapse the NAICS classes down to the specific level of detail we need."""
+    ncols = params["naics_cols"]
+    estabs[ncols["out"]] = get_naics_leaf_class(
+        codes=estabs[ncols["raw"]].values,
+        leaves=naics_leaves[ncols["leaf"]].values,
+    ).astype(int)
+    return estabs
+
+
+def embed_hexes(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
+    """Create embeddings for each hexagon based on the total employment in each establishment type."""
+    pcols = params["columns"]
+    emp_col = pcols["n_employees"]
+    estabs[emp_col] = estabs[emp_col] + (estabs[emp_col] == 0) * params["zero_emp_buff"]
+
+    logger.info("Computing embedding for each hexagon")
+    estabs_hex = estabs.groupby([pcols["hex_id"], pcols["naics"]])[emp_col].sum()
+    estabs_hex = estabs_hex.unstack(pcols["naics"], fill_value=0).astype(int)
+
+    pre = params["naics_prefix"]
+    naics_to_str = {
+        col: f"{pre}{col}" for col in estabs_hex.columns if isinstance(col, int)
+    }
+    estabs_hex = estabs_hex.rename(columns=naics_to_str)
+    estabs_hex = estabs_hex.sort_index(
+        axis=1
+    )  # Establishing lexical sorting of NAICS code strings
+
+    mrg_cols = [pcols["hex_id"], pcols["geom"]] + params["keep_metadata_cols"]
+    hex_mrg = estabs.loc[:, mrg_cols].drop_duplicates(pcols["hex_id"])
+    hex_mrg = hex_mrg.set_index(pcols["hex_id"])
+    estabs_hex = estabs_hex.merge(
+        hex_mrg, how="left", left_index=True, right_index=True
+    )
+    estabs_hex = gpd.GeoDataFrame(data=estabs_hex, geometry=pcols["geom"])
+
+    if params["include_neighbors"]:
+        logger.info("Computing neighbor embeddings for each hexagon")
+        naics_cols = sorted(list(naics_to_str.values()))
+        ngbr_embs = get_neighbor_embeddings(
+            hexes=estabs_hex.index.values.astype(np.uint64),
+            embs=estabs_hex.loc[:, naics_cols].values,
+            include_center=False,
+            distance=1,
+        )
+        ngbr_df = pd.DataFrame(
+            data=ngbr_embs, columns=naics_cols, index=estabs_hex.index
+        )
+        estabs_hex = estabs_hex.merge(
+            ngbr_df,
+            how="left",
+            left_index=True,
+            right_index=True,
+            suffixes=("", params["neighbor_merge_suffix"]),
+        )
+
+    return estabs_hex
+
+
+def cluster_hexes(embs: gpd.GeoDataFrame, params: dict) -> pd.DataFrame:
+    """Cluster hexagons together based on embeddings."""
+    scaler = StandardScaler(**params["scaler_kwargs"])
+    clusterer = KMeans(**params["clusterer_kwargs"])
+
+    fcols = []
+    if params["features"]["include_own_naics"]:
+        fcols.extend(
+            [col for col in embs.columns if col.startswith(params["naics_prefix"])]
+        )
+    if params["features"]["include_ngbr_naics"]:
+        fcols.extend(
+            [col for col in embs.columns if col.endswith(params["ngbr_suffix"])]
+        )
+
+    other_feats = params["features"]["other_features"]
+    if other_feats is not None:
+        fcols.extend(other_feats)
+
+    X_train = embs.loc[:, fcols].values
+    X_transf = np.log10(1 + X_train)
+    train_scaled = scaler.fit_transform(X=X_transf)
+    embs[params["cluster_col"]] = clusterer.fit_predict(X=train_scaled)
+
+    return embs.loc[:, [params["cluster_col"]]]
+
+
+def apply_clusters(
+    hexes: pd.DataFrame, clusts: pd.DataFrame, params: dict
+) -> pd.DataFrame:
+    """Apply clusters to locations of observed dwells."""
+    assert hexes.index.name == params["hex_col"]
+    assert clusts.index.name == params["hex_col"]
+    out = hexes.merge(clusts, how="left", left_index=True, right_index=True)
+    cl_col = params["clust_col"]
+    out[cl_col] = out[cl_col].fillna(params["fill_cluster"]).astype(int)
+    return out

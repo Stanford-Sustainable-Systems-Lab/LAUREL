@@ -6,13 +6,18 @@ generated using Kedro 0.19.3
 from kedro.pipeline import Node, Pipeline
 
 from megaPLuG.utils.data import filter_by_vals_in_cols
+from megaPLuG.utils.distributed import load_in_memory_node
 from megaPLuG.utils.time import get_timezones
 
 from .nodes import (
+    apply_clusters,
     build_analysis_areas_node,
     # build_land_use_areas,
     build_substation_polygons,
+    cluster_hexes,
+    collapse_naics_classes,
     describe_substation_usage,
+    embed_hexes,
     format_estabs,
     format_govt_areas,
     format_highways,
@@ -21,6 +26,7 @@ from .nodes import (
     format_substation_profiles,
     format_urban,
     get_hexes_by_area,
+    reassign_hqs,
 )
 
 
@@ -117,6 +123,57 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="format_allied_datasets",
     )
 
+    estab_pipe = Pipeline(
+        [
+            Node(
+                func=format_estabs,
+                inputs=[
+                    "establishments_name_naics_employees",
+                    "establishments_location",
+                    "establishments_parent_bus_status",
+                    "params:format_estabs",
+                ],
+                outputs="establishments_formatted",
+                name="format_estabs",
+            ),
+            Node(
+                func=load_in_memory_node,
+                inputs="establishments_formatted",
+                outputs="estabs_raw",
+                name="load_to_memory_estabs_raw",
+            ),
+            Node(
+                func=reassign_hqs,
+                inputs=["estabs_raw", "params:reassign_hqs"],
+                outputs="estabs_hqed",
+                name="reassign_hqs",
+            ),
+            Node(
+                func=collapse_naics_classes,
+                inputs=[
+                    "estabs_hqed",
+                    "naics_focus_leaves",
+                    "params:collapse_naics_classes",
+                ],
+                outputs="estabs_leafed",
+                name="collapse_naics_classes",
+            ),
+            Node(
+                func=embed_hexes,
+                inputs=["estabs_leafed", "params:embed_hexes"],
+                outputs="hex_embeds",
+                name="embed_hexes",
+            ),
+            Node(
+                func=cluster_hexes,
+                inputs=["hex_embeds", "params:cluster_hexes"],
+                outputs="hex_cluster_corresp",
+                name="cluster_hexes",
+            ),
+        ],
+        tags="establishments",
+    )
+
     geo_pipe = Pipeline(
         [
             Node(
@@ -174,8 +231,18 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=get_timezones,
                 inputs=["hex_area_corresp", "params:get_timezones"],
-                outputs="hex_region_corresp",
+                outputs="hex_tz_corresp",
                 name="get_timezones",
+            ),
+            Node(
+                func=apply_clusters,
+                inputs=[
+                    "hex_tz_corresp",
+                    "hex_cluster_corresp",
+                    "params:apply_clusters",
+                ],
+                outputs="hex_region_corresp",
+                name="apply_clusters",
             ),
         ],
         tags="substation_geographies",
@@ -186,6 +253,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         "params:analysis_areas",
         "params:get_hexes_by_area",
         "params:get_timezones",
+        "params:apply_clusters",
     }
 
     geo_pipes = [
@@ -196,6 +264,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             inputs={
                 "states_formatted": "states_formatted",
                 "substations_standard": "substations_standard_pg_and_e",
+                "hex_cluster_corresp": "hex_cluster_corresp",
             },
             tags="geos_pg_and_e",
         ),
@@ -206,32 +275,16 @@ def create_pipeline(**kwargs) -> Pipeline:
             inputs={
                 "states_formatted": "states_formatted",
                 "substations_standard": "substations_standard_continental",
+                "hex_cluster_corresp": "hex_cluster_corresp",
             },
             tags="geos_continental",
         ),
     ]
 
-    estab_pipe = Pipeline(
-        [
-            Node(
-                func=format_estabs,
-                inputs=[
-                    "establishments_name_naics_employees",
-                    "establishments_location",
-                    "establishments_parent_bus_status",
-                    "params:format_estabs",
-                ],
-                outputs="establishments_formatted",
-                name="format_estabs",
-            ),
-        ],
-        tags="establishments",
-    )
-
     return (
         ca_subs_pipe
         + continental_subs_pipe
         + format_allied_pipe
-        + sum(geo_pipes)
         + estab_pipe
+        + sum(geo_pipes)
     )

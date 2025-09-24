@@ -182,3 +182,60 @@ format_estabs:
   calculated_keep_cols:
     - hex_id
     - geometry
+
+reassign_hqs:
+  columns:
+    naics: naics_8
+    parent_id: parent_id
+    n_employees: n_employees
+    estab_id: estab_id
+    buss_status: business_status_code
+  emp_ratio_min: 5 # Minimum ratio of n_employees at this establishment compared to median of parent company for this to be considered an HQ
+  hq_bus_codes: # Business status codes corresponding to HQs
+    - 1
+  n_estabs_big: 20 # The minimum number of establishments within a parent to be considered "big" and viable for HQ replacement
+  naics_window: # Window of NAICS values for which replacement can occur
+    lower: 40000000
+    upper: 50000000
+  hq_naics: 55111201 # Replacement NAICS for HQs - Offices of other holding companies
+
+collapse_naics_classes:
+  naics_cols:
+    raw: naics_8
+    out: naics_focus
+    leaf: naics_leaf
+  
+embed_hexes:
+  columns:
+    n_employees: n_employees
+    naics: naics_focus
+    hex_id: hex_id
+    geom: geometry
+  keep_metadata_cols:
+    - state
+  zero_emp_buff: 1 # Number of "fake" employees to add to establishments without employees
+  naics_prefix: naics_
+  include_neighbors: True
+  neighbor_merge_suffix: _ngbr
+
+cluster_hexes:
+  cluster_col: cluster_id
+  naics_prefix: naics_
+  ngbr_suffix: _ngbr
+  features:
+    include_own_naics: True
+    include_ngbr_naics: True
+    other_features: # Leaving nothing here implies a value of None
+  scaler_kwargs:
+    with_mean: True
+    with_std: True
+  clusterer_kwargs:
+    n_clusters: 50 #500
+    random_state: 42
+    init: k-means++
+    verbose: 1 # Scikit-learn uses an integer system for verbosity, with 0 being no prints
+
+apply_clusters:
+  hex_col: hex_id
+  clust_col: cluster_id
+  fill_cluster: ${cluster_hexes.clusterer_kwargs.n_clusters} # Fill with max(clust_id) + 1
