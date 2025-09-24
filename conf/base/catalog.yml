@@ -514,7 +514,7 @@ dwell_obj_w_modes:
   type: MemoryDataset
   copy_mode: assign
 
-dwell_obj_manage:
+dwell_obj_eval:
   type: MemoryDataset
   copy_mode: assign
 
@@ -522,7 +522,15 @@ dwell_obj_w_delays:
   type: MemoryDataset
   copy_mode: assign
 
-dwell_obj_eval:
+dwell_obj_w_regions:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_w_metadata:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_filtered:
   type: MemoryDataset
   copy_mode: assign
 

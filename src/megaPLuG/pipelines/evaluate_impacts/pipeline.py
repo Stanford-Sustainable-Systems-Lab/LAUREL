@@ -6,6 +6,7 @@ generated using Kedro 0.19.1
 from kedro.pipeline import Node, Pipeline
 
 from megaPLuG.models.dwell_sets import load_dwell_set
+from megaPLuG.pipelines.electrify_trips.nodes import merge_dwellset_node
 from megaPLuG.scenarios.io import (
     read_scenario_partition,
     write_scenario_partition,
@@ -13,7 +14,6 @@ from megaPLuG.scenarios.io import (
 from megaPLuG.utils.data import (
     categorize_columns,
     get_merge_params,
-    merge_dataframes_node,
 )
 from megaPLuG.utils.distributed import start_dask_node
 
@@ -21,9 +21,7 @@ from .nodes import (
     apply_delays,
     build_eval_columns,
     build_sampling_totals,
-    build_slice_frame,
     filter_events,
-    filter_slices_time,
     localize_time_from_hexes,
     manage_charging,
     sample_vehicle_windows,
@@ -98,7 +96,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags=["report_vehicles", "scenario_run"],
     )
 
-    manage_pipe = Pipeline(
+    dwell_pipe = Pipeline(
         [
             Node(
                 func=apply_delays,
@@ -106,22 +104,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="dwell_obj_w_delays",
                 name="apply_delays",
             ),
-            Node(
-                func=manage_charging,
-                inputs=[
-                    "dwell_obj_w_delays",
-                    "params:manage_charging",
-                ],
-                outputs="events",
-                name="manage_charging",
-                tags="frame-charging_management",
-            ),
-        ],
-        tags=["scenario_run", "manage_charging"],
-    )
-
-    report_profiles_scaled_prep_pipe = Pipeline(
-        [
             Node(
                 func=get_merge_params,
                 inputs=[
@@ -135,13 +117,13 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="get_merge_params_locations",
             ),
             Node(
-                func=merge_dataframes_node,
+                func=merge_dwellset_node,
                 inputs=[
-                    "events",
+                    "dwell_obj_w_delays",
                     "hex_region_corresp_categorized",
                     "merge_params_locations",
                 ],
-                outputs="events_w_regions",
+                outputs="dwell_obj_w_regions",
                 name="assign_metadata_location",
             ),
             Node(
@@ -157,24 +139,40 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="get_merge_params_vehicles",
             ),
             Node(
-                func=merge_dataframes_node,
+                func=merge_dwellset_node,
                 inputs=[
-                    "events_w_regions",
+                    "dwell_obj_w_regions",
                     "vehicles_evaluated",
                     "merge_params_vehicles",
                 ],
-                outputs="events_w_metadata",
+                outputs="dwell_obj_w_metadata",
                 name="assign_metadata_vehicles_to_events",
             ),
             Node(
                 func=filter_events,  # TODO: Add location filtering to this
                 inputs=[
-                    "events_w_metadata",
+                    "dwell_obj_w_metadata",
                     "params:filter_events",
                     "params:eval_columns",
                 ],
-                outputs="events_filtered",
+                outputs="dwell_obj_filtered",
                 name="filter_events",
+            ),
+        ],
+        tags=["scenario_run"],
+    )
+
+    event_pipe = Pipeline(
+        [
+            Node(
+                func=manage_charging,
+                inputs=[
+                    "dwell_obj_filtered",
+                    "params:manage_charging",
+                ],
+                outputs="events_filtered",
+                name="manage_charging",
+                tags="frame-charging_management",
             ),
             Node(
                 func=localize_time_from_hexes,
@@ -196,38 +194,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="slices",
                 name="slice_vehicle_windows",
             ),
-            Node(
-                func=filter_slices_time,
-                inputs=["slices", "params:slice_events", "params:eval_columns"],
-                outputs="slices_filtered",
-                name="filter_slices_of_events",
-            ),
-            Node(
-                func=build_slice_frame,
-                inputs=["vehicles_evaluated", "params:build_slice_frame"],
-                outputs="slice_frame",
-                name="build_slice_frame",
-            ),
-            Node(
-                func=merge_dataframes_node,
-                inputs=[
-                    "slice_frame",
-                    "vehicles_evaluated",
-                    "merge_params_vehicles",
-                ],
-                outputs="slice_frame_w_metadata",
-                name="assign_metadata_vehicles_to_slice_frame",
-            ),
-            Node(
-                func=filter_slices_time,
-                inputs=[
-                    "slice_frame_w_metadata",
-                    "params:slice_events",
-                    "params:eval_columns",
-                ],
-                outputs="slice_frame_filtered",
-                name="filter_slices_of_slice_frame",
-            ),
+        ],
+        tags=["scenario_run", "manage_charging"],
+    )
+
+    report_profiles_scaled_prep_pipe = Pipeline(
+        [
             Node(
                 func=build_sampling_totals,
                 inputs=["adoption_scenarios", "params:build_sampling_totals"],
@@ -327,7 +299,8 @@ def create_pipeline(**kwargs) -> Pipeline:
     return (
         read_pipe
         + report_vehicles_pipe
-        + manage_pipe
+        + dwell_pipe
+        + event_pipe
         + report_profiles_scaled_prep_pipe
         + sum(report_profiles_pipes)
     )

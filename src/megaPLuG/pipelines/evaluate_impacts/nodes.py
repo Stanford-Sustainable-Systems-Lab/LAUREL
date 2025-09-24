@@ -256,12 +256,24 @@ def manage_charging(dw: DwellSet, params: dict) -> pd.DataFrame:
 
 def filter_events(events: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFrame:
     """Filter events down to only include the ones we want to summarize."""
+
+    # DO NOT drop the zero-charge dwells. They're critical to the dwell-based sampling.
+    # Furthermore, I'll need to consider keeping the non-critical days around to retain
+    # these dwells.
+
+    # However, dropping optional stops not taken could be very important.
+
+    # After apply_delays, optional stops without charging should be the only ones with
+    #   zero duration.
+
     old_len = len(events)
 
     prof_cols = list(pcols["diff_cols"].values())
     any_nonzero = (events.loc[:, prof_cols] != 0).any(axis=1)
     vehicle_feasible = ~events[params["drop_events_col"]]
-    duplic_events = events.duplicated(subset=params["duplic_check_cols"], keep=False)
+    duplic_events = events.duplicated(
+        subset=params["duplic_check_cols"], keep=False
+    )  # TODO: Move this to an event filtering step
     events = events.loc[any_nonzero & vehicle_feasible & ~duplic_events, :]
     events = events.dropna(subset=params["drop_na_cols"])
     events = events.drop(columns=[params["drop_events_col"]])
@@ -271,6 +283,34 @@ def filter_events(events: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFra
     pct_diff = round(abs_diff / old_len * 100, 1)
     logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
     return events
+
+
+# def filter_slices_location(
+#     slices: pd.DataFrame, params: dict, pcols: dict
+# ) -> pd.DataFrame:
+#     """Filter the vehicle-time slices (e.g. to only include weekdays).
+
+#     This process would usually occur before sampling of the vehicle-time slices, so that
+#     only relevant slice types are used.
+#     """
+#     # Remove slices applying to untracked locations (this had been earlier for performance)
+#     slices_filt = slices.dropna(subset=pcols["group_cols"])
+#     return slices_filt
+
+
+# def filter_slices_time(slices: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFrame:
+#     """Filter the vehicle-time slices (e.g. to only include weekdays).
+
+#     This process would usually occur before sampling of the vehicle-time slices, so that
+#     only relevant slice types are used.
+#     """
+#     FIRST_DAY_OF_WEEKEND = 5
+#     slices["is_weekend"] = (
+#         slices[params["slice_id_col"]].dt.weekday >= FIRST_DAY_OF_WEEKEND
+#     )
+#     slices_filt = slices.loc[~slices["is_weekend"]]
+#     slices_filt = slices_filt.drop(columns=["is_weekend"])
+#     return slices_filt
 
 
 def build_eval_columns(pcols: dict, group_cols: list) -> dict:
@@ -617,34 +657,6 @@ def slice_vehicle_windows(
     if orig_idx != [None]:
         events_windows = events_windows.set_index(orig_idx)
     return events_windows
-
-
-def filter_slices_location(
-    slices: pd.DataFrame, params: dict, pcols: dict
-) -> pd.DataFrame:
-    """Filter the vehicle-time slices (e.g. to only include weekdays).
-
-    This process would usually occur before sampling of the vehicle-time slices, so that
-    only relevant slice types are used.
-    """
-    # Remove slices applying to untracked locations (this had been earlier for performance)
-    slices_filt = slices.dropna(subset=pcols["group_cols"])
-    return slices_filt
-
-
-def filter_slices_time(slices: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFrame:
-    """Filter the vehicle-time slices (e.g. to only include weekdays).
-
-    This process would usually occur before sampling of the vehicle-time slices, so that
-    only relevant slice types are used.
-    """
-    FIRST_DAY_OF_WEEKEND = 5
-    slices["is_weekend"] = (
-        slices[params["slice_id_col"]].dt.weekday >= FIRST_DAY_OF_WEEKEND
-    )
-    slices_filt = slices.loc[~slices["is_weekend"]]
-    slices_filt = slices_filt.drop(columns=["is_weekend"])
-    return slices_filt
 
 
 def build_sampling_totals(scaler: pd.DataFrame, params: dict) -> pd.DataFrame:
