@@ -192,11 +192,16 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     if not dw.is_dask:
         old_len = len(dw.data)
 
-    flt_cols = params["filter_cols"]
-    is_critical = dw.data[flt_cols["refresh"]] | dw.data[flt_cols["crit"]]
     is_long_enough = dw.data[params["dwell_time_col"]] >= 0
+    if params["filter_critical_days"]:
+        flt_cols = params["filter_cols"]
+        is_critical = dw.data[flt_cols["refresh"]] | dw.data[flt_cols["crit"]]
+        mask_ser = is_long_enough & is_critical
+    else:
+        mask_ser = is_long_enough
+
     mask_col = "keep_dwells"
-    dw.data[mask_col] = is_critical & is_long_enough
+    dw.data[mask_col] = mask_ser
 
     accum_cols_internal = [dw.trip_dist, dw.trip_dur, dw.reset]
     accum_cols_fw = accum_cols_internal + params["accum_cols_forward_extra"]

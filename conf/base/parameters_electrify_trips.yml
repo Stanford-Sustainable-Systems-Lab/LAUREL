@@ -177,6 +177,7 @@ mark_critical_days:
   energy_col_remain_shift: energy_use_kwh_shift
 
 filter_dwells:
+  filter_critical_days: False
   filter_cols:
     refresh: is_refresh
     crit: is_crit_day
