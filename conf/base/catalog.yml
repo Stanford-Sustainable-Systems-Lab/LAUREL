@@ -97,7 +97,10 @@ establishments_formatted:
   type: megaPLuG.datasets.geoparquet.GeoParquetDataset
   filepath: data/02_intermediate/establishments_formatted/
   save_args:
-    write_index: False
+    write_index: True
+    write_metadata_file: True
+  load_args:
+    calculate_divisions: True
 
 trips_formatted:
   type: dask.ParquetDataset
