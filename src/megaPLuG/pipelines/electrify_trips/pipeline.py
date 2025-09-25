@@ -15,6 +15,7 @@ from .nodes import (
     calc_dwell_durations,
     calc_energy_use,
     filter_dwells,
+    filter_dwells_post,
     filter_vehicles,
     mark_critical_days,
     mark_shift_powers,
@@ -168,9 +169,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 tags="frame-charging_choice",
             ),
             Node(
+                func=filter_dwells_post,
+                inputs=["dwell_obj_w_charging", "params:filter_dwells_post"],
+                outputs="dwell_obj_no_unused_optionals",
+                name="filter_dwells_post",
+                tags="frame-charging_choice",
+            ),
+            Node(
                 func=merge_dwellset_node,
                 inputs=[
-                    "dwell_obj_w_charging",
+                    "dwell_obj_no_unused_optionals",
                     "charging_modes",
                     "params:merge_chosen_mode",
                 ],
@@ -179,7 +187,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             Node(
                 func=save_dwell_set,
-                inputs="dwell_obj_w_charging",
+                inputs="dwell_obj_w_modes",
                 outputs="dwells_with_charging",
                 name="save_dwell_set",
             ),

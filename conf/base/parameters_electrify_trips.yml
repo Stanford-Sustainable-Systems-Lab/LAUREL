@@ -177,7 +177,7 @@ mark_critical_days:
   energy_col_remain_shift: energy_use_kwh_shift
 
 filter_dwells:
-  filter_critical_days: False
+  filter_critical_days: True # This will filter out all optional dwells on critical days
   filter_cols:
     refresh: is_refresh
     crit: is_crit_day
@@ -237,6 +237,18 @@ merge_chosen_mode:
   merge_kwargs:
     how: left
     "on": charge_mode_id
+
+filter_dwells_post:
+  filter_unused_optionals: True # This will filter out all unused optional stops
+  filter_cols:
+    charge: charge_kwh
+  accum_cols_forward_extra: # None implicitly
+  accum_cols_reverse: # None implicitly
+  drop_cols:
+    - energy_use_kwh
+    - energy_use_kwh_next
+    - energy_use_kwh_shift
+    - max_power_kw_avail_shift
 
 apply_delays:
   delay_columns:

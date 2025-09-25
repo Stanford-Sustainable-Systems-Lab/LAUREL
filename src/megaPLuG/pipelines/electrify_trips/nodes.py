@@ -204,6 +204,47 @@ def mark_critical_days(dw: DwellSet, params: dict) -> DwellSet:
     return dw
 
 
+def _filter_dwells_core(
+    dw: DwellSet,
+    keep_col: str,
+    accum_cols_fw_extra: list[str] | None = None,
+    accum_cols_rv: list[str] | None = None,
+    drop_cols_extra: list[str] | None = None,
+) -> DwellSet:
+    """Core dwell filtering functionality, used several times.
+
+    Wraps DwellSet.accum_masked() with additional column renaming and setup and teardown.
+    """
+    accum_cols = [dw.trip_dist, dw.trip_dur, dw.reset]
+    revs = [False] * len(accum_cols)
+
+    if accum_cols_fw_extra is not None:
+        accum_cols += accum_cols_fw_extra
+        revs += [False] * len(accum_cols_fw_extra)
+
+    if accum_cols_rv is not None:
+        accum_cols += accum_cols_rv
+        revs += [True] * len(accum_cols_rv)
+
+    dw.accum_masked(keep_col, accum_cols=accum_cols, reverse=revs, inplace=True)
+
+    dw.data[keep_col] = dw.data[keep_col].astype("boolean")
+    dw.data[keep_col] = dw.data[keep_col].replace(False, pd.NA)
+    if dw.is_dask:
+        dw.data = dw.data.dropna(subset=keep_col)
+    else:
+        dw.data = dw.data.dropna(subset=keep_col)
+    dw.data[keep_col] = dw.data[keep_col].astype(bool)
+    drop_cols = [keep_col] + accum_cols
+    if drop_cols_extra is not None:
+        drop_cols.extend(drop_cols_extra)
+    dw.data = dw.data.drop(columns=drop_cols)
+    renamer = {f"{old}_{keep_col}": old for old in accum_cols}
+    dw.data = dw.data.rename(columns=renamer)
+    dw.data[dw.reset] = dw.data[dw.reset].astype(bool)
+    return dw
+
+
 def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     """Filter out the en-route dwells on non-critical days.
 
@@ -215,36 +256,26 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     if not dw.is_dask:
         old_len = len(dw.data)
 
-    is_long_enough = dw.data[params["dwell_time_col"]] >= 0
+    is_long_enough = (
+        dw.data[params["dwell_time_col"]] >= 0
+    )  # Note, this duration already takes into account the plug in/out times
     if params["filter_critical_days"]:
         flt_cols = params["filter_cols"]
         is_critical = dw.data[flt_cols["refresh"]] | dw.data[flt_cols["crit"]]
-        mask_ser = is_long_enough & is_critical
+        is_optional = dw.data[dw.end] <= dw.data[dw.start]
+        keep_ser = is_long_enough & (is_critical | ~is_optional)
     else:
-        mask_ser = is_long_enough
+        keep_ser = is_long_enough
 
-    mask_col = "keep_dwells"
-    dw.data[mask_col] = mask_ser
+    dw.data["keep_dwells"] = keep_ser
 
-    accum_cols_internal = [dw.trip_dist, dw.trip_dur, dw.reset]
-    accum_cols_fw = accum_cols_internal + params["accum_cols_forward_extra"]
-    accum_cols_rv = params["accum_cols_reverse"]
-    accum_cols = accum_cols_fw + accum_cols_rv
-    revs = ([False] * len(accum_cols_fw)) + ([True] * len(accum_cols_rv))
-    dw.accum_masked(mask_col, accum_cols=accum_cols, reverse=revs, inplace=True)
-
-    dw.data[mask_col] = dw.data[mask_col].astype("boolean")
-    dw.data[mask_col] = dw.data[mask_col].replace(False, pd.NA)
-    if dw.is_dask:
-        dw.data = dw.data.dropna(subset=mask_col)
-    else:
-        dw.data = dw.data.dropna(subset=mask_col)
-    dw.data[mask_col] = dw.data[mask_col].astype(bool)
-    drop_cols = [mask_col] + params["drop_cols"] + accum_cols
-    dw.data = dw.data.drop(columns=drop_cols)
-    renamer = {f"{old}_{mask_col}": old for old in accum_cols}
-    dw.data = dw.data.rename(columns=renamer)
-    dw.data[dw.reset] = dw.data[dw.reset].astype(bool)
+    dw = _filter_dwells_core(
+        dw=dw,
+        keep_col="keep_dwells",
+        accum_cols_fw_extra=params["accum_cols_forward_extra"],
+        accum_cols_rv=params["accum_cols_reverse"],
+        drop_cols_extra=params["drop_cols"],
+    )
 
     if not dw.is_dask:
         new_len = len(dw.data)
@@ -336,4 +367,40 @@ def simulate_charging_choice(
         dw.data = strat.run(dwells=dw, vehs=vehs, modes=modes)
 
     dw.data = dw.data.drop(columns=params["drop_cols"])
+    return dw
+
+
+def filter_dwells_post(dw: DwellSet, params: dict) -> DwellSet:
+    """Filter out the optional stops not taken.
+
+    We drop dwells wich are:
+        - optional stops (zero duration)
+        - no charging (charge kwh is zero)
+    """
+    logger.info("Filter by dwells by accumulating through")
+    if not dw.is_dask:
+        old_len = len(dw.data)
+
+    if params["filter_unused_optionals"]:
+        is_optional = dw.data[dw.end] <= dw.data[dw.start]
+        has_some_charge = dw.data[params["filter_cols"]["charge"]] > 0.0
+        dw.data["keep_dwells"] = ~is_optional | (is_optional & has_some_charge)
+
+        dw = _filter_dwells_core(
+            dw=dw,
+            keep_col="keep_dwells",
+            accum_cols_fw_extra=params["accum_cols_forward_extra"],
+            accum_cols_rv=params["accum_cols_reverse"],
+            drop_cols_extra=params["drop_cols"],
+        )
+    else:
+        pass
+
+    if not dw.is_dask:
+        new_len = len(dw.data)
+        abs_diff = old_len - new_len
+        pct_diff = round(abs_diff / old_len * 100, 1)
+        logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
+    else:
+        logger.info("Rows dropped: not calculated for Dask-backed DwellSets.")
     return dw
