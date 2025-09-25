@@ -510,6 +510,10 @@ dwell_obj_w_charging:
   type: MemoryDataset
   copy_mode: assign
 
+dwell_obj_no_unused_optionals:
+  type: MemoryDataset
+  copy_mode: assign
+
 dwell_obj_w_modes:
   type: MemoryDataset
   copy_mode: assign
