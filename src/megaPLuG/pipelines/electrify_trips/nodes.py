@@ -11,7 +11,7 @@ import pandas as pd
 
 from megaPLuG.models.charging_algorithms import ForwardLookingChargingChoiceStrategy
 from megaPLuG.models.dwell_sets import CumAggFunc, DwellSet
-from megaPLuG.utils.data import generate_mock_data, merge_dataframes_node
+from megaPLuG.utils.mode_masks import bool_arr_to_bits
 from megaPLuG.utils.params import build_df_from_dict
 from megaPLuG.utils.time import total_hours
 
@@ -91,14 +91,31 @@ def prepare_mode_loc_corresp(modes: pd.DataFrame, params: dict) -> DwellSet:
         value_col=avail_dict["value_col"],
     )
 
-    poss = modes["mode_name"]
-    avails[params["value_col_bool"]] = avails[avail_dict["value_col"]].transform(
-        lambda av: np.isin(poss, av)
-    )
+    poss = modes["mode_name"].to_numpy()
+    max_power_source = params["max_power_source_col"]
+    power_arr = modes[max_power_source].to_numpy()
+    # Build boolean availability matrix (rows: locations, cols: modes)
+    # Using vectorized comprehension via list for clarity then stack (acceptable size)
+    bool_rows = []
+    for av in avails[avail_dict["value_col"]].values:
+        bool_rows.append(np.isin(poss, av))
+    if bool_rows:
+        bool_arr = np.vstack(bool_rows)
+    else:
+        bool_arr = np.zeros((0, poss.shape[0]), dtype=bool)
+
+    # Build bitmask column via njit function
+    bitmask_col = params["value_col_bool"]  # reuse existing param name
+    avails[bitmask_col] = bool_arr_to_bits(bool_arr)
+
+    # Max power derivation: elementwise multiply then row max
+    if bool_arr.shape[0]:
+        avails[params["max_power_col"]] = (bool_arr * power_arr[None, :]).max(axis=1)
+    else:
+        avails[params["max_power_col"]] = np.array([], dtype=float)
+
+    # Location categorical treatment (unchanged)
     avails[params["loc_col"]] = pd.Categorical(avails[params["loc_col"]])
-    avails[params["max_power_col"]] = avails[params["value_col_bool"]].transform(
-        lambda a: np.max(a * modes[params["max_power_source_col"]])
-    )
     return avails
 
 
