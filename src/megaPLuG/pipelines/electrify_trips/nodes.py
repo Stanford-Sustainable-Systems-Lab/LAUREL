@@ -83,7 +83,7 @@ def prepare_modes(modes: dict) -> pd.DataFrame:
     return modes_df
 
 
-def prepare_mode_loc_corresp(modes: pd.DataFrame, params: dict) -> DwellSet:
+def prepare_mode_loc_corresp(modes: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Assign modes to each dwell using a boolean vector of mode availability."""
     avail_dict = params["charge_modes_avail"]
     avails = build_df_from_dict(
