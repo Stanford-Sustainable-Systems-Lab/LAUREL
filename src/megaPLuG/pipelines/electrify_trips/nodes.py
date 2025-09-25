@@ -72,13 +72,14 @@ def calc_dwell_durations(dw: DwellSet, params: dict) -> DwellSet:
 
 def prepare_modes(modes: dict) -> pd.DataFrame:
     """Prepare the modes dataframe."""
-    name_col = modes.pop("name_column")
-    id_col = modes.pop("id_column")
-    modes = pd.DataFrame.from_dict(data=modes, orient="index")
-    modes.index.name = name_col
-    modes = modes.reset_index()
-    modes.index.name = id_col
-    return modes
+    modes_copy = dict(modes)  # avoid mutating input params dict
+    name_col = modes_copy.pop("name_column")
+    id_col = modes_copy.pop("id_column")
+    modes_df = pd.DataFrame.from_dict(data=modes_copy, orient="index")
+    modes_df.index.name = name_col
+    modes_df = modes_df.reset_index()
+    modes_df.index.name = id_col
+    return modes_df
 
 
 def prepare_mode_loc_corresp(modes: pd.DataFrame, params: dict) -> DwellSet:
