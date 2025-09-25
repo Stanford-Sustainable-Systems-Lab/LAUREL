@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.utils.data import to_arrays
+from megaPLuG.utils.mode_masks import bits_to_bool_vec
 
 
 class AbstractChargingChoiceStrategy(ABC):
@@ -405,7 +406,8 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         # Option 2: Charge for available time on available power levels, with a minimum
         #   level charged to avoid tiny charging sessions.
         avail_hrs = dwl["dwell_hrs"]
-        powers_flat = modes["avail_kw"] * dwl["modes_avail"]
+        modes_avail = bits_to_bool_vec(dwl["modes_avail"], n_modes=n_modes)
+        powers_flat = modes["avail_kw"] * modes_avail
         min_e_chg = veh["min_soc_charge"] * veh["batt_cap"]
         e[1, :] = np.maximum(powers_flat * avail_hrs, min_e_chg)
 
@@ -429,7 +431,7 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         e[5, :] = np.maximum(veh["batt_cap"] - cur_energy, min_e_chg)
 
         # Zero out charging on unavailable modes
-        e = e * (caster * dwl["modes_avail"])
+        e = e * (caster * modes_avail)
 
         ## Calculate outcomes
         # Energy at end of charging (i.e., "final" energy)
