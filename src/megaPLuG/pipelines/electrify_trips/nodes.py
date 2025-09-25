@@ -19,7 +19,7 @@ from megaPLuG.utils.time import total_hours
 logger = logging.getLogger(__name__)
 
 
-def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
+def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
     """Filter out vehicles that we're not considering."""
     logger.info("Filter by vehicles by direct dropping")
     if not dw.is_dask:
@@ -46,6 +46,10 @@ def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame) -> DwellSet:
         abs_diff = old_len - new_len
         pct_diff = round(abs_diff / old_len * 100, 1)
         logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
+
+    if dw.is_dask:
+        dw.data = dw.data.repartition(npartitions=params["n_partitions"])
+
     return dw
 
 

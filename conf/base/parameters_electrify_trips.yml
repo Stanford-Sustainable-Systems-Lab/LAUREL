@@ -20,7 +20,7 @@ dask_electrify_trips:
     n_workers: 8
     processes: True
     threads_per_worker: 1 # Must stay at 1, since our code is not thread safe
-    memory_limit: 4GiB
+  n_partitions: 250 # Works well for the full continental on a laptop
 
 filter_vehicles:
   filters:

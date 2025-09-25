@@ -55,7 +55,11 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             Node(
                 func=filter_vehicles,
-                inputs=["dwell_obj", "vehicles_with_params"],
+                inputs=[
+                    "dwell_obj",
+                    "vehicles_with_params",
+                    "params:dask_electrify_trips",
+                ],
                 outputs="dwell_obj_filtered_vehs",
                 name="filter_vehicles",
             ),
