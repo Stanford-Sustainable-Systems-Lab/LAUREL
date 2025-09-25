@@ -155,23 +155,24 @@ def filter_by_vals_in_cols(
 
     The different columns are and'ed or or'ed together based on the params.
     """
-    filt_ser = np.ones(len(df), dtype=np.bool)
+    df["filt"] = True
     keep_cols = []
     for col, filt in params["filters"].items():
         cur_ser = df[col].isin(filt["value_isin"])
         if "invert" in filt and filt["invert"]:
             cur_ser = ~cur_ser
         if "joining_bool" not in filt or filt["joining_bool"].upper() == "AND":
-            filt_ser &= cur_ser
+            df["filt"] &= cur_ser
         elif filt["joining_bool"].upper() == "OR":
-            filt_ser |= cur_ser
+            df["filt"] |= cur_ser
         keep_cols.append(col)
     if isinstance(df, gpd.GeoDataFrame):
         keep_cols += [df.geometry.name]
     if params["keep_only_filter_cols"]:
-        filtered = df.loc[filt_ser, keep_cols]
+        filtered = df.loc[df["filt"], keep_cols]
     else:
-        filtered = df.loc[filt_ser]
+        filtered = df.loc[df["filt"]]
+    filtered = filtered.drop(columns="filt")
     return filtered
 
 
