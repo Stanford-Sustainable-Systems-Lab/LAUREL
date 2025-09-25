@@ -234,7 +234,7 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
     if dw.is_dask:
         dw.data = dw.data.dropna(subset=mask_col)
     else:
-        dw.data.dropna(subset=mask_col, inplace=True)
+        dw.data = dw.data.dropna(subset=mask_col)
     dw.data[mask_col] = dw.data[mask_col].astype(bool)
     drop_cols = [mask_col] + params["drop_cols"] + accum_cols
     dw.data = dw.data.drop(columns=drop_cols)
@@ -279,7 +279,7 @@ def mark_shift_powers(dw: DwellSet, params: dict) -> DwellSet:
     if dw.is_dask:
         dw.data = dw.data.drop(columns=acc_col)
     else:
-        dw.data.drop(columns=acc_col, inplace=True)
+        dw.data = dw.data.drop(columns=acc_col)
     return dw
 
 
