@@ -301,8 +301,8 @@ class AbstractChargingChoiceStrategy(ABC):
         dwl: np.recarray,
         veh: np.recarray,
         modes: np.recarray,
-    ) -> np.ndarray:
-        """Choose charging energy and mode.
+    ) -> tuple[float, float, int]:
+        """Choose charging energy, delay, and mode.
 
         Note: Will be passed to JIT-ed _simulate().
         """
@@ -327,7 +327,7 @@ class SoCThreshChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         dwl: np.recarray,
         veh: np.recarray,
         modes: np.recarray,
-    ) -> np.ndarray:
+    ) -> tuple[float, float, int]:
         """Choose charging energy and mode.
 
         Note: Will be passed to JIT-ed _simulate().
@@ -335,12 +335,16 @@ class SoCThreshChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         # TODO: Convert this to a discrete choice framework
         # TODO: Return the selected mode
         if cur_energy / veh["batt_cap"] <= veh["charge_soc"]:
-            chg = np.minimum(
-                veh["batt_cap"] - cur_energy, dwl["dwell_hrs"] * modes["avail_kw"][-1]
+            chg = float(
+                np.minimum(
+                    veh["batt_cap"] - cur_energy,
+                    dwl["dwell_hrs"] * modes["avail_kw"][-1],
+                )
             )
         else:
-            chg = 0
-        return chg
+            chg = 0.0
+        mode = int(np.argmax(modes["avail_kw"]))
+        return (chg, 0.0, mode)
 
 
 class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
@@ -383,7 +387,7 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         dwl: np.recarray,
         veh: np.recarray,
         modes: np.recarray,
-    ) -> np.ndarray:
+    ) -> tuple[float, float, int]:
         """Choose the charging energy, delay, and mode for a dwell."""
         # Set some weighting constants
         EXTREME_DELAY_HRS = 10000.0  # More than a year of delay
@@ -477,7 +481,7 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         v = soc_targeting - (delay - delay_shift) + trip_succeeds + batt_respected
         flat_best_idx = np.argmax(v, axis=None)
         best_idx = (flat_best_idx // n_modes, flat_best_idx % n_modes)
-        chg = e[best_idx]
-        dly = time_delta[best_idx]
-        mode = best_idx[1]
+        chg = float(e[best_idx])
+        dly = float(time_delta[best_idx])
+        mode = int(best_idx[1])
         return (chg, dly, mode)
