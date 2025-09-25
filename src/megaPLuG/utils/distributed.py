@@ -2,6 +2,8 @@ import dask.dataframe as dd
 import pandas as pd
 from dask.distributed import Client, LocalCluster
 
+from megaPLuG.models.dwell_sets import DwellSet
+
 
 def start_dask_node(params: dict) -> tuple[LocalCluster, Client]:
     """Start a Dask LocalCluster and client."""
@@ -26,6 +28,15 @@ def stop_dask_node(cluster: LocalCluster, client: Client, result: object) -> Non
         cluster.close()
 
 
-def load_in_memory_node(ddf: dd.DataFrame) -> pd.DataFrame:
+def load_in_memory_node(ddf: dd.DataFrame | DwellSet) -> pd.DataFrame | DwellSet:
     """Force computation to bring the input dataframe into memory."""
-    return ddf.compute()
+    if isinstance(ddf, DwellSet):
+        ddf_new = ddf.copy_without_data()
+        ddf_new.data = ddf.data.compute()
+        return ddf_new
+    elif isinstance(ddf, dd.DataFrame):
+        return ddf.compute()
+    else:
+        raise NotImplementedError(
+            "Load-in-memory is not yet implemented for this type."
+        )
