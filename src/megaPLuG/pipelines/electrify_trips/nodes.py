@@ -297,24 +297,19 @@ def simulate_charging_choice(
 
     if params["precompile"]:  # Note: Pre-compilation does not help distributed workers
         logger.info("Pre-compiling charging choice JIT-compiled functions.")
-        try:
-            dw_mock = dw.copy_without_data()
-            base_df = dw.data._meta_nonempty if dw.is_dask else dw.data.iloc[:5].copy()
-            dw_mock.data = base_df.copy()
-            # Set all mode bits to 1 for each mock dwell
-            all_mask = bool_arr_to_bits(np.ones(shape=(len(modes),), dtype=np.bool_))
-            modes_avail_col = params["input_cols"]["modes_avail"]
-            if modes_avail_col in dw_mock.data.columns:
-                dw_mock.data[modes_avail_col] = np.repeat(
-                    all_mask, repeats=len(dw_mock.data)
-                )
-            vehs_mock = vehs.iloc[: len(dw_mock.data)].copy()
-            vehs_mock.index = dw_mock.data.index
-            _ = strat.run(
-                dwells=dw_mock, vehs=vehs_mock, modes=modes, show_progress=False
+        dw_mock = dw.copy_without_data()
+        base_df = dw.data._meta_nonempty if dw.is_dask else dw.data.iloc[:5].copy()
+        dw_mock.data = base_df.copy()
+        # Set all mode bits to 1 for each mock dwell
+        all_mask = bool_arr_to_bits(np.ones(shape=(len(modes),), dtype=np.bool_))
+        modes_avail_col = params["input_cols"]["modes_avail"]
+        if modes_avail_col in dw_mock.data.columns:
+            dw_mock.data[modes_avail_col] = np.repeat(
+                all_mask, repeats=len(dw_mock.data)
             )
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"Precompile attempt failed; continuing without: {e}")
+        vehs_mock = vehs.iloc[: len(dw_mock.data)].copy()
+        vehs_mock.index = dw_mock.data.index
+        _ = strat.run(dwells=dw_mock, vehs=vehs_mock, modes=modes, show_progress=False)
 
     logger.info("Run charging choice simulation.")
     if dw.is_dask:
