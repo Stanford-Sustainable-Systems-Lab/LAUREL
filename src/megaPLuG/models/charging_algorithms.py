@@ -25,6 +25,7 @@ class AbstractChargingChoiceStrategy(ABC):
     modes_avail: str
     refresh: str
     reset: str
+    critical: str
     batt_cap: str
     random_seed: str
     _replace_dtypes: dict = {
@@ -64,6 +65,7 @@ class AbstractChargingChoiceStrategy(ABC):
         avail_kw: str,
         refresh: str,
         reset: str,
+        critical: str,
         batt_cap: str,
         max_delay_recoverable_hrs: str,
         random_seed: str,
@@ -81,7 +83,9 @@ class AbstractChargingChoiceStrategy(ABC):
             - dwell_hrs
             - modes_avail
             - avail_kw
+            - refresh
             - reset
+            - critical
 
         And we need the vehicle parameters:
             - battery_capacity
@@ -94,6 +98,7 @@ class AbstractChargingChoiceStrategy(ABC):
         self.modes_avail = modes_avail
         self.avail_kw = avail_kw
         self.refresh = refresh
+        self.critical = critical
         self.reset = reset
         self.batt_cap = batt_cap
         self.max_delay_recoverable_hrs = max_delay_recoverable_hrs
@@ -247,9 +252,13 @@ class AbstractChargingChoiceStrategy(ABC):
             # Manage vehicles running out of energy and resuscitating
             veh_is_alive = cur_energy >= 0
             dwell_is_refresh = dwls["refresh"][i]
+            dwell_is_critical = dwls["critical"][i]
 
             if veh_is_alive:  # Business as usual charging choice
-                chg, dly, mode = choice_func(cur_energy, dwls[i], veh, modes)
+                if dwell_is_critical or dwell_is_refresh:
+                    chg, dly, mode = choice_func(cur_energy, dwls[i], veh, modes)
+                else:
+                    chg, dly, mode = (0.0, 0.0, np.argmin(modes["avail_kw"]))
             else:  # noqa: PLR5501
                 if dwell_is_refresh:  # If we are at a refresh point, then revive
                     cur_energy = 0.0

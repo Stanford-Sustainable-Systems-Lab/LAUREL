@@ -169,8 +169,8 @@ mark_critical_days:
   dur_col: dwell_time_hrs
   max_power_col: max_power_kw_avail
   refresh_col: is_refresh
-  crit_bound_col: is_crit_day_boundary
-  crit_col: is_crit_day
+  crit_bound_col: is_critical_boundary
+  crit_col: is_critical
   batt_cap_col: battery_capacity_kwh
   energy_col: energy_use_kwh
   energy_col_next_trip: energy_use_kwh_next
@@ -180,7 +180,7 @@ filter_dwells:
   filter_critical_days: True # This will filter out all optional dwells on critical days
   filter_cols:
     refresh: is_refresh
-    crit: is_crit_day
+    crit: is_critical
   dwell_time_col: dwell_time_hrs
   accum_cols_forward_extra:
     - energy_use_kwh
@@ -191,7 +191,6 @@ filter_dwells:
     - minimum_times_plug_out_mins
     - consump_rate_kwh_per_mi
     - battery_capacity_kwh
-    - is_crit_day
 
 mark_shift_powers:
   refresh_col: is_refresh
@@ -213,6 +212,7 @@ simulate_charging_choice:
     avail_kw: max_power_kw
     refresh: is_refresh
     reset: reset_state_before
+    critical: is_critical
     batt_cap: battery_capacity_kwh
     random_seed: random_seed
     rng_alpha: initial_soc_alpha
@@ -249,6 +249,7 @@ filter_dwells_post:
     - energy_use_kwh_next
     - energy_use_kwh_shift
     - max_power_kw_avail_shift
+    - is_critical
 
 apply_delays:
   delay_columns:
