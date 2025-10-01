@@ -107,7 +107,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags=["report_vehicles", "scenario_run"],
     )
 
-    dwell_pipe = Pipeline(
+    dwell_pipe_pre_prob = Pipeline(
         [
             Node(
                 func=apply_delays,
@@ -242,7 +242,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags=["scenario_run"],
     )
 
-    event_pipe = Pipeline(
+    dwell_pipe_post_prob = Pipeline(
         [
             Node(
                 func=filter_dwells_post_prob,
@@ -262,6 +262,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="dwell_obj_ided",
                 name="add_dwell_id",
             ),
+        ],
+        tags=["scenario_run"],
+    )
+
+    event_pipe = Pipeline(
+        [
             Node(
                 func=get_dwells_nonzero,
                 inputs=[
@@ -410,8 +416,9 @@ def create_pipeline(**kwargs) -> Pipeline:
     return (
         read_pipe
         + report_vehicles_pipe
-        + dwell_pipe
+        + dwell_pipe_pre_prob
         + prob_pipe
+        + dwell_pipe_post_prob
         + event_pipe
         + report_profiles_scaled_prep_pipe
         + sum(report_profiles_pipes)
