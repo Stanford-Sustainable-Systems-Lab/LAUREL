@@ -542,6 +542,14 @@ dwell_obj_electrified:
   type: MemoryDataset
   copy_mode: assign
 
+dwell_obj_ided:
+  type: MemoryDataset
+  copy_mode: assign
+
+dwell_obj_nonzero:
+  type: MemoryDataset
+  copy_mode: assign
+
 dwell_obj_desc_veh_locs:
   type: MemoryDataset
   copy_mode: assign

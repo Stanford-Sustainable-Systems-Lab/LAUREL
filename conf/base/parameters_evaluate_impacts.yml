@@ -129,8 +129,8 @@ compute_class_probs:
     prob_obs_elect: p_obs_elect_g_lclass_vclass
     n_elect_dwells_expected: n_dwells_expected_elect
 
-add_dwell_id:
-  dwell_id_col: dwell_id
+get_dwells_nonzero:
+  charge_col: charge_kwh
 
 manage_charging:
   charging_manager: MinPowerChargingManager
@@ -141,9 +141,9 @@ manage_charging:
     duration: dwell_time_hrs
     max_power: max_power_kw
     id_cols:
-      - dwell_id
+      - ${eval_columns.dw_col}
+      - ${eval_columns.hex_col}
   round_decimals: 4
-
 
 build_slice_frame:
   columns_input:
@@ -159,14 +159,16 @@ build_slice_frame:
 eval_columns:
   hex_col: hex_id
   veh_col: veh_id
+  dw_col: dwell_id
   timezone_col: tz
   time_col: time
+  charge_col: charge_kwh
   group_cols: None # Filled in by the specific modular pipeline settings
   profile_cols: # profile_cols and diff_cols must have the same set of keys
     power: power_kw
-    plugged: n_vehs_plugged
+    plugged: plugged
   diff_cols:
-    power: hex_kw_diff
+    power: power_kw_diff
     plugged: plugged_diff
   duration_col: duration
 
@@ -200,6 +202,7 @@ assign_metadata_vehicle:
 
 slice_events:
     slice_freq: 1d
+    clip_dur_to_slice_freq: True
     slice_id_col: slice_time_start
     slice_time_col: slice_time_relative
     source_time_col: time_local

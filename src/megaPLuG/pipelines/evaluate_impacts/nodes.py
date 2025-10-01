@@ -15,7 +15,7 @@ from tqdm.auto import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.group_times import AdaptiveTimeGrouper, HourOfWeekdayGrouper
-from megaPLuG.models.manage_charging import _MANAGER_MAP
+from megaPLuG.models.manage_charging import _MANAGER_MAP, ProfileType
 from megaPLuG.models.probability_localization import (
     ElectProbLocalizer,
     ElectProbLocalizerConfig,
@@ -507,23 +507,48 @@ def filter_dwells_post_prob(dw: DwellSet, pcols: dict) -> DwellSet:
 
 def add_dwell_id(dw: DwellSet, params: dict) -> DwellSet:
     """Add a dwell id column."""
-    dw.data[params["dwell_id_col"]] = np.arange(len(dw.data))
+    dw.data[params["dw_col"]] = np.arange(len(dw.data))
     return dw
+
+
+def get_dwells_nonzero(dw: DwellSet, pcols: dict) -> DwellSet:
+    """Get dwells down to only include the ones with nonzero charging.
+
+    We finally drop the zero-charge dwells here, because we don't need to add them to
+    the load profiles EVEN IF they are sampled.
+    """
+    if not dw.is_dask:
+        old_len = len(dw.data)
+
+    # Dwells which have nonzero charging
+    nonzero_chg = dw.data[pcols["charge_col"]] > 0
+
+    # Perform filtering
+    nz = dw.copy_without_data()  # IMPORTANT: This is a view, not an inplace filtering
+    nz.data = dw.data.loc[nonzero_chg, :]
+
+    if not dw.is_dask:
+        new_len = len(nz.data)
+        abs_diff = old_len - new_len
+        pct_diff = round(abs_diff / old_len * 100, 1)
+        logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
+
+    return nz
 
 
 def manage_charging(dw: DwellSet, params: dict) -> pd.DataFrame:
     """Manage the charging of vehicles within each dwell to create charging events."""
     manager_cls = _MANAGER_MAP[params["charging_manager"]]
-    manager = manager_cls(dw=dw, **params["input_cols"])
+    manager = manager_cls(
+        dw=dw, **params["input_cols"], prof_type=ProfileType.OBSERVATIONS
+    )
     events = manager.get_events()
     pow_col = manager_cls.suffixes["power"]
     events[pow_col] = events[pow_col].round(params["round_decimals"])
     return events
 
 
-def slice_vehicle_windows(
-    events: pd.DataFrame, params: dict, pcols: dict
-) -> pd.DataFrame:
+def slice_events(events: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFrame:
     """Slice up an events DataFrame into vehicle-windows.
 
     This involves setting a frequency-based slicing, and then creating new events to
@@ -531,77 +556,82 @@ def slice_vehicle_windows(
     in time.
 
     """
-    DUR_COL = "duration"
+    dur_col = pcols["duration_col"]
     slice_begin_col = params["slice_id_col"]
     slice_time_col = params["slice_time_col"]
     src_time_col = params["source_time_col"]
 
-    orig_idx = events.index.names
-    events_mod = events.reset_index()
-
     if events[src_time_col].dt.tz is not None:
         raise RuntimeError("The source time column must be time zone naïve.")
 
-    logger.info("Sort by vehicle and UTC time")
-    sort_cols = [pcols["veh_col"], pcols["time_col"]]
-    events_mod = events_mod.sort_values(sort_cols, ascending=[True, True])
+    events_mod = events.reset_index()
 
-    logger.info("Build profile and duration columns for internal use (will be dropped)")
-    events_grp = events_mod.groupby(pcols["veh_col"], sort=False, observed=True)
-    events_mod[DUR_COL] = events_grp[pcols["time_col"]].transform(
-        lambda ser: ser.shift(-1) - ser
-    )
-    cum_renamer = {f"{col}_cum": col for col in pcols["diff_cols"].values()}
-    cum_cols = list(cum_renamer.keys())
-    for cum, raw in cum_renamer.items():
-        events_mod[cum] = events_grp[raw].cumsum()
-
-    events_clean_idx = events_mod.reset_index()
-    any_nonzero = (events_clean_idx.loc[:, cum_cols] != 0).any(axis=1)
-    dur_isna = events_clean_idx[DUR_COL].isna()
-    drop_idx = events_clean_idx.loc[~any_nonzero | dur_isna].index
-    nonzero = events_clean_idx.drop(index=drop_idx)
+    # Clip durations to maximum length so that we preserve characteristic shape
+    if params["clip_dur_to_slice_freq"]:
+        dur_spread_col = "dur_clipped"
+        max_dur = pd.Timedelta(params["slice_freq"])
+        events_mod[dur_spread_col] = events_mod[dur_col].clip(upper=max_dur)
+    else:
+        dur_spread_col = dur_col
 
     logger.info(
         "Spread observations to cover all local-time slices across their duration"
     )
-    grp_cols = [
-        pcols["veh_col"],
-        pcols["hex_col"],
-    ]  # Including hex col so that it stays integer
+    grp_cols = [pcols["dw_col"]]
+    cum_cols = list(pcols["profile_cols"].values())
     spreader = IntervalBeginSpreader(
         time_col=src_time_col,
-        dur_col=DUR_COL,
+        dur_col=dur_spread_col,
         value_cols=cum_cols,
         group_cols=grp_cols,
         freq=params["slice_freq"],
     )
-    inits = spreader.spread(nonzero, return_spreaded_only=True)
-    inits = inits.rename(columns=cum_renamer)
-    inits["is_init"] = True
+    to_spread = events_mod.dropna(subset=dur_spread_col)
+    inits = spreader.spread(to_spread, return_spreaded_only=True)
 
     logger.info(
         "Concatenating and sorting original observations and initialization observations."
     )
-    events_concat = events_mod.drop(columns=[DUR_COL] + cum_cols)
-    events_concat["is_init"] = False
-    events_windows = pd.concat([events_concat, inits], axis=0, ignore_index=True)
-    events_windows[slice_begin_col] = events_windows[src_time_col].dt.floor(
+    keep_cols = grp_cols + [src_time_col] + cum_cols
+    events_mod = events_mod.loc[:, keep_cols]
+    events_concat = pd.concat([events_mod, inits], axis=0, ignore_index=True)
+    events_concat[slice_begin_col] = events_concat[src_time_col].dt.floor(
         params["slice_freq"]
     )
     # Note that `time_local` is both local and then timezone-naïve. This means that the
     # daylight savings time extra and missing hours are introduced here
-    events_windows[slice_time_col] = (
-        events_windows[src_time_col] - events_windows[slice_begin_col] + pd.Timestamp(0)
+    events_concat[slice_time_col] = (
+        events_concat[src_time_col] - events_concat[slice_begin_col] + pd.Timestamp(0)
     )
-    events_windows = events_windows.sort_values(
-        [pcols["veh_col"], src_time_col], ascending=[True, True]
-    )
-    events_windows = events_windows.ffill()
 
-    if orig_idx != [None]:
-        events_windows = events_windows.set_index(orig_idx)
-    return events_windows
+    events_out = events_concat.drop(columns=[src_time_col, slice_begin_col])
+    return events_out
+
+
+def build_time_ordered_slice(
+    events: pd.DataFrame, params: dict, pcols: dict
+) -> pd.DataFrame:
+    """Build the time-ordered slice of differences use for sampling from."""
+    events_sort = events.sort_values(
+        [pcols["dw_col"], params["slice_time_col"]], ascending=[True, True]
+    )
+
+    prof_cols = pcols["profile_cols"]
+    diff_cols = pcols["diff_cols"]
+    if set(prof_cols.keys()) != set(diff_cols.keys()):
+        raise ValueError("Profile and diff column sets must be paired in the config.")
+
+    for k, pc in prof_cols.items():
+        events_sort[diff_cols[k]] = events_sort.groupby(pcols["dw_col"])[pc].diff()
+        na_diff = events_sort[diff_cols[k]].isna()
+        events_sort[diff_cols[k]] = events_sort[diff_cols[k]].where(
+            ~na_diff, events_sort[pc]
+        )
+
+    events_sort = events_sort.drop(columns=list(prof_cols.values()))
+    events_sort = events_sort.sort_values(params["slice_time_col"])
+
+    return events_sort
 
 
 def compute_location_dwell_counts(
