@@ -265,7 +265,7 @@ class AbstractChargingChoiceStrategy(ABC):
                     cur_delay = 0.0
                     chg, dly, mode = choice_func(cur_energy, dwls[i], veh, modes)
                 else:  # If not, then become/stay dead
-                    chg, dly, mode = (np.nan, np.nan, np.argmin(modes["avail_kw"]))
+                    chg, dly, mode = (np.nan, 0.0, np.argmin(modes["avail_kw"]))
 
             # Set limits on the amount of delay which is recoverable
             if dwell_is_refresh:
