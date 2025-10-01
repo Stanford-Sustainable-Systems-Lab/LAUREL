@@ -246,20 +246,6 @@ def apply_delays(dw: DwellSet, params: dict) -> DwellSet:
     return dw
 
 
-def manage_charging(dw: DwellSet, params: dict) -> pd.DataFrame:
-    """Manage the charging of vehicles within each dwell to create charging events."""
-    # Drop dwells with NaN charging energy, which probably resulted from vehicle deaths
-    dw.data = dw.data.dropna(subset=params["drop_na_cols"])
-
-    # Manage charging energy into power
-    manager_cls = _MANAGER_MAP[params["charging_manager"]]
-    manager = manager_cls(dw=dw, **params["input_cols"])
-    events = manager.get_events()
-    pow_col = manager_cls.suffixes["power"]
-    events[pow_col] = events[pow_col].round(params["round_decimals"])
-    return events
-
-
 def filter_dwells_pre_prob(dw: DwellSet, params: dict, pcols: dict) -> DwellSet:
     """Filter dwells down to only include the ones we want to summarize for probabilities.
 
@@ -517,6 +503,20 @@ def filter_dwells_post_prob(dw: DwellSet, pcols: dict) -> DwellSet:
         logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
 
     return dw
+
+
+def manage_charging(dw: DwellSet, params: dict) -> pd.DataFrame:
+    """Manage the charging of vehicles within each dwell to create charging events."""
+    # Drop dwells with NaN charging energy, which probably resulted from vehicle deaths
+    dw.data = dw.data.dropna(subset=params["drop_na_cols"])
+
+    # Manage charging energy into power
+    manager_cls = _MANAGER_MAP[params["charging_manager"]]
+    manager = manager_cls(dw=dw, **params["input_cols"])
+    events = manager.get_events()
+    pow_col = manager_cls.suffixes["power"]
+    events[pow_col] = events[pow_col].round(params["round_decimals"])
+    return events
 
 
 def compute_location_dwell_counts(
