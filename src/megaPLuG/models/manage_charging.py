@@ -1,5 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
+from enum import IntEnum, auto
 from itertools import product
 from typing import Self
 
@@ -10,6 +11,13 @@ import pandas as pd
 from megaPLuG.models.dwell_sets import DwellSet
 
 logger = logging.getLogger(__name__)
+
+
+class ProfileType(IntEnum):
+    """Possible profile type to be used by AbstractChargingManager."""
+
+    OBSERVATIONS = auto()
+    DIFFERENCES = auto()
 
 
 class AbstractChargingManager(ABC):
@@ -27,6 +35,7 @@ class AbstractChargingManager(ABC):
     _scale_up: str = None
     _region: str = None
     _id_cols: list[str] = None
+    _prof_type: ProfileType = ProfileType.OBSERVATIONS
 
     def __init__(
         self,
@@ -38,6 +47,7 @@ class AbstractChargingManager(ABC):
         scale_up: str = None,
         cost: str = None,
         id_cols: list[str] = None,
+        prof_type: ProfileType = ProfileType.OBSERVATIONS,
     ) -> None:
         """Initialize the ChargingManager."""
         self.dw = dw
@@ -48,6 +58,7 @@ class AbstractChargingManager(ABC):
         self.scale_up = scale_up
         self.cost = cost
         self.id_cols = id_cols
+        self.prof_type = prof_type
 
     @abstractmethod
     def get_events(self) -> pd.DataFrame:
@@ -114,14 +125,24 @@ class AbstractChargingManager(ABC):
         self.dw._rename_idx_col(value, self._cost)
         self._cost = value
 
+    @property
+    def prof_type(self):
+        """Name of the pofile type to use when setting events."""
+        return self._prof_type
+
+    @prof_type.setter
+    def prof_type(self, value):
+        self._prof_type = value
+
 
 class IndependentDwellChargingManager(AbstractChargingManager):
     """Charge each dwell independently without considering influences within a region."""
 
     suffixes = {
         "time": "time",
-        "power": "hex_kw_diff",
-        "plugged": "plugged_diff",
+        "duration": "duration",
+        "power": "power_kw",
+        "plugged": "plugged",
     }
 
     @property
@@ -166,29 +187,46 @@ class MinPowerChargingManager(IndependentDwellChargingManager):
     seq_names = ["dwell_start", "dwell_end"]
 
     def set_dwell_events(self) -> Self:
-        time_cols = [f"{seqn}_{self.suffixes['time']}" for seqn in self.seq_names]
-        pwr_cols = [f"{seqn}_{self.suffixes['power']}" for seqn in self.seq_names]
-        plg_cols = [f"{seqn}_{self.suffixes['plugged']}" for seqn in self.seq_names]
+        cnames = {}
+        for k, v in self.suffixes.items():
+            cnames[k] = [f"{seqn}_{v}" for seqn in self.seq_names]
 
         # Set values at dwell_start
-        self.dw.data[time_cols[0]] = self.dw.data[self.dw.start]
+        self.dw.data[cnames["time"][0]] = self.dw.data[self.dw.start]
 
         zero_energy = self.dw.data[self.energy] == 0.0
         zero_dur = self.dw.data[self.duration] == 0.0
         good_div = ~(zero_energy | zero_dur)
         with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-            self.dw.data[pwr_cols[0]] = (
+            self.dw.data[cnames["power"][0]] = (
                 self.dw.data[self.energy] / self.dw.data[self.duration]
             )
-            self.dw.data[pwr_cols[0]] = self.dw.data[pwr_cols[0]].where(good_div, 0.0)
+            self.dw.data[cnames["power"][0]] = self.dw.data[cnames["power"][0]].where(
+                good_div, 0.0
+            )
 
-        nonzero_pwr = self.dw.data[pwr_cols[0]] != 0
-        self.dw.data[plg_cols[0]] = 1 * nonzero_pwr
+        nonzero_pwr = self.dw.data[cnames["power"][0]] != 0
+        self.dw.data[cnames["plugged"][0]] = 1 * nonzero_pwr
 
         # Set values at dwell_end
-        self.dw.data[time_cols[-1]] = self.dw.data[self.dw.end]
-        self.dw.data[pwr_cols[-1]] = -self.dw.data[pwr_cols[0]]
-        self.dw.data[plg_cols[-1]] = -1 * nonzero_pwr
+        self.dw.data[cnames["time"][-1]] = self.dw.data[self.dw.end]
+        self.dw.data[cnames["duration"][0]] = (
+            self.dw.data[cnames["time"][-1]] - self.dw.data[cnames["time"][0]]
+        )
+        self.dw.data[cnames["duration"][-1]] = pd.NA
+        self.dw.data[cnames["duration"][-1]] = pd.to_timedelta(
+            self.dw.data[cnames["duration"][-1]]
+        )
+
+        if self.prof_type == ProfileType.OBSERVATIONS:
+            self.dw.data[cnames["power"][-1]] = 0
+            self.dw.data[cnames["plugged"][-1]] = 0
+        elif self.prof_type == ProfileType.DIFFERENCES:
+            self.dw.data[cnames["power"][-1]] = -self.dw.data[cnames["power"][0]]
+            self.dw.data[cnames["plugged"][-1]] = -1 * nonzero_pwr
+        else:
+            raise NotImplementedError()
+
         return self
 
 
@@ -198,16 +236,16 @@ class ImmediateChargingManager(IndependentDwellChargingManager):
     seq_names = ["dwell_start", "charge_end"]
 
     def set_dwell_events(self) -> Self:
-        time_cols = [f"{seqn}_{self.suffixes['time']}" for seqn in self.seq_names]
-        pwr_cols = [f"{seqn}_{self.suffixes['power']}" for seqn in self.seq_names]
-        plg_cols = [f"{seqn}_{self.suffixes['plugged']}" for seqn in self.seq_names]
+        cnames = {}
+        for k, v in self.suffixes.items():
+            cnames[k] = [f"{seqn}_{v}" for seqn in self.seq_names]
 
         # Set units at dwell_start
-        self.dw.data[time_cols[0]] = self.dw.data[self.dw.start]
-        self.dw.data[pwr_cols[0]] = self.dw.data[self.max_power]
+        self.dw.data[cnames["time"][0]] = self.dw.data[self.dw.start]
+        self.dw.data[cnames["power"][0]] = self.dw.data[self.max_power]
 
-        nonzero_pwr = self.dw.data[pwr_cols[0]] != 0
-        self.dw.data[plg_cols[0]] = 1 * nonzero_pwr
+        nonzero_pwr = self.dw.data[cnames["power"][0]] != 0
+        self.dw.data[cnames["plugged"][0]] = 1 * nonzero_pwr
 
         # Set values at charge_end
         # Assumes that units are kWh, kW, and hours
@@ -229,9 +267,24 @@ class ImmediateChargingManager(IndependentDwellChargingManager):
         charge_end = self.dw.data[self.dw.start] + charge_time
         charge_end = charge_end.clip(upper=self.dw.data[self.dw.end])
 
-        self.dw.data[time_cols[-1]] = charge_end
-        self.dw.data[pwr_cols[-1]] = -self.dw.data[self.max_power]
-        self.dw.data[plg_cols[-1]] = -1 * nonzero_pwr
+        # Set values at dwell_end
+        self.dw.data[cnames["time"][-1]] = charge_end
+        self.dw.data[cnames["duration"][0]] = (
+            self.dw.data[cnames["time"][-1]] - self.dw.data[cnames["time"][0]]
+        )
+        self.dw.data[cnames["duration"][-1]] = pd.NA
+        self.dw.data[cnames["duration"][-1]] = pd.to_timedelta(
+            self.dw.data[cnames["duration"][-1]]
+        )
+
+        if self.prof_type == ProfileType.OBSERVATIONS:
+            self.dw.data[cnames["power"][-1]] = 0
+            self.dw.data[cnames["plugged"][-1]] = 0
+        elif self.prof_type == ProfileType.DIFFERENCES:
+            self.dw.data[cnames["power"][-1]] = -self.dw.data[self.max_power]
+            self.dw.data[cnames["plugged"][-1]] = -1 * nonzero_pwr
+        else:
+            raise NotImplementedError()
 
         self.dw.data = self.dw.data.drop(columns=["charge_hrs"])
         return self
