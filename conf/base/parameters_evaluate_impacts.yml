@@ -5,7 +5,7 @@
 # Link: https://docs.kedro.org/en/0.19.1/configuration/parameters.html
 
 geo_partition_eval:
-  dir: pg_and_e
+  dir: continental
 
 summarize_vehicles:
   dead_energy_col: dwell_init_kwh
@@ -32,6 +32,7 @@ summarize_vehicles:
     shift_delay: shift_delay_hrs
     max_delay: max_delay_hrs
   drop_events_col: drop_events_all_reasons
+  electrified_col: electrified
   delay_frac_thresh_quantile: 0.95
   max_delay_thresh_quantile: 1.00
   shift_max_dur_hrs: 14 # From FMCSA hours of service regulations
@@ -50,13 +51,75 @@ localize_time_from_hexes:
     - veh_id
     - time_local
 
-filter_events:
-  duplic_check_cols:
-    - veh_id
-    - time
-  drop_events_col: drop_events_all_reasons
+filter_dwells_pre_prob_eval:
+  filter_out_weekends: True
   drop_na_cols:
-    - substation_id
+    - cluster_id # This is okay, since everything from here on out is one dwell at a time
+
+dwell_scaling:
+  loc_class_cols:
+    - cluster_id
+  veh_class_cols:
+    - primary_op_dist
+    #- vin_gvw
+  electrified_col: electrified
+  dwell_rate_col: dwells_per_time_unit
+  
+
+compute_known_adoption_totals:
+  totals_column: n_vehs_target
+  fuel_type_col: fuel_type
+  electrified_fuel_types:
+    - electricity
+  filter_totals:
+    filters:
+      gvw_class:
+        value_isin:
+          - "8"
+      scenario:
+        value_isin:
+          - Central
+      is_mandate_active:
+        value_isin:
+          - True
+      year:
+        value_isin:
+          - 2030
+    keep_only_filter_cols: False
+
+compute_dwell_rate:
+  time_unit: ${slice_events.slice_freq}
+  dwell_count_col: n_dwells
+  obs_dur_col: obs_duration
+  target_vehs_col: ${compute_known_adoption_totals.totals_column}
+  dwell_rate_col: ${compute_class_probs.columns.dwell_rate}
+
+merge_classes:
+  keep_right_columns:
+    - primary_op_dist
+    - ${compute_class_probs.columns.dwell_rate}
+    - ${compute_class_probs.columns.n_vehs_in_class}
+    - ${compute_class_probs.columns.n_vehs_electrified_in_class}
+  merge_kwargs:
+    how: left
+    'on': ${dwell_scaling.veh_class_cols} # Using quotes here because "on" somehow gets interpreted as "True" without quotes
+
+compute_class_probs:
+  loc_class_cols:
+    - cluster_id
+  veh_class_cols:
+    - primary_op_dist
+    #- vin_gvw
+  columns:
+    n_dwells_obs: n_dwells_obs
+    n_dwells_obs_elect: n_dwells_electrified
+    n_vehs_in_class: ${compute_known_adoption_totals.totals_column}
+    n_vehs_electrified_in_class: n_vehs_electrified
+    dwell_rate: dwell_rate
+  out_columns:
+    prob_obs_elect: p_obs_elect_g_lclass_vclass
+    n_elect_dwells_expected: n_dwells_expected_elect
+
 
 build_slice_frame:
   columns_input:
@@ -92,28 +155,6 @@ state_op_dist.group_columns:
 
 stratify_columns: ${sample_slices.stratify_cols}
 
-build_sampling_totals:
-  totals_column: n_vehs_target
-  filter_totals:
-    filters:
-      gvw_class:
-        value_isin:
-          - "8"
-      scenario:
-        value_isin:
-          - Central
-      is_mandate_active:
-        value_isin:
-          - True
-      fuel_type:
-        value_isin:
-          - electricity
-      year:
-        value_isin:
-          - 2030
-    keep_only_filter_cols: False
-
-
 assign_metadata_location:
   keep_right_columns:
     - hex_id
@@ -126,7 +167,7 @@ assign_metadata_location:
 assign_metadata_vehicle:
   keep_right_columns:
     - veh_id
-    - drop_events_all_reasons
+    - electrified
     # Other columns will be added at runtime
   merge_kwargs:
     how: left
@@ -155,6 +196,7 @@ sample_slices:
     stratify_cols:
       - home_base_state
       - primary_op_dist
+      - cluster_id
     target_count_col: n_vehs_target
     discrete_freq: 15min
     skip_resampling: False

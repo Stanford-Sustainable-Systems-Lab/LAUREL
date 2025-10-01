@@ -6,7 +6,10 @@ generated using Kedro 0.19.1
 from kedro.pipeline import Node, Pipeline
 
 from megaPLuG.models.dwell_sets import load_dwell_set
-from megaPLuG.pipelines.electrify_trips.nodes import merge_dwellset_node
+from megaPLuG.pipelines.electrify_trips.nodes import (
+    merge_dataframes_node,
+    merge_dwellset_node,
+)
 from megaPLuG.scenarios.io import (
     read_scenario_partition,
     write_scenario_partition,
@@ -15,13 +18,18 @@ from megaPLuG.utils.data import (
     categorize_columns,
     get_merge_params,
 )
-from megaPLuG.utils.distributed import start_dask_node
+from megaPLuG.utils.distributed import load_in_memory_node, start_dask_node
 
 from .nodes import (
     apply_delays,
+    build_class_frame,
     build_eval_columns,
-    build_sampling_totals,
-    filter_events,
+    compute_class_dwell_counts,
+    compute_class_probs,
+    compute_dwell_rate,
+    compute_known_adoption_totals,
+    filter_dwells_post_prob,
+    filter_dwells_pre_prob,
     localize_time_from_hexes,
     manage_charging,
     sample_vehicle_windows,
@@ -79,7 +87,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=summarize_vehicles,
                 inputs=[
-                    "dwell_obj_eval",
+                    "dwell_obj_w_delays_mem",
                     "vehicles_with_params_eval_categorized",
                     "params:summarize_vehicles",
                 ],
@@ -105,6 +113,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="apply_delays",
             ),
             Node(
+                func=load_in_memory_node,
+                inputs="dwell_obj_w_delays",
+                outputs="dwell_obj_w_delays_mem",
+                name="load_in_memory_eval",
+            ),
+            Node(
                 func=get_merge_params,
                 inputs=[
                     "params:assign_metadata_location",
@@ -119,7 +133,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=merge_dwellset_node,
                 inputs=[
-                    "dwell_obj_w_delays",
+                    "dwell_obj_w_delays_mem",
                     "hex_region_corresp_categorized",
                     "merge_params_locations",
                 ],
@@ -149,14 +163,77 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="assign_metadata_vehicles_to_events",
             ),
             Node(
-                func=filter_events,  # TODO: Add location filtering to this
+                func=filter_dwells_pre_prob,
                 inputs=[
                     "dwell_obj_w_metadata",
-                    "params:filter_events",
+                    "params:filter_dwells_pre_prob_eval",
                     "params:eval_columns",
                 ],
                 outputs="dwell_obj_filtered",
-                name="filter_events",
+                name="filter_dwells_pre_prob_eval",
+            ),
+        ],
+        tags=["scenario_run"],
+    )
+
+    prob_pipe = Pipeline(
+        [
+            Node(
+                func=build_class_frame,
+                inputs=[
+                    "hex_region_corresp",
+                    "vehicles_evaluated",
+                    "params:dwell_scaling",
+                ],
+                outputs="classes_frame",
+                name="build_class_frame",
+            ),
+            Node(
+                func=compute_class_dwell_counts,
+                inputs=[
+                    "classes_frame",
+                    "dwell_obj_filtered",
+                    "params:dwell_scaling",
+                ],
+                outputs="classes_counts",
+                name="compute_class_dwell_counts",
+            ),
+            Node(
+                func=compute_known_adoption_totals,
+                inputs=[
+                    "adoption_scenarios",
+                    "params:compute_known_adoption_totals",
+                    "params:dwell_scaling",
+                ],
+                outputs="veh_classes_adopt",
+                name="compute_known_adoption_totals",
+            ),
+            Node(
+                func=compute_dwell_rate,
+                inputs=[
+                    "veh_classes_adopt",
+                    "dwell_obj_filtered",
+                    "vehicles_evaluated",
+                    "params:compute_dwell_rate",
+                    "params:dwell_scaling",
+                ],
+                outputs="veh_classes_rate",
+                name="compute_dwell_rate",
+            ),
+            Node(
+                func=merge_dataframes_node,
+                inputs=["classes_counts", "veh_classes_rate", "params:merge_classes"],
+                outputs="classes_w_vehs",
+                name="merge_classes",
+            ),
+            Node(
+                func=compute_class_probs,
+                inputs=[
+                    "classes_w_vehs",
+                    "params:compute_class_probs",
+                ],
+                outputs="classes_w_probs",
+                name="compute_class_probs",
             ),
         ],
         tags=["scenario_run"],
@@ -165,9 +242,18 @@ def create_pipeline(**kwargs) -> Pipeline:
     event_pipe = Pipeline(
         [
             Node(
-                func=manage_charging,
+                func=filter_dwells_post_prob,
                 inputs=[
                     "dwell_obj_filtered",
+                    "params:dwell_scaling",
+                ],
+                outputs="dwell_obj_electrified",
+                name="filter_dwells_post_prob_eval",
+            ),
+            Node(
+                func=manage_charging,
+                inputs=[
+                    "dwell_obj_electrified",
                     "params:manage_charging",
                 ],
                 outputs="events_filtered",
@@ -200,12 +286,6 @@ def create_pipeline(**kwargs) -> Pipeline:
 
     report_profiles_scaled_prep_pipe = Pipeline(
         [
-            Node(
-                func=build_sampling_totals,
-                inputs=["adoption_scenarios", "params:build_sampling_totals"],
-                outputs="sampling_totals",
-                name="build_sampling_totals",
-            ),
             Node(
                 func=start_dask_node,
                 inputs="params:dask_eval",
@@ -300,6 +380,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         read_pipe
         + report_vehicles_pipe
         + dwell_pipe
+        + prob_pipe
         + event_pipe
         + report_profiles_scaled_prep_pipe
         + sum(report_profiles_pipes)

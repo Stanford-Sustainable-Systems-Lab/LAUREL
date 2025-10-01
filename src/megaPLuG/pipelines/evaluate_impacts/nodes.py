@@ -16,6 +16,10 @@ from tqdm.auto import tqdm
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.models.group_times import AdaptiveTimeGrouper, HourOfWeekdayGrouper
 from megaPLuG.models.manage_charging import _MANAGER_MAP
+from megaPLuG.models.probability_localization import (
+    ElectProbLocalizer,
+    ElectProbLocalizerConfig,
+)
 from megaPLuG.models.summarize import IntervalBeginSpreader, NonzeroGroupedSummarizer
 from megaPLuG.utils.data import IndexIntegerizer, filter_by_vals_in_cols
 from megaPLuG.utils.h3 import cells_to_region_polygons
@@ -24,6 +28,7 @@ from megaPLuG.utils.time import (
     calc_local_time,
     calc_time_zones_from_hexes,
     total_hours,
+    total_time_units,
 )
 
 logger = logging.getLogger(__name__)
@@ -197,6 +202,7 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
         | vehs["delays_too_long_rel"]
         | vehs["delays_too_long_abs"]
     )
+    vehs[params["electrified_col"]] = ~vehs[params["drop_events_col"]]
 
     logger.info("Vehicles to be dropped [%] based on reason:")
     reasons = [
@@ -254,35 +260,312 @@ def manage_charging(dw: DwellSet, params: dict) -> pd.DataFrame:
     return events
 
 
-def filter_events(events: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFrame:
-    """Filter events down to only include the ones we want to summarize."""
+def filter_dwells_pre_prob(dw: DwellSet, params: dict, pcols: dict) -> DwellSet:
+    """Filter dwells down to only include the ones we want to summarize for probabilities.
 
-    # DO NOT drop the zero-charge dwells. They're critical to the dwell-based sampling.
-    # Furthermore, I'll need to consider keeping the non-critical days around to retain
-    # these dwells.
+    That is, we want the dwells which occur within:
+        - The location target pool OR the location donor pool
+        - The time spans expected (e.g. weekdays)
 
-    # However, dropping optional stops not taken could be very important.
+    DO NOT drop the zero-charge dwells. They're critical to the dwell-based sampling.
+    Furthermore, I'll need to consider keeping the non-critical days around to retain
+    these dwells.
 
-    # After apply_delays, optional stops without charging should be the only ones with
-    #   zero duration.
+    DO NOT drop the dwells from non-electrified vehicles. These will be essential for
+    probability of electrification calculations.
+    """
+    if not dw.is_dask:
+        old_len = len(dw.data)
 
-    old_len = len(events)
+    # Dwells which have at least some time within our time spans of interest
+    if params["filter_out_weekends"]:
+        FIRST_DAY_OF_WEEKEND = 5
+        is_weekday = (dw.data[dw.start].dt.weekday < FIRST_DAY_OF_WEEKEND) | (
+            dw.data[dw.end].dt.weekday < FIRST_DAY_OF_WEEKEND
+        )
+        dw.data = dw.data.loc[is_weekday, :]
 
-    prof_cols = list(pcols["diff_cols"].values())
-    any_nonzero = (events.loc[:, prof_cols] != 0).any(axis=1)
-    vehicle_feasible = ~events[params["drop_events_col"]]
-    duplic_events = events.duplicated(
-        subset=params["duplic_check_cols"], keep=False
-    )  # TODO: Move this to an event filtering step
-    events = events.loc[any_nonzero & vehicle_feasible & ~duplic_events, :]
-    events = events.dropna(subset=params["drop_na_cols"])
-    events = events.drop(columns=[params["drop_events_col"]])
+    # Perform filtering
+    if params["drop_na_cols"] is not None:
+        dw.data = dw.data.dropna(subset=params["drop_na_cols"])
 
-    new_len = len(events)
-    abs_diff = old_len - new_len
-    pct_diff = round(abs_diff / old_len * 100, 1)
-    logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
-    return events
+    if not dw.is_dask:
+        new_len = len(dw.data)
+        abs_diff = old_len - new_len
+        pct_diff = round(abs_diff / old_len * 100, 1)
+        logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
+
+    return dw
+
+
+def get_unique_series(df: pd.DataFrame, col: str) -> pd.Series:
+    """Get the series from the df with the given name, and return only the unique values."""
+    if col in df.columns:
+        ser = df[col].sort_values()
+    elif col in df.index.names:
+        ser = df.index.get_level_values(col).to_series().sort_values()
+    else:
+        raise RuntimeError(
+            f"Column {col} not found in the dataframe columns or index names."
+        )
+    uniq_ser = pd.Series(data=ser.unique(), name=col)
+    return uniq_ser
+
+
+def build_class_frame(
+    locs: pd.DataFrame, vehs: pd.DataFrame, params: dict
+) -> pd.DataFrame:
+    """Build the frame for all combinations of location and vehicle classes."""
+    components = []
+    for col in params["veh_class_cols"]:
+        components.append(get_unique_series(vehs, col))
+    for col in params["loc_class_cols"]:
+        components.append(get_unique_series(locs, col))
+
+    classes = pd.MultiIndex.from_product(components).to_frame(index=False)
+    return classes
+
+
+def compute_class_dwell_counts(
+    classes: pd.DataFrame,
+    dw: DwellSet,
+    params: dict,
+) -> pd.DataFrame:
+    """Compute dwell counts for combinations of vehicle and location classes."""
+    cls_cols = params["veh_class_cols"] + params["loc_class_cols"]
+    n_obs_grper = cls_cols + [params["electrified_col"]]
+    n_obs = dw.data.groupby(n_obs_grper, observed=True).size().sort_index()
+    dwells_obs = n_obs.unstack(params["electrified_col"])
+    renamer = {True: "n_dwells_electrified", False: "n_dwells_not_electrified"}
+    dwells_obs.columns = [renamer[old] for old in dwells_obs.columns]
+    dwells_obs["n_dwells_obs"] = dwells_obs.sum(axis=1)
+    dwells_obs = dwells_obs.drop(columns=[renamer[False]])
+
+    classes = classes.merge(dwells_obs, how="left", on=cls_cols)
+    for col in ["n_dwells_obs", "n_dwells_electrified"]:
+        classes[col] = classes[col].fillna(0).astype(int)
+
+    return classes
+
+
+def compute_known_adoption_totals(
+    adopts: pd.DataFrame,
+    params: dict,
+    pcols: dict,
+) -> pd.DataFrame:
+    """Compute known adoption totals from forecasts."""
+    adopts_sel = filter_by_vals_in_cols(adopts, params["filter_totals"])
+
+    tot_col = params["totals_column"]
+    adopts_sel.loc[:, tot_col] = adopts_sel[tot_col].astype(int)
+
+    elect_col = pcols["electrified_col"]
+    ftype_col = params["fuel_type_col"]
+    adopts_sel[elect_col] = adopts_sel[ftype_col].isin(params["electrified_fuel_types"])
+    adopt_grper = pcols["veh_class_cols"] + [elect_col]
+    adopt_elect = adopts_sel.groupby(adopt_grper)[tot_col].sum()
+    adopt_elect = adopt_elect.unstack(elect_col)
+    renamer = {True: f"n_vehs_{elect_col}", False: f"n_vehs_not_{elect_col}"}
+    adopt_elect.columns = [renamer[old] for old in adopt_elect.columns]
+
+    adopt_elect[tot_col] = adopt_elect.sum(axis=1)
+    adopt_elect = adopt_elect.drop(columns=[renamer[False]])
+    return adopt_elect
+
+
+def compute_dwell_rate(
+    veh_classes: pd.DataFrame,
+    dw: DwellSet,
+    vehs: pd.DataFrame,
+    params: dict,
+    pcols: dict,
+) -> pd.DataFrame:
+    """Compute the rate of dwells per unit time."""
+    dw_count_col = params["dwell_count_col"]
+    obs_dur_col = params["obs_dur_col"]
+    vclass_cols = pcols["veh_class_cols"]
+
+    n_dwells = dw.data.groupby(dw.veh).size()
+    n_dwells.name = dw_count_col
+    n_dwells = n_dwells.to_frame()
+    mrg = vehs.loc[:, [obs_dur_col] + vclass_cols]
+    n_dwells = n_dwells.merge(mrg, how="right", left_index=True, right_index=True)
+
+    t_unit = params["time_unit"]
+    obs_t_units_col = f"obs_{t_unit}_units"
+    n_dwells[obs_t_units_col] = total_time_units(n_dwells[obs_dur_col], unit=t_unit)
+    dw_per_t_unit = n_dwells.groupby(vclass_cols, observed=True).agg(
+        n_dwells=pd.NamedAgg(dw_count_col, "sum"),
+        obs_units=pd.NamedAgg(obs_t_units_col, "sum"),
+        n_vehs_obs=pd.NamedAgg(dw_count_col, "size"),
+    )
+    dw_per_t_unit = dw_per_t_unit.rename(
+        columns={"obs_units": obs_t_units_col, "n_dwells": dw_count_col}
+    )
+    dw_per_t_unit[params["dwell_rate_col"]] = (
+        dw_per_t_unit[dw_count_col] / dw_per_t_unit[obs_t_units_col]
+    )
+
+    veh_classes = veh_classes.merge(dw_per_t_unit, how="left", on=vclass_cols)
+    return veh_classes
+
+
+def compute_class_probs(
+    cls: pd.DataFrame,
+    params: dict,
+) -> pd.DataFrame:
+    """Compute probabilities associated with location and vehicle cls.
+
+    We compute:
+        - P(L,V): the probability of a dwell falling into location class l and vehicle class v
+        - P(L|V): the probability of a dwell falling into location class l given it is in vehicle class v
+    """
+    if len(params["loc_class_cols"]) > 1:
+        raise ValueError(
+            "Location class must be defined by a single column. If needed, combine columns together to achieve this."
+        )
+    if len(params["veh_class_cols"]) > 1:
+        raise ValueError(
+            "Vehicle class must be defined by a single column. If needed, combine columns together to achieve this."
+        )
+
+    vcols = params["veh_class_cols"]
+    lcols = params["loc_class_cols"]
+    pcols = params["columns"]
+
+    # Get P(L|V) from sample
+    dw_obs_col = pcols["n_dwells_obs"]
+    dw_ele_col = pcols["n_dwells_obs_elect"]
+    cls["n_dwells_obs_vclass"] = cls.groupby(vcols, observed=True)[
+        dw_obs_col
+    ].transform(lambda ser: ser.sum())
+    cls["p_lclass_g_vclass"] = cls[dw_obs_col] / cls["n_dwells_obs_vclass"]
+
+    # Get P(L,V) from sample
+    cls["p_vclass_lclass"] = cls[dw_obs_col] / cls[dw_obs_col].sum()
+
+    # Get P(E|V) from forecast
+    tot_col = pcols["n_vehs_in_class"]
+    veh_ele_col = pcols["n_vehs_electrified_in_class"]
+    cls["p_elect_g_vclass"] = cls[veh_ele_col] / cls[tot_col]
+
+    # Get consensus P(E|L,V) through data fusion
+    cfg = ElectProbLocalizerConfig(
+        loc_col=lcols[0],
+        veh_col=vcols[0],
+        n_electrified_col=dw_ele_col,
+        n_obs_col=dw_obs_col,
+    )
+    fuser = ElectProbLocalizer(cls, config=cfg)
+    cls["p_elect_g_vclass_lclass_cls"] = fuser.fit_transform()
+
+    # Get number of dwells expected by class combination.
+    dw_rate_col = pcols["dwell_rate"]
+    tgt_veh_col = pcols["n_vehs_in_class"]
+    cls["n_dwells_expected"] = (
+        cls["p_lclass_g_vclass"] * cls[dw_rate_col] * cls[tgt_veh_col]
+    )
+
+    ## Compute output columns: unique values for each (loc class, veh class) pair
+    # Get probability of observed-electrifiability: P(E,O|L,V)
+    ocols = params["out_columns"]
+    n_obs_dwells = cls[dw_obs_col].sum()
+    cls[ocols["prob_obs_elect"]] = (
+        cls["p_vclass_lclass"]
+        * cls["p_elect_g_vclass_lclass_cls"]
+        * n_obs_dwells
+        / cls["n_dwells_expected"]
+    )
+
+    # Get number of expected electrified dwells per class PER location within class
+    cls[ocols["n_elect_dwells_expected"]] = (
+        cls["n_dwells_expected"] * cls["p_elect_g_vclass_lclass_cls"]
+    )
+
+    keep_cols = lcols + vcols + list(ocols.values())
+    out = cls.loc[:, keep_cols]
+    out = out.set_index(lcols + vcols).sort_index()
+    return out
+
+
+def filter_dwells_post_prob(dw: DwellSet, pcols: dict) -> DwellSet:
+    """Filter dwells down to only include the ones we want to sample.
+
+    That is, we want the dwells which occur within:
+        - The location target pool OR the location donor pool
+        - The time spans expected (e.g. weekdays)
+        - AND is electrified
+
+    DO NOT drop the zero-charge dwells. They're critical to the dwell-based sampling.
+    Furthermore, I'll need to consider keeping the non-critical days around to retain
+    these dwells.
+    """
+    if not dw.is_dask:
+        old_len = len(dw.data)
+
+    # Dwells which are feasible to electrify
+    vehicle_feasible = dw.data[pcols["electrified_col"]]
+
+    # Perform filtering
+    dw.data = dw.data.loc[vehicle_feasible, :]
+    dw.data = dw.data.drop(columns=[pcols["electrified_col"]])
+
+    if not dw.is_dask:
+        new_len = len(dw.data)
+        abs_diff = old_len - new_len
+        pct_diff = round(abs_diff / old_len * 100, 1)
+        logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
+
+    return dw
+
+
+def compute_location_dwell_counts(
+    clusts: pd.DataFrame, classes: pd.DataFrame, params: dict
+) -> pd.DataFrame:
+    """Compute expected and available dwell counts per location for use in sampling."""
+    lclass_cols = params["loc_class_cols"]
+    n_dwl_expected_class_col = params["out_columns"]["n_elect_dwells_expected"]
+    mrg = classes.groupby(lclass_cols)[n_dwl_expected_class_col].sum()
+    clusts = clusts.merge(mrg, how="left", on=lclass_cols)
+
+    mrg = clusts.groupby(lclass_cols).size()
+    mrg.name = "n_locs_in_class"
+    clusts = clusts.merge(mrg, how="left", on=lclass_cols)
+    clusts["n_dwells_expected"] = (
+        clusts[n_dwl_expected_class_col] / clusts["n_locs_in_class"]
+    )
+    return clusts
+
+
+# def filter_events(events: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFrame:
+#     """Filter events down to only include the ones we want to summarize."""
+
+#     # DO NOT drop the zero-charge dwells. They're critical to the dwell-based sampling.
+#     # Furthermore, I'll need to consider keeping the non-critical days around to retain
+#     # these dwells.
+
+#     # However, dropping optional stops not taken could be very important.
+
+#     # After apply_delays, optional stops without charging should be the only ones with
+#     #   zero duration.
+
+#     old_len = len(events)
+
+#     prof_cols = list(pcols["diff_cols"].values())
+#     any_nonzero = (events.loc[:, prof_cols] != 0).any(axis=1)
+#     vehicle_feasible = ~events[params["drop_events_col"]]
+#     duplic_events = events.duplicated(
+#         subset=params["duplic_check_cols"], keep=False
+#     )  # TODO: Move this to an event filtering step
+#     events = events.loc[any_nonzero & vehicle_feasible & ~duplic_events, :]
+#     events = events.dropna(subset=params["drop_na_cols"])
+#     events = events.drop(columns=[params["drop_events_col"]])
+
+#     new_len = len(events)
+#     abs_diff = old_len - new_len
+#     pct_diff = round(abs_diff / old_len * 100, 1)
+#     logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
+#     return events
 
 
 # def filter_slices_location(
@@ -657,14 +940,6 @@ def slice_vehicle_windows(
     if orig_idx != [None]:
         events_windows = events_windows.set_index(orig_idx)
     return events_windows
-
-
-def build_sampling_totals(scaler: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Build sampling totals for this particular scenario run."""
-    tots = filter_by_vals_in_cols(scaler, params["filter_totals"])
-    tot_col = params["totals_column"]
-    tots.loc[:, tot_col] = tots[tot_col].astype(int)
-    return tots
 
 
 class SliceWeightSampler:
