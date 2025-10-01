@@ -493,8 +493,9 @@ def filter_dwells_post_prob(dw: DwellSet, pcols: dict) -> DwellSet:
     vehicle_feasible = dw.data[pcols["electrified_col"]]
 
     # Perform filtering
-    dw.data = dw.data.loc[vehicle_feasible, :]
-    dw.data = dw.data.drop(columns=[pcols["electrified_col"]])
+    feas = dw.copy_without_data()
+    feas.data = dw.data.loc[vehicle_feasible, :]
+    feas.data = feas.data.drop(columns=[pcols["electrified_col"]])
 
     if not dw.is_dask:
         new_len = len(dw.data)
@@ -502,7 +503,7 @@ def filter_dwells_post_prob(dw: DwellSet, pcols: dict) -> DwellSet:
         pct_diff = round(abs_diff / old_len * 100, 1)
         logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
 
-    return dw
+    return feas
 
 
 def add_dwell_id(dw: DwellSet, params: dict) -> DwellSet:
