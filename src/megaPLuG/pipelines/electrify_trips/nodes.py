@@ -290,7 +290,10 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
 def mark_shift_powers(dw: DwellSet, params: dict) -> DwellSet:
     """Mark the maximum available power in the remainder of the shift."""
     refr_col = params["refresh_col"]
+    crit_col = params["crit_col"]
     max_pow_col = params["max_power_col"]
+    power_avail = dw.data[crit_col] | dw.data[refr_col]
+    dw.data[max_pow_col] = dw.data[max_pow_col].where(power_avail, other=0.0)
     dw.accum_masked(
         keep_mask_col=refr_col,
         accum_cols=max_pow_col,

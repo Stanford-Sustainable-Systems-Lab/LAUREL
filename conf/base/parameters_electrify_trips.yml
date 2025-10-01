@@ -194,6 +194,7 @@ filter_dwells:
 
 mark_shift_powers:
   refresh_col: is_refresh
+  crit_col: is_critical
   max_power_col: max_power_kw_avail
   max_power_col_shift: max_power_kw_avail_shift
   final_value: 0
