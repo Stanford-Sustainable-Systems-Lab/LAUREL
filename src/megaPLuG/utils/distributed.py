@@ -31,9 +31,12 @@ def stop_dask_node(cluster: LocalCluster, client: Client, result: object) -> Non
 def load_in_memory_node(ddf: dd.DataFrame | DwellSet) -> pd.DataFrame | DwellSet:
     """Force computation to bring the input dataframe into memory."""
     if isinstance(ddf, DwellSet):
-        ddf_new = ddf.copy_without_data()
-        ddf_new.data = ddf.data.compute()
-        return ddf_new
+        if isinstance(ddf.data, dd.DataFrame):
+            ddf_new = ddf.copy_without_data()
+            ddf_new.data = ddf.data.compute()
+            return ddf_new
+        else:
+            return ddf
     elif isinstance(ddf, dd.DataFrame):
         return ddf.compute()
     else:
