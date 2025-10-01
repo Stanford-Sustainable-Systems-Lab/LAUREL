@@ -505,6 +505,12 @@ def filter_dwells_post_prob(dw: DwellSet, pcols: dict) -> DwellSet:
     return dw
 
 
+def add_dwell_id(dw: DwellSet, params: dict) -> DwellSet:
+    """Add a dwell id column."""
+    dw.data[params["dwell_id_col"]] = np.arange(len(dw.data))
+    return dw
+
+
 def manage_charging(dw: DwellSet, params: dict) -> pd.DataFrame:
     """Manage the charging of vehicles within each dwell to create charging events."""
     # Drop dwells with NaN charging energy, which probably resulted from vehicle deaths

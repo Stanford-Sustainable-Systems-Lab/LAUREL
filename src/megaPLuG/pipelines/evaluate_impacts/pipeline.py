@@ -21,6 +21,7 @@ from megaPLuG.utils.data import (
 from megaPLuG.utils.distributed import load_in_memory_node, start_dask_node
 
 from .nodes import (
+    add_dwell_id,
     apply_delays,
     build_class_frame,
     build_eval_columns,
@@ -251,9 +252,18 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="filter_dwells_post_prob_eval",
             ),
             Node(
-                func=manage_charging,
+                func=add_dwell_id,
                 inputs=[
                     "dwell_obj_electrified",
+                    "params:add_dwell_id",
+                ],
+                outputs="dwell_obj_ided",
+                name="add_dwell_id",
+            ),
+            Node(
+                func=manage_charging,
+                inputs=[
+                    "dwell_obj_ided",
                     "params:manage_charging",
                 ],
                 outputs="events_filtered",

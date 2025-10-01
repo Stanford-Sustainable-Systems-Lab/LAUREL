@@ -129,6 +129,9 @@ compute_class_probs:
     prob_obs_elect: p_obs_elect_g_lclass_vclass
     n_elect_dwells_expected: n_dwells_expected_elect
 
+add_dwell_id:
+  dwell_id_col: dwell_id
+
 manage_charging:
   charging_manager: MinPowerChargingManager
   drop_na_cols:
@@ -137,6 +140,8 @@ manage_charging:
     energy: charge_kwh
     duration: dwell_time_hrs
     max_power: max_power_kw
+    id_cols:
+      - dwell_id
   round_decimals: 4
 
 
