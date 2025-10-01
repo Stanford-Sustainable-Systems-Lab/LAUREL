@@ -63,6 +63,7 @@ filter_dwells_pre_prob_eval:
   filter_out_weekends: True
   drop_na_cols:
     - cluster_id # This is okay, since everything from here on out is one dwell at a time
+    - charge_kwh # Any dwells with NaN charging should not be counted as electrified
 
 dwell_scaling:
   loc_class_cols:
