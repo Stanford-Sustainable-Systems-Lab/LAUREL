@@ -458,6 +458,12 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         # Battery charged within bounds
         batt_respected = np.where(e_fin <= veh["batt_cap"], 0, -np.inf)
 
+        # Shift is feasible, because energy at end of shift is greater than zero
+        #   OR there is some opportunity to charge later.
+        best_alt_power = dwl["power_kw_shift_max_remaining"]
+        e_shift = e_fin - dwl["consumed_kwh_shift"]
+        shift_feasible = np.where((e_shift > 0) | (best_alt_power > 0), 0, -np.inf)
+
         # Delay at this dwell
         powers = caster * powers_flat
         chg_time = np.where(powers == 0.0, EXTREME_DELAY_HRS, e / powers)
@@ -474,20 +480,26 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
 
         # Delay that would result if we charged instead at the highest power dwell
         #  remaining in this shift.
-        if dwl["power_kw_shift_max_remaining"] == 0:
+        if best_alt_power == 0:
             delay_shift = np.ones_like(delay) * EXTREME_DELAY_HRS
         else:
             e_rem = (
                 nrg_needed_shift - cur_energy - np.maximum(nrg_needed_shift - e_fin, 0)
             )
-            delay_shift = e_rem / dwl["power_kw_shift_max_remaining"]
+            delay_shift = e_rem / best_alt_power
 
         soc_targeting = (
             -BETA_SOC * (veh["soc_buffer_high"] - e_fin / veh["batt_cap"]) ** 2
         )
 
         ## Calculate indirect utility and maximize
-        v = soc_targeting - (delay - delay_shift) + trip_succeeds + batt_respected
+        v = (
+            soc_targeting
+            - (delay - delay_shift)
+            + trip_succeeds
+            + batt_respected
+            + shift_feasible
+        )
         flat_best_idx = np.argmax(v, axis=None)
         best_idx = (flat_best_idx // n_modes, flat_best_idx % n_modes)
         chg = float(e[best_idx])
