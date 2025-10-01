@@ -513,10 +513,6 @@ def add_dwell_id(dw: DwellSet, params: dict) -> DwellSet:
 
 def manage_charging(dw: DwellSet, params: dict) -> pd.DataFrame:
     """Manage the charging of vehicles within each dwell to create charging events."""
-    # Drop dwells with NaN charging energy, which probably resulted from vehicle deaths
-    dw.data = dw.data.dropna(subset=params["drop_na_cols"])
-
-    # Manage charging energy into power
     manager_cls = _MANAGER_MAP[params["charging_manager"]]
     manager = manager_cls(dw=dw, **params["input_cols"])
     events = manager.get_events()
