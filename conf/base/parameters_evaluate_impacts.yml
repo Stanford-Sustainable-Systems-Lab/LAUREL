@@ -51,6 +51,14 @@ localize_time_from_hexes:
     - veh_id
     - time_local
 
+apply_delays:
+  delay_columns:
+    cumul_hrs: dwell_init_delay_hrs
+    increase_hrs: delay_inc_hrs
+    decrease_hrs: delay_dec_hrs
+    dwell_hrs: dwell_time_hrs
+  delay_unit: hour
+
 filter_dwells_pre_prob_eval:
   filter_out_weekends: True
   drop_na_cols:
@@ -119,6 +127,16 @@ compute_class_probs:
   out_columns:
     prob_obs_elect: p_obs_elect_g_lclass_vclass
     n_elect_dwells_expected: n_dwells_expected_elect
+
+manage_charging:
+  charging_manager: MinPowerChargingManager
+  drop_na_cols:
+    - charge_kwh
+  input_cols: # keys should match the keyword arguments of the charging manager
+    energy: charge_kwh
+    duration: dwell_time_hrs
+    max_power: max_power_kw
+  round_decimals: 4
 
 
 build_slice_frame:
