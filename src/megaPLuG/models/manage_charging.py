@@ -26,6 +26,7 @@ class AbstractChargingManager(ABC):
     _cost: str = None
     _scale_up: str = None
     _region: str = None
+    _id_cols: list[str] = None
 
     def __init__(
         self,
@@ -36,6 +37,7 @@ class AbstractChargingManager(ABC):
         region: str = None,
         scale_up: str = None,
         cost: str = None,
+        id_cols: list[str] = None,
     ) -> None:
         """Initialize the ChargingManager."""
         self.dw = dw
@@ -45,6 +47,7 @@ class AbstractChargingManager(ABC):
         self.region = region
         self.scale_up = scale_up
         self.cost = cost
+        self.id_cols = id_cols
 
     @abstractmethod
     def get_events(self) -> pd.DataFrame:
@@ -145,7 +148,7 @@ class IndependentDwellChargingManager(AbstractChargingManager):
                 self.dw.data[col] = self.dw.data[col] * self.dw.data[self.scale_up]
         # self.dw.data = self.dw.data.dropna(subset=self.dw.seq_names)
         self.dw.seq_names = self.seq_names
-        events = self.dw.to_events(id_cols=[self.dw.hex, self.dw.veh])
+        events = self.dw.to_events(id_cols=self.id_cols)
         return events
 
     def check_for_suffixes(self) -> list[str]:
