@@ -284,7 +284,7 @@ def filter_dwells_pre_prob(dw: DwellSet, params: dict, pcols: dict) -> DwellSet:
     return dw
 
 
-def get_unique_series(df: pd.DataFrame, col: str) -> pd.Series:
+def get_unique_series(df: pd.DataFrame, col: str, dropna: bool = True) -> pd.Series:
     """Get the series from the df with the given name, and return only the unique values."""
     if col in df.columns:
         ser = df[col].sort_values()
@@ -295,6 +295,8 @@ def get_unique_series(df: pd.DataFrame, col: str) -> pd.Series:
             f"Column {col} not found in the dataframe columns or index names."
         )
     uniq_ser = pd.Series(data=ser.unique(), name=col)
+    if dropna:
+        uniq_ser = uniq_ser.dropna()
     return uniq_ser
 
 
