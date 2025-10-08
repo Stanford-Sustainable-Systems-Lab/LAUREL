@@ -238,4 +238,5 @@ cluster_hexes:
 apply_clusters:
   hex_col: hex_id
   clust_col: cluster_id
-  fill_cluster: ${cluster_hexes.clusterer_kwargs.n_clusters} # Fill with max(clust_id) + 1
+  fill_cluster: False
+  fill_cluster_value: ${cluster_hexes.clusterer_kwargs.n_clusters} # Fill with max(clust_id) + 1

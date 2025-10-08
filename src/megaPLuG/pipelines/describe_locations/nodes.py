@@ -414,5 +414,6 @@ def apply_clusters(
     assert clusts.index.name == params["hex_col"]
     out = hexes.merge(clusts, how="left", left_index=True, right_index=True)
     cl_col = params["clust_col"]
-    out[cl_col] = out[cl_col].fillna(params["fill_cluster"]).astype(int)
+    if params["fill_cluster"]:
+        out[cl_col] = out[cl_col].fillna(params["fill_cluster_value"]).astype(int)
     return out
