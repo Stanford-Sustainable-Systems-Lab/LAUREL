@@ -172,7 +172,7 @@ def filter_by_vals_in_cols(
         filtered = df.loc[df["filt"], keep_cols]
     else:
         filtered = df.loc[df["filt"]]
-    filtered = filtered.drop(columns="filt")
+        filtered = filtered.drop(columns="filt")
     return filtered
 
 
