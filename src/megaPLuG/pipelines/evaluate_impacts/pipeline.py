@@ -184,7 +184,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=build_class_frame,
                 inputs=[
-                    "hex_region_corresp",
+                    "hex_region_corresp_categorized",
                     "vehicles_evaluated",
                     "params:dwell_scaling",
                 ],
