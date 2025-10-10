@@ -398,7 +398,7 @@ def to_arrays(  # noqa: PLR0912
     return (arrays, names, formats)
 
 
-def categorize_columns(df: pd.DataFrame | DwellSet) -> pd.DataFrame:
+def categorize_columns(df: pd.DataFrame | DwellSet) -> pd.DataFrame | DwellSet:
     """Categorize object-typed columns to save memory."""
     if isinstance(df, DwellSet):
         df_to_cat = df.data
@@ -408,4 +408,22 @@ def categorize_columns(df: pd.DataFrame | DwellSet) -> pd.DataFrame:
     for col in df_to_cat.columns:
         if df_to_cat[col].dtype == np.dtype("O"):
             df_to_cat[col] = pd.Categorical(df_to_cat[col])
-    return df
+
+    if isinstance(df, DwellSet):
+        out = df.copy_without_data()
+        out.data = df_to_cat
+    else:
+        out = df_to_cat
+    return out
+
+
+def select_columns(
+    df: pd.DataFrame | gpd.GeoDataFrame, params: dict
+) -> pd.DataFrame | gpd.GeoDataFrame:
+    """Down-select columns of the DataFrame."""
+    keep_cols = params["keep_cols"]
+    if isinstance(keep_cols, str):
+        keep_cols = [keep_cols]
+    if isinstance(df, gpd.GeoDataFrame):
+        keep_cols.append(df.geometry.name)
+    return df.loc[:, keep_cols]
