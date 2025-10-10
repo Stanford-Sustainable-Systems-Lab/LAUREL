@@ -10,9 +10,10 @@ import dask_geopandas as dgpd
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+from dask.dataframe.dispatch import make_meta
+from dask.diagnostics import ProgressBar
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
-from tqdm import tqdm
 
 from megaPLuG.utils.h3 import (
     H3_CRS,
@@ -83,30 +84,14 @@ def describe_substation_usage(
     return subs
 
 
-def format_substation_boundaries_contin(
-    infra: gpd.GeoDataFrame, params: dict
-) -> gpd.GeoDataFrame:
-    """Add up substation capacities from the capacities of transformer banks."""
-    infra = infra.rename(columns={v: k for k, v in params["col_renamer"].items()})
-    infra["substation_id"] = infra["substation_id"].astype(int)
-    orig_len = len(infra)
-    infra = infra.dropna(subset=infra.geometry.name)
-    new_len = len(infra)
-    if new_len < orig_len:
-        d = int(orig_len - new_len)
-        logger.warning(f"{d} substations dropped because of missing geometries.")
-    return infra
-
-
-def build_substation_polygons(
-    subs: gpd.GeoDataFrame, states: gpd.GeoDataFrame, params: dict
-) -> gpd.GeoDataFrame:
+def format_substations_contin(subs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
     """Get substation polygons from points and state boundaries."""
-    states = states.to_crs(params["proj_crs"])
-    subs = subs.to_crs(params["proj_crs"])
+    subs = subs.rename(columns={v: k for k, v in params["col_renamer"].items()})
+    subs["substation_id_contin"] = subs["substation_id_contin"].astype(int)
 
     # Calculate Voronoi polygons, then merge them back onto the substation dataframe
-    orig_geo_name = subs.geometry.name
+    orig_geom_name = subs.geometry.name
+    subs = subs.to_crs(params["proj_crs"])
     vor_polys = subs.geometry.voronoi_polygons()
     substs_polys = gpd.GeoDataFrame(geometry=vor_polys)
     substs_polys.rename_geometry("substation_polygons", inplace=True)
@@ -115,43 +100,37 @@ def build_substation_polygons(
         substs_polys, how="left", left_on="index_right", right_index=True
     )
     subs_polys.set_geometry("substation_polygons", inplace=True)
-
-    # Clip the substation polygons at the bounds
-    ddf = dgpd.from_geopandas(subs_polys, npartitions=params["n_partitions"])
-    bounds = states.geometry.union_all()
-    subs_polys[params["poly_col_out"]] = ddf.intersection(bounds).compute()
-    subs_polys.set_geometry(params["poly_col_out"], inplace=True)
-    subs_polys = subs_polys.drop(columns=[orig_geo_name, "substation_polygons"])
+    subs_polys = subs_polys.drop(columns=[orig_geom_name])
+    subs_polys = subs_polys.rename_geometry(orig_geom_name)
     return subs_polys
 
 
-def format_govt_areas(states: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
+def format_states(states: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
     """Format the states dataset."""
     states = states.rename(columns={v: k for k, v in params["col_renamer"].items()})
-    states = states.loc[:, params["keep_cols"] + [states.geometry.name]]
     return states
 
 
 def format_urban(urban: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
     """Format the urban areas dataset."""
-    urban[params["state_col"]] = urban[params["area_name_col"]].str[-2:]
+    urban = urban.rename(columns={v: k for k, v in params["col_renamer"].items()})
     return urban
 
 
-def format_highways(
-    highways: gpd.GeoDataFrame, states: gpd.GeoDataFrame, params: dict
-) -> gpd.GeoDataFrame:
+def format_highways(highways: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
     """Format the highways dataset."""
-    scols = params["state_cols"]
-    corresp = states.loc[:, [scols["name"], scols["code"]]]
-    highways = highways.merge(
-        corresp,
-        how="inner",
-        left_on=params["highway_cols"]["state"],
-        right_on=scols["name"],
-    )
     highways = highways.rename(columns={v: k for k, v in params["col_renamer"].items()})
-    highways = highways.loc[:, params["keep_cols"] + [highways.geometry.name]]
+
+    logger.info("Dissolving highways")
+    highways = highways.dissolve(by=params["dissolve_cols"])
+    highways = highways.reset_index()
+
+    buff_miles = params["highway_buffer_miles"]
+    orig_crs = highways.crs
+    highways = highways.to_crs(params["buff_crs"])
+    logger.info("Buffering highways")
+    highways.geometry = highways.geometry.buffer(distance=buff_miles * METERS_PER_MILE)
+    highways = highways.to_crs(orig_crs)
     return highways
 
 
@@ -188,48 +167,83 @@ def build_land_use_areas(
     return land_use
 
 
-def build_analysis_areas_node(
-    govt: gpd.GeoDataFrame,
-    infra: gpd.GeoDataFrame,
-    params: dict,
-) -> gpd.GeoDataFrame:
-    """Build the set of mutially-exclusive, collectively-exhaustive polygons which cover
-    the study area.
-    """
-    return build_analysis_areas(infra, extent=govt, crs=params["crs"])
+def clip_to_extent(
+    gdf: gpd.GeoDataFrame, extent: gpd.GeoDataFrame, params: dict
+) -> pd.DataFrame:
+    """Clip a geometry layer to an extent layer."""
+    extent_proj = extent.loc[:, [extent.geometry.name]].to_crs(params["crs"])
+    gdf_proj = gdf.to_crs(params["crs"])
+    geo_clip = gdf_proj.overlay(extent_proj, how="intersection", make_valid=True)
+    geo_clip = geo_clip.loc[~geo_clip.geometry.is_empty, gdf_proj.columns]
+    geo_clip = geo_clip.dropna(subset=[geo_clip.geometry.name])
+
+    geo_col = gdf_proj.geometry.name
+    attr_cols = [col for col in gdf_proj.columns if col != geo_col]
+    geo_compact = geo_clip.dissolve(by=attr_cols).reset_index()
+    return geo_compact
 
 
-def build_analysis_areas(
-    *args: list[gpd.GeoDataFrame], extent: gpd.GeoDataFrame, crs: str
-) -> gpd.GeoDataFrame:
-    """Build the set of mutually-exclusive, collectively-exhaustive polygons which
-    cover the study area (e.g. state boundaries, utility territories).
-    """
-    out = extent.to_crs(crs)
-    for gdf in tqdm(args):
-        gdf_proj = gdf.to_crs(crs)
-        out = out.overlay(gdf_proj, how="intersection")
-    return out
+def hexify_polygons(gdf: gpd.GeoDataFrame, params: dict) -> pd.DataFrame:
+    """Hexify the polygons in a GeoDataFrame."""
 
+    hex_col = params["hex_col"]
+    kws = {
+        "grp_cols": [col for col in gdf.columns if col != gdf.geometry.name],
+        "hex_col": hex_col,
+    }
 
-def get_hexes_by_area(areas: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
-    """Get hexagon geometries for each study area.
+    n_parts = params["n_partitions"]
+    if n_parts > 1:
+        geo_dask = dgpd.from_geopandas(data=gdf, npartitions=n_parts)
+        meta_dict = {col: gdf[col].dtype for col in kws["grp_cols"]}
+        meta_dict[hex_col] = np.uint64
+        meta = make_meta(meta_dict)
+        hex_dask = geo_dask.map_partitions(region_polygons_to_cells, **kws, meta=meta)
+        with ProgressBar():
+            hexes = hex_dask.compute()
 
-    This implicitly assumes that the hexagons are small relative to the regions, so that
-    there is a one-to-many relationship between regions and hexagons.
-    """
-    areas = areas.rename(
-        columns={v: k for k, v in params["group_cols_renamer"].items()}
-    )
-    hexes = region_polygons_to_cells(
-        geos=areas,
-        grp_cols=list(params["group_cols_renamer"].keys()),
-        hex_col=params["hex_col"],
-    )
-    hexes = hexes.reset_index()
-    hexes = hexes.drop_duplicates(subset=params["hex_col"])
-    hexes = hexes.set_index(params["hex_col"])
+    else:
+        hexes = region_polygons_to_cells(gdf, **kws)
+
+    logger.info("Drop duplicates and set index")
+    hexes = hexes.reset_index(drop=True)
+    hexes = hexes.drop_duplicates(subset=hex_col)
+    hexes = hexes.set_index(hex_col)
+
     return hexes
+
+
+def concat_columns(*args: list[pd.DataFrame]) -> pd.DataFrame:
+    """Concatenate columns by their shared index."""
+    cat = pd.concat(args, axis=1, join="outer")
+    return cat
+
+
+def fill_missingness(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Fill in missingness using the parameters."""
+    # For some columns, drop all NA values
+    dropna_cols = params.get("drop_na_cols", None)
+    if dropna_cols is not None:
+        df_filt = df.dropna(subset=dropna_cols).copy()
+    else:
+        df_filt = df.copy()
+
+    # For other columns, fill NA values with chosen values
+    fillna_vals = params.get("fill_na_vals", None)
+    if fillna_vals is not None:
+        for col, val in fillna_vals.items():
+            col_data = df_filt[col]
+            if isinstance(col_data.dtype, pd.CategoricalDtype):
+                if val not in col_data.cat.categories:
+                    new_cats = list(col_data.cat.categories) + [val]
+                    new_dtype = pd.CategoricalDtype(
+                        categories=new_cats, ordered=col_data.cat.ordered
+                    )
+                    df_filt[col] = df_filt[col].astype(new_dtype)
+                df_filt.loc[:, col] = df_filt[col].fillna(val)
+            else:
+                df_filt.loc[:, col] = col_data.fillna(val)
+    return df_filt
 
 
 def format_estabs(

@@ -36,40 +36,21 @@ describe_substation_usage:
     rating_mw: rating_mw
     cap_avail_mw: cap_avail_mw
 
-pg_and_e.filter_state_codes:
-  filters:
-    state_code:
-      value_isin:
-        - CA
-      invert: False
-  keep_only_filter_cols: False
-
 pg_and_e.geo_partition:
   dir: pg_and_e
 
 # For continental substations
 format_substations_contin:
   col_renamer:
-    substation_id: id
-    substation_name: name
-    state_code: state
-  substation_id: substation_id
+    substation_id_contin: id
+  proj_crs: ${clip_to_extent.crs}
 
-filter_contin_bounds:
+subs_contin.select_columns:
+  keep_cols:
+    - substation_id_contin
+
+filter_contin_subs:
   filters:
-    state_code:
-      value_isin:
-        - GU
-        - MP
-        - PR
-        - AK
-        - HI
-        - VI
-        - AS
-        - BC
-        - SK
-        - AB
-      invert: True
     status:
       value_isin:
         - IN SERVICE
@@ -81,29 +62,20 @@ filter_contin_bounds:
         - NOT AVAILABLE
   keep_only_filter_cols: False
 
-govt_areas_contin:
-  filters:
-    state_code:
-      value_isin:
-        - GU
-        - MP
-        - PR
-        - AK
-        - HI
-        - VI
-        - AS
-        - BC
-        - SK
-        - AB
-      invert: True
-  keep_only_filter_cols: True
-    
-build_substation_polygons:
-  proj_crs: EPSG:5070
-  n_partitions: 4
-  poly_col_out: voronoi_polygons
+continental.geo_partition:
+  dir: continental
 
-continental.filter_state_codes:
+# For supporting datasets
+format_states:
+  col_renamer:
+    state_code: STUSPS
+    state_name: NAME
+
+states.select_columns:
+  keep_cols:
+    - state_code
+
+filter_state_codes:
   filters:
     state_code:
       value_isin:
@@ -120,52 +92,43 @@ continental.filter_state_codes:
       invert: True
   keep_only_filter_cols: False
 
-continental.geo_partition:
-  dir: continental
-
-# For supporting datasets
-format_govt_areas:
-  col_renamer:
-    state_code: STUSPS
-    state_name: NAME
-  keep_cols:
-    - state_code
-    - state_name
-
 format_urban:
-  state_col: state_code
-  area_name_col: NAME20
+  col_renamer:
+    urban_area: NAME20
+
+urban_areas.select_columns:
+  keep_cols:
+    - urban_area
 
 format_highways:
-  state_cols:
-    name: state_name
-    code: state_code
-  highway_cols:
-    state: JURISNAME
   col_renamer:
     road_num: ROADNUM
+  dissolve_cols:
+    - road_num
+  highway_buffer_miles: 5
+  buff_crs: ${clip_to_extent.crs}
+
+highways.select_columns:
   keep_cols:
-    - state_code
     - road_num
 
-# For hexagon-region correspondence
-# land_use:
-#   crs: EPSG:5070
-#   highway_buffer_miles: 5
-#   land_use_col: land_use
-
-analysis_areas:
+clip_to_extent:
   crs: EPSG:5070
 
-get_hexes_by_area:
-  group_cols_renamer:
-    state: state_code_1 # Because state_code gets duplicated in the build_analysis_areas
-    substation_id: substation_id
-    # land_use: land_use
+hexify_polygons:
   hex_col: hex_id
+  n_partitions: 1
 
 get_timezones:
-  hex_col: hex_id
+  hex_col: ${hexify_polygons.hex_col}
+
+fill_missingness:
+  drop_na_cols:
+    - state_code
+    - tz
+  fill_na_vals:
+    road_num: far_from_highway
+    urban_area: non_urban
 
 format_estabs:
   col_renamer:

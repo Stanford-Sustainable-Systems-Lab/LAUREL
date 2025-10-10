@@ -5,27 +5,31 @@ generated using Kedro 0.19.3
 
 from kedro.pipeline import Node, Pipeline
 
-from megaPLuG.utils.data import filter_by_vals_in_cols
+from megaPLuG.utils.data import (
+    categorize_columns,
+    filter_by_vals_in_cols,
+    select_columns,
+)
 from megaPLuG.utils.distributed import load_in_memory_node
 from megaPLuG.utils.time import get_timezones
 
 from .nodes import (
     apply_clusters,
-    build_analysis_areas_node,
-    # build_land_use_areas,
-    build_substation_polygons,
+    clip_to_extent,
     cluster_hexes,
     collapse_naics_classes,
+    concat_columns,
     describe_substation_usage,
     embed_hexes,
+    fill_missingness,
     format_estabs,
-    format_govt_areas,
     format_highways,
-    format_substation_boundaries_contin,
+    format_states,
     format_substation_boundaries_pg_and_e,
     format_substation_profiles,
+    format_substations_contin,
     format_urban,
-    get_hexes_by_area,
+    hexify_polygons,
     reassign_hqs,
 )
 
@@ -65,62 +69,32 @@ def create_pipeline(**kwargs) -> Pipeline:
     continental_subs_pipe = Pipeline(
         [
             Node(
-                func=format_substation_boundaries_contin,
-                inputs=["substations_continent", "params:format_substations_contin"],
-                outputs="substations_continent_formatted",
-                name="format_substation_geographies_contin",
-            ),
-            Node(
                 func=filter_by_vals_in_cols,
-                inputs=[
-                    "substations_continent_formatted",
-                    "params:filter_contin_bounds",
-                ],
+                inputs=["substations_continent", "params:filter_contin_subs"],
                 outputs="substations_continent_select",
                 name="filter_by_vals_in_cols_substations_contin",
             ),
             Node(
-                func=filter_by_vals_in_cols,
-                inputs=["states_formatted", "params:govt_areas_contin"],
-                outputs="govt_areas_contin",
-                name="filter_by_vals_in_cols_govt_contin",
-            ),
-            Node(
-                func=build_substation_polygons,
+                func=format_substations_contin,
                 inputs=[
                     "substations_continent_select",
-                    "govt_areas_contin",
-                    "params:build_substation_polygons",
+                    "params:format_substations_contin",
                 ],
-                outputs="substations_standard_continental",
-                name="build_substation_polygons",
+                outputs="substations_continent_formatted_unclipped",
+                name="format_substation_geographies_contin",
+            ),
+            Node(
+                func=clip_to_extent,
+                inputs=[
+                    "substations_continent_formatted_unclipped",
+                    "states_formatted",
+                    "params:clip_to_extent",
+                ],
+                outputs="substations_continent_formatted",
+                name="clip_to_extent_subs_contin",
             ),
         ],
         tags="continental_substations",
-    )
-
-    format_allied_pipe = Pipeline(
-        [
-            Node(
-                func=format_govt_areas,
-                inputs=["state_boundaries", "params:format_govt_areas"],
-                outputs="states_formatted",
-                name="format_govt_areas",
-            ),
-            Node(
-                func=format_urban,
-                inputs=["urban_areas", "params:format_urban"],
-                outputs="urban_areas_formatted",
-                name="format_urban",
-            ),
-            Node(
-                func=format_highways,
-                inputs=["highways", "states_formatted", "params:format_highways"],
-                outputs="highways_formatted",
-                name="format_highways",
-            ),
-        ],
-        tags="format_allied_datasets",
     )
 
     estab_pipe = Pipeline(
@@ -158,6 +132,176 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="estabs_leafed",
                 name="collapse_naics_classes",
             ),
+        ],
+        tags="establishments",
+    )
+
+    state_pipe = Pipeline(
+        [
+            Node(
+                func=format_states,
+                inputs=["state_boundaries", "params:format_states"],
+                outputs="states_formatted_raw",
+                name="format_states",
+            ),
+            Node(
+                func=filter_by_vals_in_cols,
+                inputs=["states_formatted_raw", "params:filter_state_codes"],
+                outputs="states_formatted",
+                name="filter_by_vals_in_cols_govt",
+            ),
+        ],
+        tags="format_states",
+    )
+
+    highway_pipe = Pipeline(
+        [
+            Node(
+                func=format_highways,
+                inputs=["highways", "params:format_highways"],
+                outputs="highways_formatted_unclipped",
+                name="format_highways",
+            ),
+            Node(
+                func=clip_to_extent,
+                inputs=[
+                    "highways_formatted_unclipped",
+                    "states_formatted",
+                    "params:clip_to_extent",
+                ],
+                outputs="highways_formatted",
+                name="clip_to_extent_highways",
+            ),
+        ],
+        tags="format_highways",
+    )
+
+    urban_areas_pipe = Pipeline(
+        [
+            Node(
+                func=format_urban,
+                inputs=["urban_areas", "params:format_urban"],
+                outputs="urban_areas_formatted_unclipped",
+                name="format_urban",
+            ),
+            Node(
+                func=clip_to_extent,
+                inputs=[
+                    "urban_areas_formatted_unclipped",
+                    "states_formatted",
+                    "params:clip_to_extent",
+                ],
+                outputs="urban_areas_formatted",
+                name="clip_to_extent_urban_areas",
+            ),
+        ],
+        tags="format_urban_areas",
+    )
+
+    polys_to_hexes_pipe = Pipeline(
+        [
+            Node(
+                func=select_columns,
+                inputs=["polys_formatted", "params:select_columns"],
+                outputs="polys_col_select",
+                name="select_columns",
+            ),
+            Node(
+                func=hexify_polygons,
+                inputs=["polys_col_select", "params:hexify_polygons"],
+                outputs="area_hexes_raw",
+                name="hexify_polygons",
+            ),
+            Node(
+                func=categorize_columns,
+                inputs="area_hexes_raw",
+                outputs="area_hexes",
+                name="categorize_columns_hexes",
+            ),
+        ],
+        tags="polys_to_hexes",
+    )
+
+    polys_to_hexes_pipe_fixed_params = {
+        "params:hexify_polygons",
+    }
+
+    polys_to_hexes_pipes = [
+        Pipeline(
+            polys_to_hexes_pipe,
+            namespace="states",
+            parameters=polys_to_hexes_pipe_fixed_params,
+            inputs={
+                "polys_formatted": "states_formatted",
+            },
+        ),
+        Pipeline(
+            polys_to_hexes_pipe,
+            namespace="highways",
+            parameters=polys_to_hexes_pipe_fixed_params,
+            inputs={
+                "polys_formatted": "highways_formatted",
+            },
+        ),
+        Pipeline(
+            polys_to_hexes_pipe,
+            namespace="urban_areas",
+            parameters=polys_to_hexes_pipe_fixed_params,
+            inputs={
+                "polys_formatted": "urban_areas_formatted",
+            },
+        ),
+        Pipeline(
+            polys_to_hexes_pipe,
+            namespace="subs_contin",
+            parameters=polys_to_hexes_pipe_fixed_params,
+            inputs={
+                "polys_formatted": "substations_continent_formatted",
+            },
+        ),
+    ]
+
+    tz_pipe = Pipeline(
+        [
+            Node(
+                func=get_timezones,
+                inputs=["states.area_hexes", "params:get_timezones"],
+                outputs="states_hexes_tz_raw",
+                name="get_timezones",
+            ),
+            Node(
+                func=categorize_columns,
+                inputs="states_hexes_tz_raw",
+                outputs="states_hexes_tz",
+                name="categorize_columns_states_tz",
+            ),
+        ],
+    )
+
+    concat_pipe = Pipeline(
+        [
+            Node(
+                func=concat_columns,
+                inputs=[
+                    "states_hexes_tz",
+                    "highways.area_hexes",
+                    "urban_areas.area_hexes",
+                    "subs_contin.area_hexes",
+                ],
+                outputs="hex_base_corresp_w_missing",
+                name="concat_columns",
+            ),
+            Node(
+                func=fill_missingness,
+                inputs=["hex_base_corresp_w_missing", "params:fill_missingness"],
+                outputs="hex_base_corresp",
+                name="fill_missingness",
+            ),
+        ],
+    )
+
+    cluster_pipe = Pipeline(
+        [
             Node(
                 func=embed_hexes,
                 inputs=["estabs_leafed", "params:embed_hexes"],
@@ -167,124 +311,31 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=cluster_hexes,
                 inputs=["hex_embeds", "params:cluster_hexes"],
-                outputs="hex_cluster_corresp",
+                outputs="hex_clusters",
                 name="cluster_hexes",
-            ),
-        ],
-        tags="establishments",
-    )
-
-    geo_pipe = Pipeline(
-        [
-            Node(
-                func=filter_by_vals_in_cols,
-                inputs=["states_formatted", "params:filter_state_codes"],
-                outputs="states_select",
-                name="filter_by_vals_in_cols_govt",
-            ),
-            # Node(
-            #     func=filter_by_vals_in_cols,
-            #     inputs=["highways_formatted", "params:filter_state_codes"],
-            #     outputs="highways_select",
-            #     name="filter_by_vals_in_cols_highway",
-            # ),
-            # Node(
-            #     func=filter_by_vals_in_cols,
-            #     inputs=["urban_areas_formatted", "params:filter_state_codes"],
-            #     outputs="urban_areas_select",
-            #     name="filter_urban_areas",
-            # ),
-            Node(
-                func=filter_by_vals_in_cols,
-                inputs=["substations_standard", "params:filter_state_codes"],
-                outputs="substation_geographies_select",
-                name="filter_by_vals_in_cols_substations",
-            ),
-            # Node(
-            #     func=build_land_use_areas,
-            #     inputs=[
-            #         "states_select",
-            #         "highways_select",
-            #         "urban_areas_select",
-            #         "params:land_use",
-            #     ],
-            #     outputs="land_use",
-            #     name="build_land_use_areas",
-            # ),
-            Node(
-                func=build_analysis_areas_node,
-                inputs=[
-                    "states_select",
-                    "substation_geographies_select",
-                    # "land_use",
-                    "params:analysis_areas",
-                ],
-                outputs="analysis_areas",
-                name="build_analysis_areas",
-            ),
-            Node(
-                func=get_hexes_by_area,
-                inputs=["analysis_areas", "params:get_hexes_by_area"],
-                outputs="hex_area_corresp",
-                name="get_hexes_by_area",
-            ),
-            Node(
-                func=get_timezones,
-                inputs=["hex_area_corresp", "params:get_timezones"],
-                outputs="hex_tz_corresp",
-                name="get_timezones",
             ),
             Node(
                 func=apply_clusters,
                 inputs=[
-                    "hex_tz_corresp",
-                    "hex_cluster_corresp",
+                    "hex_base_corresp",
+                    "hex_clusters",
                     "params:apply_clusters",
                 ],
-                outputs="hex_region_corresp",
+                outputs="hex_cluster_corresp",
                 name="apply_clusters",
             ),
         ],
-        tags="substation_geographies",
     )
-
-    geo_pipe_fixed_params = {
-        # "params:land_use",
-        "params:analysis_areas",
-        "params:get_hexes_by_area",
-        "params:get_timezones",
-        "params:apply_clusters",
-    }
-
-    geo_pipes = [
-        Pipeline(
-            geo_pipe,
-            namespace="pg_and_e",
-            parameters=geo_pipe_fixed_params,
-            inputs={
-                "states_formatted": "states_formatted",
-                "substations_standard": "substations_standard_pg_and_e",
-                "hex_cluster_corresp": "hex_cluster_corresp",
-            },
-            tags="geos_pg_and_e",
-        ),
-        Pipeline(
-            geo_pipe,
-            namespace="continental",
-            parameters=geo_pipe_fixed_params,
-            inputs={
-                "states_formatted": "states_formatted",
-                "substations_standard": "substations_standard_continental",
-                "hex_cluster_corresp": "hex_cluster_corresp",
-            },
-            tags="geos_continental",
-        ),
-    ]
 
     return (
         ca_subs_pipe
         + continental_subs_pipe
-        + format_allied_pipe
         + estab_pipe
-        + sum(geo_pipes)
+        + state_pipe
+        + tz_pipe
+        + urban_areas_pipe
+        + highway_pipe
+        + cluster_pipe
+        + sum(polys_to_hexes_pipes)
+        + concat_pipe
     )
