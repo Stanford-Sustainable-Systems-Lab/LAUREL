@@ -112,18 +112,28 @@ def region_polygons_to_cells(
     if isinstance(grp_cols, str):
         grp_cols = [grp_cols]
 
+    geo_col = geos.geometry.name
     geos = geos.to_crs(H3_CRS)
 
-    def _geo_to_cell_ser(gser: gpd.GeoSeries) -> pd.Series:
-        unified = gser.union_all()
-        hexes = h3.geo_to_cells(unified, res=H3_DEFAULT_RESOLUTION)
-        hexes = pd.Series(hexes)
-        return hexes
+    if geos.empty:
+        return pd.DataFrame(columns=grp_cols + [hex_col])
 
-    hexes = geos.groupby(grp_cols).geometry.apply(_geo_to_cell_ser)
-    hexes = hexes.droplevel(-1, axis="index")
-    hexes.name = hex_col
-    hexes = hexes.to_frame()
+    geos = geos.dropna(subset=[geo_col]).copy()
+    if geos.empty:
+        return pd.DataFrame(columns=grp_cols + [hex_col])
+
+    geos[hex_col] = geos[geo_col].apply(
+        lambda geom: tuple(h3.geo_to_cells(geom, res=H3_DEFAULT_RESOLUTION))
+    )
+    hexes = geos.drop(columns=[geo_col])
+    hexes = hexes.explode(hex_col)
+    hexes = hexes.dropna(subset=[hex_col])
+    if hexes.empty:
+        return pd.DataFrame(columns=grp_cols + [hex_col])
+
+    hexes[hex_col] = hexes[hex_col].astype(np.uint64)
+    hexes = hexes.loc[:, grp_cols + [hex_col]]
+    hexes = hexes.reset_index(drop=True)
     return hexes
 
 
