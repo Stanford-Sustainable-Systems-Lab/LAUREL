@@ -4,7 +4,10 @@ from numba import jit
 
 @jit
 def get_naics_leaf_class(
-    codes: np.ndarray[int], leaves: np.ndarray[int], src_digits: int = 8
+    codes: np.ndarray[int],
+    leaves: np.ndarray[int],
+    src_digits: int = 8,
+    fill_leaf: int | None = None,
 ) -> np.ndarray[int]:
     """Get the NAICS 'leaf' for each NAICS code."""
     out = np.zeros_like(codes)
@@ -20,6 +23,8 @@ def get_naics_leaf_class(
         codes = np.floor_divide(codes, 10)
     # n_digits = np.where(out == 0, 1, np.floor(np.log10(out)) + 1)
     # out = out * np.power(10, src_digits - n_digits)
-    if np.any(out == 0):
+    if fill_leaf is not None:
+        out = np.where(out != 0, out, fill_leaf)
+    elif np.any(out == 0):
         raise ValueError("At least some NAICS codes are assigned to no leaf code.")
     return out
