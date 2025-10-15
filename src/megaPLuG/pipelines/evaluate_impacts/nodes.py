@@ -20,6 +20,12 @@ from megaPLuG.models.probability_localization import (
     ElectProbLocalizer,
     ElectProbLocalizerConfig,
 )
+from megaPLuG.models.sampling import (
+    build_entity_mask_array,
+    discretize_sparse_profiles,
+    normalize_sparse,
+    sample_profiles,
+)
 from megaPLuG.models.summarize import IntervalBeginSpreader, NonzeroGroupedSummarizer
 from megaPLuG.utils.data import IndexIntegerizer, filter_by_vals_in_cols
 from megaPLuG.utils.h3 import cells_to_region_polygons
@@ -282,6 +288,14 @@ def filter_dwells_pre_prob(dw: DwellSet, params: dict, pcols: dict) -> DwellSet:
         logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
 
     return dw
+
+
+def filter_locs_pre_prob(locs: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Filter locations to report upon."""
+    grp_col = params["loc_group_col"]
+    locs_report = locs.dropna(subset=grp_col)
+    locs_report[grp_col] = locs_report[grp_col].astype(int)
+    return locs_report
 
 
 def get_unique_series(df: pd.DataFrame, col: str, dropna: bool = True) -> pd.Series:
@@ -637,6 +651,140 @@ def build_time_ordered_slice(
     return events_sort
 
 
+def sample_profiles_node(
+    dw: DwellSet,
+    events: pd.DataFrame,
+    locs: pd.DataFrame,
+    classes: pd.DataFrame,
+    params: dict,
+    pcols: dict,
+) -> pd.DataFrame:
+    """Sample load profiles using self and class dwells."""
+    sample_self = params["sample_self"]
+    sample_class = params["sample_class"]
+    n_boots = params["n_bootstraps"]
+    if not sample_self and not sample_class and n_boots > 1:
+        logger.warning(
+            "No sampling requested, so defaulting the number of bootstraps to 1."
+        )
+        n_boots = 1
+
+    hex_col = pcols["hex_col"]
+    hex_col_compact = f"{hex_col}_compact"
+
+    reg_col = pcols["group_cols"][0]  # TODO: Enable multi-column
+    reg_col_compact = f"{reg_col}_compact"
+
+    logger.info("Build compact identifiers and correspondence matrices")
+    locs_counts = locs.reset_index(drop=False)
+    locs_counts.index.name = hex_col_compact
+    locs_counts = locs_counts.reset_index(drop=False)
+
+    mrg = locs_counts.loc[:, [hex_col, hex_col_compact]]
+    dwells_samp = dw.data.merge(mrg, how="left", on=hex_col)
+
+    locs_counts[reg_col_compact] = pd.Categorical(locs_counts[reg_col]).codes
+
+    # Build Dwells x Locations mask
+    n_hexes = locs_counts[hex_col_compact].max() + 1
+    Ga = build_entity_mask_array(ids=dwells_samp[hex_col_compact].values, n_ent=n_hexes)
+    Ga = Ga.tocsr()
+
+    # Build Locations x Lclasses mask
+    class_arr = locs_counts[params["loc_group_col"]].values.astype(int)
+    Cy = build_entity_mask_array(ids=class_arr)
+    Cy = Cy.tocsr()
+
+    # Build Events x Dwells mask
+    n_dwells = dwells_samp[pcols["dw_col"]].max() + 1
+    Be = build_entity_mask_array(ids=events[pcols["dw_col"]].values, n_ent=n_dwells)
+    Be = Be.tocsr()
+
+    # Build Region x Location mask
+    n_regions = locs_counts[reg_col_compact].max() + 1
+    Rho = build_entity_mask_array(
+        ids=locs_counts[reg_col_compact].values, n_ent=n_regions
+    )
+    Rho = Rho.tocsr()
+
+    ## Build the inverse propensity weights
+    om = 1 / dwells_samp[params["dwell_prob_obs_elect_col"]].values[:, np.newaxis]
+    # For a Dwells x Locations matrix
+    Om_hex = Ga * om
+    Om_hex = Om_hex.tocsc()
+    Om_hex = normalize_sparse(Om_hex, axis=0)
+
+    # For a Dwells x Clusters matrix
+    Om_cls = (Ga @ Cy) * om
+    Om_cls = Om_cls.tocsc()
+    Om_cls = normalize_sparse(Om_cls, axis=0)
+
+    ## Build the dwell counts, both observed and expected
+    dw_arr = np.ones(shape=(om.shape[0],), dtype=np.int64)
+    m_hex_obs = Ga.T @ dw_arr
+    m_class_obs = Cy.T @ m_hex_obs
+
+    exp_dwell_rate_col = params["n_dwells_expected_elect_col"]
+    loc_cls = classes.groupby(params["loc_group_col"])[exp_dwell_rate_col].sum()
+    loc_cls = loc_cls.sort_index()
+    n_locs_per_class = Cy.sum(axis=0)
+    m_class_expected = loc_cls.values / n_locs_per_class
+    m_hex_expected = Cy @ m_class_expected
+
+    # Get profiles
+    tcol = params["time_col"]
+    kws = {
+        "m_hex_expected": m_hex_expected,
+        "m_hex_obs": m_hex_obs.astype(int),
+        "m_class_expected": m_class_expected,
+        "m_class_obs": m_class_obs.astype(int),
+        "hex_class": class_arr,
+        "max_first_stage_options": params["max_first_stage_options"],
+        "Om_hex": Om_hex,
+        "Om_class": Om_cls,
+        "events_by_dwells": Be,
+        "region_by_hex": Rho,
+        "events": events,
+        "slice_freq": params["slice_freq"],
+        "discrete_freq": params["discrete_freq"],
+        "prof_cols": list(pcols["diff_cols"].values()),
+        "dur_col": pcols["duration_col"],
+        "region_name": reg_col_compact,
+        "time_col": tcol,
+        "sample_self": params["sample_self"],
+        "sample_class": params["sample_class"],
+    }
+
+    logger.info("Perform bootstrap sampling")
+    prof_dict = {}
+
+    if n_boots == 1:
+        prof_dict[0] = sample_profiles(**kws)
+    elif n_boots > 1:
+        for boot_id in tqdm(range(n_boots)):
+            prof_dict[boot_id] = sample_profiles(**kws)
+    else:
+        raise ValueError("Number of bootstraps must be >= 1.")
+
+    logger.info("Concatenate bootstrap results")
+    boot_profs = pd.concat(prof_dict, names=[params["bootstrap_id_col"], "index"])
+    del prof_dict
+    gc.collect()
+    boot_profs = boot_profs.droplevel("index")
+    boot_profs = boot_profs.reset_index()
+
+    # Reset names to originals
+    renamer = {d: pcols["profile_cols"][k] for k, d in pcols["diff_cols"].items()}
+    boot_profs = boot_profs.rename(columns=renamer)
+
+    loc_counts_names = locs_counts.loc[:, [reg_col_compact, reg_col]].drop_duplicates()
+    reg_name_restorer = loc_counts_names.set_index(reg_col_compact)[reg_col]
+    boot_profs[reg_col] = boot_profs[reg_col_compact].map(reg_name_restorer)
+    boot_profs = boot_profs.drop(columns=[reg_col_compact])
+
+    return boot_profs
+
+
 def compute_location_dwell_counts(
     clusts: pd.DataFrame, classes: pd.DataFrame, params: dict
 ) -> pd.DataFrame:
@@ -794,44 +942,6 @@ def report_by_region_peaks(
     )
     peaks = peaks.set_index(orig_idx)
     return peaks
-
-
-def discretize_sparse_profiles(
-    profs: pd.DataFrame,
-    time_col: str,
-    dur_col: str,
-    prof_cols: list[str],
-    group_cols: list[str],
-    tz_col: str | None = None,
-    freq: str = "1h",
-) -> pd.DataFrame:
-    """Discretize profiles by region and time grouping."""
-    logger.info("Remove all observations with unknown duration or zero power.")
-    # First drop the observations with no duration or zero power
-    is_na_dur = profs[dur_col].isna()
-    any_nonzero = (profs.loc[:, prof_cols] != 0).any(axis=1)
-    nonzero = profs.loc[~is_na_dur & any_nonzero, :]
-
-    logger.info("Spread observations to cover all intervals across their duration")
-    if tz_col is not None:
-        grp_cols = group_cols + [tz_col]
-    else:
-        grp_cols = group_cols
-    spreader = IntervalBeginSpreader(
-        time_col=time_col,
-        dur_col=dur_col,
-        value_cols=prof_cols,
-        group_cols=grp_cols,
-        freq=freq,
-    )
-    nonzero_exp = spreader.spread(nonzero)
-
-    logger.info("Group events")
-    grouper = grp_cols + [pd.Grouper(key=time_col, freq=freq)]
-    gpby = nonzero_exp.groupby(grouper, sort=False, observed=True)
-    grped_nonzero = gpby[prof_cols].max()
-    grped_nonzero = grped_nonzero.reset_index()
-    return grped_nonzero
 
 
 def report_by_region_quantiles(
@@ -1217,21 +1327,21 @@ def sample_vehicle_windows(
 
 
 def summarize_vehicle_window_quantiles(
-    profs: pd.DataFrame, params_slice: dict, params_summ: dict, pcols: dict
+    profs: pd.DataFrame, params: dict, pcols: dict
 ) -> pd.DataFrame:
     """Summarize vehicle windows by grouping into times and then quantiling."""
-    tcol = params_slice["slice_time_col"]
+    tcol = params["time_col"]
     grouper = AdaptiveTimeGrouper(
         time_col=tcol,
         tz_col=pcols["timezone_col"],
         start_time=pd.Timestamp(0),
-        end_time=pd.Timestamp(0) + pd.Timedelta(params_slice["slice_freq"]),
+        end_time=pd.Timestamp(0) + pd.Timedelta(params["slice_freq"]),
         possible_tzs=["no_time_zone"],
-        freq=params_summ["discrete_freq"],
+        freq=params["discrete_freq"],
     )
     profs = grouper.add_group_classes(profs)
     grp_cnts_tz = grouper.get_possible_obs_counts()
-    n_bootstraps = profs[params_slice["bootstrap_id_col"]].nunique()
+    n_bootstraps = profs[params["bootstrap_id_col"]].nunique()
     grp_cnts_tz = grp_cnts_tz * n_bootstraps
     grp_cnts_tz = grp_cnts_tz.reset_index()
     grp_cnts_tz[tcol] = grp_cnts_tz[tcol].dt.tz_localize(None)
@@ -1242,7 +1352,7 @@ def summarize_vehicle_window_quantiles(
     summ_cols = pcols["group_cols"] + grouper.time_group_cols
     summer = NonzeroGroupedSummarizer(
         group_cols=summ_cols,
-        quantiles=np.array(params_summ["quantiles"]),
+        quantiles=np.array(params["quantiles"]),
     )
     quantiles = summer.summarize(
         events=profs,

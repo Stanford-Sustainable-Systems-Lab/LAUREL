@@ -65,6 +65,9 @@ filter_dwells_pre_prob_eval:
     - cluster_id # This is okay, since everything from here on out is one dwell at a time
     - charge_kwh # Any dwells with NaN charging should not be counted as electrified
 
+filter_locs_pre_prob:
+  loc_group_col: cluster_id
+
 dwell_scaling:
   loc_class_cols:
     - cluster_id
@@ -179,7 +182,8 @@ state_op_dist.group_columns:
     - state
     - primary_op_dist
 
-stratify_columns: ${sample_slices.stratify_cols}
+stratify_columns:
+  - cluster_id
 
 assign_metadata_location:
   keep_right_columns:
@@ -200,13 +204,23 @@ assign_metadata_vehicle:
     'on': veh_id # Using quotes here because "on" somehow gets interpreted as "True" without quotes
     validate: many_to_one
 
+merge_dwell_probs:
+  keep_right_columns:
+    - cluster_id
+    - primary_op_dist
+    - p_obs_elect_g_lclass_vclass
+  merge_kwargs:
+    how: left
+    'on': # Using quotes here because "on" somehow gets interpreted as "True" without quotes
+      - cluster_id
+      - primary_op_dist
+
 slice_events:
     slice_freq: 1d
     clip_dur_to_slice_freq: True
     slice_id_col: slice_time_start
     slice_time_col: slice_time_relative
     source_time_col: time_local
-    bootstrap_id_col: bootstrap_id
 
 dask_eval:
   cluster:
@@ -217,19 +231,18 @@ dask_eval:
     # The actual managed memory was only about 1GiB per 15 bootstraps (loaded at beginning, probably is winds_mini)
     # In contrast, 350 bootstraps could be completed on 4GiB workers with no spilling
 
-sample_slices:
-    seed_for_seeds: 1
-    n_bootstraps: 350
-    stratify_cols:
-      - home_base_state
-      - primary_op_dist
-      - cluster_id
-    target_count_col: n_vehs_target
-    discrete_freq: 15min
-    skip_resampling: False
-
-summarize_slices:
+sample_profiles:
   discrete_freq: 15min
+  slice_freq: ${slice_events.slice_freq}
+  n_bootstraps: 2 # As of 10/6/2025, 100 is about the maximum possible on Fletcher's laptop
+  bootstrap_id_col: bootstrap_id
+  sample_self: True
+  sample_class: True
+  max_first_stage_options: 1000
+  dwell_prob_obs_elect_col: p_obs_elect_g_lclass_vclass
+  n_dwells_expected_elect_col: n_dwells_expected_elect
+  time_col: ${slice_events.slice_time_col}
+  loc_group_col: cluster_id
   quantiles:
     - 0.00
     - 0.05

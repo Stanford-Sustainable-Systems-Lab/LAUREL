@@ -573,6 +573,10 @@ dwell_obj_electrified:
   type: MemoryDataset
   copy_mode: assign
 
+dwell_obj_probabilities:
+  type: MemoryDataset
+  copy_mode: assign
+
 dwell_obj_ided:
   type: MemoryDataset
   copy_mode: assign

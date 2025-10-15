@@ -18,7 +18,7 @@ from megaPLuG.utils.data import (
     categorize_columns,
     get_merge_params,
 )
-from megaPLuG.utils.distributed import load_in_memory_node, start_dask_node
+from megaPLuG.utils.distributed import load_in_memory_node  # , start_dask_node
 
 from .nodes import (
     add_dwell_id,
@@ -32,10 +32,11 @@ from .nodes import (
     compute_known_adoption_totals,
     filter_dwells_post_prob,
     filter_dwells_pre_prob,
+    filter_locs_pre_prob,
     get_dwells_nonzero,
     localize_time_from_hexes,
     manage_charging,
-    sample_vehicle_windows,
+    sample_profiles_node,
     slice_events,
     summarize_vehicle_window_quantiles,
     summarize_vehicles,
@@ -47,7 +48,10 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             Node(
                 func=read_scenario_partition,
-                inputs=["dwells_with_charging_partition", "params:results_partition"],
+                inputs=[
+                    "dwells_with_charging_partition_dask",
+                    "params:results_partition",
+                ],
                 outputs="dwells_with_charging_eval",
                 name="collate_partitions_dwells_with_charging",
             ),
@@ -76,8 +80,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="collate_partitions_hexes",
             ),
             Node(
+                func=filter_locs_pre_prob,
+                inputs=["hex_region_corresp", "params:filter_locs_pre_prob"],
+                outputs="hex_region_corresp_filtered",
+                name="filter_locs_pre_prob",
+            ),
+            Node(
                 func=categorize_columns,
-                inputs="hex_region_corresp",
+                inputs="hex_region_corresp_filtered",
                 outputs="hex_region_corresp_categorized",
                 name="categorize_hex_region_corresp",
             ),
@@ -254,9 +264,19 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="filter_dwells_post_prob_eval",
             ),
             Node(
-                func=add_dwell_id,
+                func=merge_dwellset_node,
                 inputs=[
                     "dwell_obj_electrified",
+                    "classes_w_probs",
+                    "params:merge_dwell_probs",
+                ],
+                outputs="dwell_obj_probabilities",
+                name="merge_dwell_probs",
+            ),
+            Node(
+                func=add_dwell_id,
+                inputs=[
+                    "dwell_obj_probabilities",
                     "params:eval_columns",
                 ],
                 outputs="dwell_obj_ided",
@@ -321,17 +341,17 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags=["scenario_run", "manage_charging"],
     )
 
-    report_profiles_scaled_prep_pipe = Pipeline(
-        [
-            Node(
-                func=start_dask_node,
-                inputs="params:dask_eval",
-                outputs=["dask_cluster_eval", "dask_client_eval"],
-                name="start_dask_eval",
-            ),
-        ],
-        tags="scenario_run",
-    )
+    # report_profiles_scaled_prep_pipe = Pipeline(
+    #     [
+    #         Node(
+    #             func=start_dask_node,
+    #             inputs="params:dask_eval",
+    #             outputs=["dask_cluster_eval", "dask_client_eval"],
+    #             name="start_dask_eval",
+    #         ),
+    #     ],
+    #     tags="scenario_run",
+    # )
 
     report_profiles_scaled_pipe = Pipeline(
         [
@@ -342,25 +362,24 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="build_eval_columns",
             ),
             Node(
-                func=sample_vehicle_windows,
+                func=sample_profiles_node,
                 inputs=[
-                    "slices_filtered",
-                    "slice_frame_filtered",
-                    "sampling_totals",
-                    "params:slice_events",
-                    "params:sample_slices",
+                    "dwell_obj_ided",
+                    "slices_ordered",
+                    "hex_region_corresp_categorized",
+                    "classes_w_probs",
+                    "params:sample_profiles",
                     "eval_columns",
-                    "dask_client_eval",
+                    # "dask_client_eval",
                 ],
-                outputs=["bootstrap_profiles", "report_by_region_energies"],
-                name="sample_vehicle_windows",
+                outputs="bootstrap_profiles",  # ["bootstrap_profiles", "report_by_region_energies"],
+                name="sample_profiles_node",
             ),
             Node(
                 func=summarize_vehicle_window_quantiles,
                 inputs=[
                     "bootstrap_profiles",
-                    "params:slice_events",
-                    "params:summarize_slices",
+                    "params:sample_profiles",
                     "eval_columns",
                 ],
                 outputs="report_by_region_quantiles",
@@ -372,12 +391,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="report_by_region_quantiles_partition",
                 name="write_scenario_partition_hexes_quants",
             ),
-            Node(
-                func=write_scenario_partition,
-                inputs=["report_by_region_energies", "params:results_partition"],
-                outputs="report_by_region_energies_partition",
-                name="write_scenario_partition_region_energies",
-            ),
+            # Node(
+            #     func=write_scenario_partition,
+            #     inputs=["report_by_region_energies", "params:results_partition"],
+            #     outputs="report_by_region_energies_partition",
+            #     name="write_scenario_partition_region_energies",
+            # ),
         ],
         tags="report_profiles",
     )
@@ -385,15 +404,14 @@ def create_pipeline(**kwargs) -> Pipeline:
     profile_group_fixed_params = {
         "params:results_partition",
         "params:eval_columns",
-        "params:slice_events",
-        "params:sample_slices",
-        "params:summarize_slices",
+        "params:sample_profiles",
     }
     profile_group_fixed_inputs = {
-        "slices_filtered",
-        "slice_frame_filtered",
-        "sampling_totals",
-        "dask_client_eval",
+        "dwell_obj_ided",
+        "slices_ordered",
+        "hex_region_corresp_categorized",
+        "classes_w_probs",
+        # "dask_client_eval",
     }
 
     report_profiles_pipes = [
@@ -404,13 +422,13 @@ def create_pipeline(**kwargs) -> Pipeline:
             inputs=profile_group_fixed_inputs,
             tags="scenario_run",
         ),
-        Pipeline(
-            report_profiles_scaled_pipe,
-            namespace="state_op_dist",
-            parameters=profile_group_fixed_params,
-            inputs=profile_group_fixed_inputs,
-            tags="scenario_run",
-        ),
+        # Pipeline(
+        #     report_profiles_scaled_pipe,
+        #     namespace="state_op_dist",
+        #     parameters=profile_group_fixed_params,
+        #     inputs=profile_group_fixed_inputs,
+        #     tags="scenario_run",
+        # ),
     ]
 
     return (
@@ -420,6 +438,6 @@ def create_pipeline(**kwargs) -> Pipeline:
         + prob_pipe
         + dwell_pipe_post_prob
         + event_pipe
-        + report_profiles_scaled_prep_pipe
+        # + report_profiles_scaled_prep_pipe
         + sum(report_profiles_pipes)
     )
