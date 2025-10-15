@@ -312,14 +312,14 @@ class NonzeroGroupedSummarizer:
 
         # Process each value column
         all_results = {}
-        for col in cols_to_process:
+        for col in tqdm(cols_to_process, desc="Summarize profile columns"):
             values = get_basic_dtype_ser(events[col]).values
             results = np.zeros(
                 (grouping.ngroups, self.quantiles.shape[0]), dtype=np.float64
             )
 
             i = 0
-            for _, idx in tqdm(grp_idxs.items(), desc=f"Summarizing {col}"):
+            for _, idx in grp_idxs.items():
                 cur_counts = counts[idx[0]]
                 cur_vals = values[idx]
                 if cur_counts < cur_vals.size:
