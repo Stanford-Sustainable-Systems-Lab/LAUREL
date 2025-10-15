@@ -658,6 +658,7 @@ def sample_profiles_node(
     classes: pd.DataFrame,
     params: dict,
     pcols: dict,
+    client: Client,
 ) -> pd.DataFrame:
     """Sample load profiles using self and class dwells."""
     sample_self = params["sample_self"]
@@ -761,8 +762,20 @@ def sample_profiles_node(
     if n_boots == 1:
         prof_dict[0] = sample_profiles(**kws)
     elif n_boots > 1:
-        for boot_id in tqdm(range(n_boots)):
-            prof_dict[boot_id] = sample_profiles(**kws)
+
+        def _sample_profiles_distrib(kws: dict, boot_id: int):
+            # boot_id argument ensures that Dask does not run once and copy results
+            return sample_profiles(**kws)
+
+        future_kws = client.scatter(kws, broadcast=True)
+        futures = [
+            client.submit(_sample_profiles_distrib, kws=future_kws, boot_id=boot_id)
+            for boot_id in range(n_boots)
+        ]
+        for boot_id, (future, result) in tqdm(
+            enumerate(as_completed(futures, with_results=True)), total=len(futures)
+        ):
+            prof_dict[boot_id] = result
     else:
         raise ValueError("Number of bootstraps must be >= 1.")
 
