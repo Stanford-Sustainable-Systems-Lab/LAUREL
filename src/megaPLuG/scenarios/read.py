@@ -140,7 +140,12 @@ class ScenarioReader(ABC):
         coll = pd.concat(df_ls, keys=key_ls, names=names_ls)
         colnames = coll.columns.tolist()
         coll = coll.reset_index(self.metadata_level_names)
-        coll = coll.loc[:, colnames + [*self.metadata_level_names]]
+        if coll.columns.nlevels > 1:
+            add_ls = [""] * (coll.columns.nlevels - 1)
+            meta_cols = [tuple([meta] + add_ls) for meta in self.metadata_level_names]
+        else:
+            meta_cols = [*self.metadata_level_names]
+        coll = coll.loc[:, colnames + meta_cols]
         return coll
 
     def list_completed_partitions(
