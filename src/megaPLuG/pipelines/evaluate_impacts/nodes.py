@@ -763,15 +763,19 @@ def sample_profiles_node(
         kws.update({diff_col: events[diff_col].values})
 
     logger.info("Perform bootstrap sampling")
+    master_seed = params.get("master_seed", None)
     boot_profs = {}
 
     if n_boots == 1:
-        boot_profs[0] = sample_profiles(**kws)
+        boot_profs[0] = sample_profiles(**kws, seed=master_seed)
     elif n_boots > 1:
 
         def _sample_profiles_distrib(kws: dict, boot_id: int):
-            # boot_id argument ensures that Dask does not run once and copy results
-            return sample_profiles(**kws)
+            if master_seed is not None:
+                seed = master_seed + boot_id
+            else:
+                seed = master_seed
+            return sample_profiles(**kws, seed=seed)
 
         future_kws = {k: client.scatter(v, broadcast=True) for k, v in kws.items()}
         futures = [

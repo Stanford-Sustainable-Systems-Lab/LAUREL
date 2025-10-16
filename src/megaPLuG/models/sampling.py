@@ -401,9 +401,12 @@ def sample_profiles(
     time_col: str,
     sample_self: bool = True,
     sample_class: bool = True,
+    seed: int | None = None,
     **event_diffs: dict[str, np.ndarray],
 ) -> pd.DataFrame:
     if sample_self or sample_class:
+        np.random.seed(seed=seed)
+
         # Integerize the number of visits expected by sampling from a Bernoulli (E[N] = p)
         m_hex_trunc = np.trunc(m_hex_expected)
         m_hex_rem = m_hex_expected - m_hex_trunc

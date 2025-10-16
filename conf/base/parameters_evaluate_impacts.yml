@@ -237,7 +237,7 @@ dask_eval:
 sample_profiles:
   discrete_freq: 15min
   slice_freq: ${slice_events.slice_freq}
-  n_bootstraps: 2 # As of 10/6/2025, 100 is about the maximum possible on Fletcher's laptop
+  master_seed: 42
   bootstrap_id_col: bootstrap_id
   sample_self: True
   sample_class: True
