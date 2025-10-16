@@ -309,9 +309,10 @@ def _collate_sparse_diffs_core(
 
 
 def collate_sparse_diffs(
-    times: pd.Series,
+    times: np.ndarray,
     final_time: np.datetime64,
     group_name: str,
+    time_name: str,
     dur_name: str = "duration",
     validate_structure: bool = True,
     **sparses: sp.sparse.sparray,
@@ -372,13 +373,13 @@ def collate_sparse_diffs(
         diffs=diffs,
         indices=ref_arr.indices,
         indptr=ref_arr.indptr,
-        times=times.values,
+        times=times,
         final_time=final_time,
     )
 
     prof_dict = {
         group_name: reg_arr,
-        times.name: time_arr,
+        time_name: time_arr,
         dur_name: dur_arr,
     }
 
@@ -402,10 +403,10 @@ def sample_profiles(
     Om_class: sp.sparse.sparray,
     events_by_dwells: sp.sparse.sparray,
     region_by_hex: sp.sparse.sparray,
-    events: pd.DataFrame,
+    event_times: np.ndarray,
+    event_diffs: dict[str, np.ndarray],
     slice_freq: str,
     discrete_freq: str,
-    prof_cols: list[str],
     dur_col: str,
     region_name: str,
     time_col: str,
@@ -460,12 +461,13 @@ def sample_profiles(
 
     # Sample sparse profiles based on sampled dwells
     event_sel = (events_by_dwells @ dwells_by_region @ region_by_hex).T
-    sparse_profs = {prf: events[prf].values * event_sel for prf in prof_cols}
+    sparse_profs = {k: diff * event_sel for k, diff in event_diffs.items()}
 
     profs_df = collate_sparse_diffs(
-        times=events[time_col],
+        times=event_times,
         final_time=(pd.Timestamp(0) + pd.Timedelta(slice_freq)).to_numpy(),
         group_name=region_name,
+        time_name=time_col,
         dur_name=dur_col,
         **sparse_profs,
     )
@@ -473,7 +475,7 @@ def sample_profiles(
         profs=profs_df,
         time_col=time_col,
         dur_col=dur_col,
-        prof_cols=prof_cols,
+        prof_cols=list(event_diffs.keys()),
         group_cols=[region_name],
         freq=discrete_freq,
     )

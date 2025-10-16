@@ -734,6 +734,7 @@ def sample_profiles_node(
 
     # Get profiles
     tcol = params["time_col"]
+    diff_cols = list(pcols["diff_cols"].values())
     kws = {
         "m_hex_expected": m_hex_expected,
         "m_hex_obs": m_hex_obs.astype(int),
@@ -745,10 +746,10 @@ def sample_profiles_node(
         "Om_class": Om_cls,
         "events_by_dwells": Be,
         "region_by_hex": Rho,
-        "events": events,
+        "event_times": events[tcol].values,
+        "event_diffs": {col: events[col].values for col in diff_cols},
         "slice_freq": params["slice_freq"],
         "discrete_freq": params["discrete_freq"],
-        "prof_cols": list(pcols["diff_cols"].values()),
         "dur_col": pcols["duration_col"],
         "region_name": reg_col_compact,
         "time_col": tcol,
