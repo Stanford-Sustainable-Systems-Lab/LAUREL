@@ -1,5 +1,6 @@
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from itertools import product
 from pathlib import Path
 from typing import Self
@@ -122,7 +123,7 @@ class ScenarioReader(ABC):
 
     def _collate_partitions_df(
         self: Self,
-        partitions: dict[str, object],
+        partitions: dict[str, Callable],
         names: dict[str, str],
         metadata: dict[str, tuple],
     ) -> pd.DataFrame:
@@ -135,8 +136,8 @@ class ScenarioReader(ABC):
             cur_key = (names[pth], *metadata[pth])
             key_ls.append(cur_key)
 
-        names = [self.scenario_name] + [*self.metadata_level_names]
-        coll = pd.concat(df_ls, keys=key_ls, names=names)
+        names_ls = [self.scenario_name] + [*self.metadata_level_names]
+        coll = pd.concat(df_ls, keys=key_ls, names=names_ls)
         colnames = coll.columns.tolist()
         coll = coll.reset_index(self.metadata_level_names)
         coll = coll.loc[:, colnames + [*self.metadata_level_names]]
