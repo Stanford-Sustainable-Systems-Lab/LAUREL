@@ -768,7 +768,7 @@ def sample_profiles_node(
             # boot_id argument ensures that Dask does not run once and copy results
             return sample_profiles(**kws)
 
-        future_kws = client.scatter(kws, broadcast=True)
+        future_kws = {k: client.scatter(v, broadcast=True) for k, v in kws.items()}
         futures = [
             client.submit(_sample_profiles_distrib, kws=future_kws, boot_id=boot_id)
             for boot_id in range(n_boots)
