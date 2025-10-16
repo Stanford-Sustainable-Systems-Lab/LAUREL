@@ -17,7 +17,7 @@ class ScenarioReader(ABC):
 
     builder: ScenarioBuilder
     metadata_level_names: tuple[str]
-    scenario_name: str = "Scenario"
+    scenario_name: str = "scenario"
 
     def __init__(self: Self) -> None:
         meta_names = set(self.metadata_level_names)
