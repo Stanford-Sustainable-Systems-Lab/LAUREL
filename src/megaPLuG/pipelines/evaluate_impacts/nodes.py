@@ -719,8 +719,7 @@ def sample_profiles_node(
     Om_cls = normalize_sparse(Om_cls, axis=0)
 
     ## Build the dwell counts, both observed and expected
-    dw_arr = np.ones(shape=(om.shape[0],), dtype=np.int64)
-    m_hex_obs = Ga.T @ dw_arr
+    m_hex_obs = Ga.T @ np.ones(shape=(len(dwells_samp),), dtype=np.int64)
     m_class_obs = Cy.T @ m_hex_obs
     locs_counts["m_hex_observed"] = m_hex_obs
 
