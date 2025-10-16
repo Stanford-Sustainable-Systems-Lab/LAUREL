@@ -758,10 +758,10 @@ def sample_profiles_node(
     }
 
     logger.info("Perform bootstrap sampling")
-    prof_dict = {}
+    boot_profs = {}
 
     if n_boots == 1:
-        prof_dict[0] = sample_profiles(**kws)
+        boot_profs[0] = sample_profiles(**kws)
     elif n_boots > 1:
 
         def _sample_profiles_distrib(kws: dict, boot_id: int):
@@ -776,14 +776,16 @@ def sample_profiles_node(
         for boot_id, (future, result) in tqdm(
             enumerate(as_completed(futures, with_results=True)), total=len(futures)
         ):
-            prof_dict[boot_id] = result
+            boot_profs[boot_id] = result
     else:
         raise ValueError("Number of bootstraps must be >= 1.")
 
-    logger.info("Concatenate bootstrap results")
-    boot_profs = pd.concat(prof_dict, names=[params["bootstrap_id_col"], "index"])
-    del prof_dict
+    del kws, Om_hex, Om_cls, Be, Rho, Cy, Ga
     gc.collect()
+
+    logger.info("Concatenate bootstrap results")
+    idx_cols = [params["bootstrap_id_col"], "index"]
+    boot_profs = pd.concat(boot_profs, names=idx_cols, copy=False)
     boot_profs = boot_profs.droplevel("index")
     boot_profs = boot_profs.reset_index()
 
