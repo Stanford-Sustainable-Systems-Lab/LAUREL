@@ -108,7 +108,6 @@ def sample_sparse_multinomial_core(
     indptr: np.ndarray,
     rng: np.random.Generator,
     loc_grp_arr: np.ndarray | None = None,
-    show_progress: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Sample a from a multinomial distribution for each row/column of a sparse array."""
     # Pre-allocate arrays to store the sample weights for dwells for each location
@@ -124,11 +123,7 @@ def sample_sparse_multinomial_core(
     w_cursor = 0
     w_cursor_next = 0
 
-    itr = range(n_arr.size)
-    # if show_progress:
-    #     itr = tqdm(itr)
-
-    for hex in itr:
+    for hex in range(n_arr.size):
         n = n_arr[hex]
         if n > 0:  # If any samples are to be taken
             if loc_grp_arr is not None:
