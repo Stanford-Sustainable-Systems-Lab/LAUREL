@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import scipy as sp
 from numba import jit
+from numpy.typing import NDArray
 
 from megaPLuG.models.summarize import IntervalBeginSpreader
 
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def build_entity_mask_array(
-    ids: np.ndarray[int], n_ent: int | None = None
+    ids: NDArray[np.int_], n_ent: int | None = None
 ) -> sp.sparse.coo_array:
     """Build an array whose columns are each a mask on the observations for a particular entity.
 
@@ -41,7 +42,7 @@ def build_entity_mask_array(
 
 
 def normalize_sparse(
-    arr,
+    arr: sp.sparse.sparray,
     axis: int = 0,
     *,
     handle_zeros: Literal["leave", "warn", "raise"] = "leave",
@@ -102,13 +103,12 @@ def normalize_sparse(
 
 @jit
 def sample_sparse_multinomial_core(
-    n_arr: np.ndarray,
-    data: np.ndarray,
-    indices: np.ndarray,
-    indptr: np.ndarray,
-    loc_grp_arr: np.ndarray | None = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Sample a from a multinomial distribution for each row/column of a sparse array."""
+    n_arr: NDArray,
+    data: NDArray,
+    indices: NDArray,
+    indptr: NDArray,
+    loc_grp_arr: NDArray | None = None,
+) -> tuple[NDArray, NDArray, NDArray]:
     # Pre-allocate arrays to store the sample weights for dwells for each location
     #  We know that, at most, we'll have one entry for each expected sample. However,
     #  we may have less because the multinomial may sample any given dwell more than once.
@@ -154,19 +154,19 @@ def sample_sparse_multinomial_core(
 
 
 def sample_sparse_multinomial(
-    n_arr: np.ndarray,
+    n_arr: NDArray,
     p_arr: sp.sparse.sparray,
-    loc_grp_arr: np.ndarray | None = None,
+    loc_grp_arr: NDArray | None = None,
 ) -> sp.sparse.sparray:
     """Sample a from a multinomial distribution for each row/column of a sparse array.
 
     Parameters
     ----------
-    n_arr : np.ndarray
+    n_arr : NDArray
         1D array of sample counts for each location/column
     p_arr : sp.sparse.sparray
         Sparse probability matrix in CSC format (dwells x locations)
-    loc_grp_arr : np.ndarray | None
+    loc_grp_arr : NDArray | None
         Optional 1D array mapping each location to a group index
 
     Returns
@@ -245,16 +245,16 @@ def sample_sparse_multinomial(
 
 
 def _collate_sparse_diffs_core(
-    diffs: np.ndarray,
-    indices: np.ndarray[np.int_],
-    indptr: np.ndarray[np.int_],
-    times: np.ndarray[np.datetime64],
+    diffs: NDArray,
+    indices: NDArray[np.int_],
+    indptr: NDArray[np.int_],
+    times: NDArray[np.datetime64],
     final_time: np.datetime64,
 ) -> tuple[
-    np.ndarray[np.int_],
-    np.ndarray[np.datetime64],
-    np.ndarray[np.timedelta64],
-    np.ndarray,
+    NDArray[np.int_],
+    NDArray[np.datetime64],
+    NDArray[np.timedelta64],
+    NDArray,
 ]:
     """Core functionality for flattening and grouping sparse array diffs.
 
@@ -299,7 +299,7 @@ def _collate_sparse_diffs_core(
 
 
 def collate_sparse_diffs(
-    times: np.ndarray,
+    times: NDArray,
     final_time: np.datetime64,
     group_name: str,
     time_name: str,
@@ -383,17 +383,17 @@ def collate_sparse_diffs(
 
 
 def sample_profiles(
-    m_hex_expected: np.ndarray,
-    m_hex_obs: np.ndarray,
-    m_class_expected: np.ndarray,
-    m_class_obs: np.ndarray,
-    hex_class: np.ndarray,
+    m_hex_expected: NDArray,
+    m_hex_obs: NDArray,
+    m_class_expected: NDArray,
+    m_class_obs: NDArray,
+    hex_class: NDArray,
     max_first_stage_options: int,
     Om_hex: sp.sparse.sparray,
     Om_class: sp.sparse.sparray,
     events_by_dwells: sp.sparse.sparray,
     region_by_hex: sp.sparse.sparray,
-    event_times: np.ndarray,
+    event_times: NDArray,
     slice_freq: str,
     discrete_freq: str,
     dur_col: str,
@@ -402,7 +402,7 @@ def sample_profiles(
     sample_self: bool = True,
     sample_class: bool = True,
     seed: int | None = None,
-    **event_diffs: dict[str, np.ndarray],
+    **event_diffs: dict[str, NDArray],
 ) -> pd.DataFrame:
     if sample_self or sample_class:
         np.random.seed(seed=seed)
