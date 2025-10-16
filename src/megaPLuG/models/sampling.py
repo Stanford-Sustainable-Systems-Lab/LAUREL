@@ -106,7 +106,6 @@ def sample_sparse_multinomial_core(
     data: np.ndarray,
     indices: np.ndarray,
     indptr: np.ndarray,
-    rng: np.random.Generator,
     loc_grp_arr: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Sample a from a multinomial distribution for each row/column of a sparse array."""
@@ -135,7 +134,6 @@ def sample_sparse_multinomial_core(
             flat_idx_last = indptr[i + 1]
             probs = data[flat_idx_first:flat_idx_last]
             inds = indices[flat_idx_first:flat_idx_last]
-            # w = rng.multinomial(n=n, pvals=probs)
             w = np.random.multinomial(n=n, pvals=probs)
 
             out_sel = np.nonzero(w)[0]
@@ -159,7 +157,6 @@ def sample_sparse_multinomial(
     n_arr: np.ndarray,
     p_arr: sp.sparse.sparray,
     loc_grp_arr: np.ndarray | None = None,
-    random_state: int | None = None,
 ) -> sp.sparse.sparray:
     """Sample a from a multinomial distribution for each row/column of a sparse array.
 
@@ -233,13 +230,11 @@ def sample_sparse_multinomial(
     if np.any(n_arr < 0):
         raise ValueError("All elements in n_arr must be non-negative")
 
-    rng = np.random.default_rng(seed=random_state)
     out_data, out_indices, out_indptr = sample_sparse_multinomial_core(
         n_arr=n_arr,
         data=p_arr.data,
         indices=p_arr.indices,
         indptr=p_arr.indptr,
-        rng=rng,
         loc_grp_arr=loc_grp_arr,
     )
     out_shape = (p_arr.shape[0], n_arr.shape[0])
