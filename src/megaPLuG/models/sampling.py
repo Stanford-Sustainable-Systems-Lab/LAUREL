@@ -404,7 +404,6 @@ def sample_profiles(
     events_by_dwells: sp.sparse.sparray,
     region_by_hex: sp.sparse.sparray,
     event_times: np.ndarray,
-    event_diffs: dict[str, np.ndarray],
     slice_freq: str,
     discrete_freq: str,
     dur_col: str,
@@ -412,6 +411,7 @@ def sample_profiles(
     time_col: str,
     sample_self: bool = True,
     sample_class: bool = True,
+    **event_diffs: dict[str, np.ndarray],
 ) -> pd.DataFrame:
     if sample_self or sample_class:
         # Integerize the number of visits expected by sampling from a Bernoulli (E[N] = p)

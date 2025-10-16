@@ -747,7 +747,6 @@ def sample_profiles_node(
         "events_by_dwells": Be,
         "region_by_hex": Rho,
         "event_times": events[tcol].values,
-        "event_diffs": {col: events[col].values for col in diff_cols},
         "slice_freq": params["slice_freq"],
         "discrete_freq": params["discrete_freq"],
         "dur_col": pcols["duration_col"],
@@ -756,6 +755,13 @@ def sample_profiles_node(
         "sample_self": params["sample_self"],
         "sample_class": params["sample_class"],
     }
+
+    for diff_col in diff_cols:
+        if diff_col in kws:
+            raise ValueError(
+                f"Profile column name '{diff_col}' is overriding an existing argument of sample_profiles."
+            )
+        kws.update({diff_col: events[diff_col].values})
 
     logger.info("Perform bootstrap sampling")
     boot_profs = {}
