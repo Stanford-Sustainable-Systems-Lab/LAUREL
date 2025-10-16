@@ -397,20 +397,20 @@ def sample_profiles(
     m_class_expected: np.ndarray,
     m_class_obs: np.ndarray,
     hex_class: np.ndarray,
-    max_first_stage_options: int,  # Param from outside
+    max_first_stage_options: int,
     Om_hex: sp.sparse.sparray,
     Om_class: sp.sparse.sparray,
     events_by_dwells: sp.sparse.sparray,
     region_by_hex: sp.sparse.sparray,
-    events: pd.DataFrame,  # Param from outside
-    slice_freq: str,  # Param from outside
-    discrete_freq: str,  # Param from outside
-    prof_cols: list[str],  # Param from outside
-    dur_col: str,  # Param from outside
-    region_name: str,  # Param from outside
-    time_col: str,  # Param from outside
-    sample_self: bool = True,  # Param from outside
-    sample_class: bool = True,  # Param from outside
+    events: pd.DataFrame,
+    slice_freq: str,
+    discrete_freq: str,
+    prof_cols: list[str],
+    dur_col: str,
+    region_name: str,
+    time_col: str,
+    sample_self: bool = True,
+    sample_class: bool = True,
 ) -> pd.DataFrame:
     if sample_self or sample_class:
         # Integerize the number of visits expected by sampling from a Bernoulli (E[N] = p)
