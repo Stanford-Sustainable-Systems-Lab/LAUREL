@@ -12,25 +12,30 @@ class ScaleTestScenarioBuilder(ScenarioBuilder):
 
     partition_level_names = (
         "run_name",
-        "is_scaled",
+        "sample_source",
         "task_id",
     )
 
     def _build_param_dicts(self) -> tuple[list[Path], list[dict]]:
         paths, scens = [], []
-        scale_levels = self.scen_params["is_scaled"]
+        sources = self.scen_params["sample_source"]
 
-        for is_scaled in scale_levels:
+        for sample_source in sources:
             pth = Path(
                 self.display_name,
-                f"is_scaled_{is_scaled}",
+                f"sample_source_{sample_source}",
             )
 
-            cur_scale = deepcopy(self.params["assign_scale_up_factor"])
-            cur_scale["apply_scaling"] = is_scaled
+            cur_samp = deepcopy(self.params["sample_profiles"])
+            if sample_source == "self":
+                cur_samp["sample_self"] = True
+                cur_samp["sample_class"] = False
+            elif sample_source == "class":
+                cur_samp["sample_self"] = False
+                cur_samp["sample_class"] = True
 
             scn = {
-                "assign_scale_up_factor": cur_scale,
+                "sample_profiles": cur_samp,
             }
 
             paths.append(pth)
@@ -42,14 +47,14 @@ class ScaleTestScenarioReader(ScenarioReader):
     """Read scenarios for the scaling test truck model."""
 
     builder = ScaleTestScenarioBuilder
-    metadata_level_names = ("is_scaled",)
+    metadata_level_names = ("sample_source",)
 
     def extract_metadata(self: Self, path: Path) -> tuple:
         meta = self.get_metadata_values(path=path)
-        task_id = re.search(r"(?<=is_scaled_)(.+)", meta["is_scaled"]).group()
+        task_id = re.search(r"(?<=sample_source_)(.+)", meta["sample_source"]).group()
         return (task_id,)
 
     def name_scenario(self: Self, path: Path) -> str:
         meta = self.get_metadata_values(path=path)
-        task_id = re.search(r"(?<=is_scaled_)(.+)", meta["is_scaled"]).group()
+        task_id = re.search(r"(?<=sample_source_)(.+)", meta["sample_source"]).group()
         return task_id

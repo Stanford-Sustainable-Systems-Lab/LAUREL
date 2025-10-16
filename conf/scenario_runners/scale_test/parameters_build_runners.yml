@@ -18,12 +18,12 @@ slurm_resources:
 cmd_line_calls:
   prefix: uv run
   kedro:
-    tags: scenario_run
+    pipeline: evaluate_impacts
     #params: partition_data_dir=$GROUP_SCRATCH/passow/megaPLuG
 
 scenario_params:
   builder: ScaleTestScenarioBuilder
   display_name: scale_test
-  is_scaled:
-    - True
-    - False
+  sample_source:
+    - self
+    - class
