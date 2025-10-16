@@ -657,7 +657,7 @@ def sample_profiles_node(
     params: dict,
     pcols: dict,
     client: Client,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Sample load profiles using self and class dwells."""
     sample_self = params["sample_self"]
     sample_class = params["sample_class"]
@@ -722,6 +722,7 @@ def sample_profiles_node(
     dw_arr = np.ones(shape=(om.shape[0],), dtype=np.int64)
     m_hex_obs = Ga.T @ dw_arr
     m_class_obs = Cy.T @ m_hex_obs
+    locs_counts["m_hex_observed"] = m_hex_obs
 
     exp_dwell_rate_col = params["n_dwells_expected_elect_col"]
     loc_cls = classes.groupby(params["loc_group_col"])[exp_dwell_rate_col].sum()
@@ -729,6 +730,7 @@ def sample_profiles_node(
     n_locs_per_class = Cy.sum(axis=0)
     m_class_expected = loc_cls.values / n_locs_per_class
     m_hex_expected = Cy @ m_class_expected
+    locs_counts["m_hex_expected"] = m_hex_expected
 
     # Get profiles
     tcol = params["time_col"]
@@ -793,7 +795,11 @@ def sample_profiles_node(
     boot_profs[reg_col] = boot_profs[reg_col_compact].map(reg_name_restorer)
     boot_profs = boot_profs.drop(columns=[reg_col_compact])
 
-    return boot_profs
+    # Report on confidence of sampling
+    conf_cols = [pcols["hex_col"], "m_hex_observed", "m_hex_expected"]
+    hex_confidence = locs_counts.loc[:, conf_cols]
+
+    return boot_profs, hex_confidence
 
 
 def compute_location_dwell_counts(
