@@ -46,6 +46,7 @@ localize_time_from_hexes:
     - time
   time_cols_local:
     - time_local
+  get_tz: False
   sort_result: False
   sort_cols:
     - veh_id
@@ -146,6 +147,7 @@ manage_charging:
     id_cols:
       - ${eval_columns.dw_col}
       - ${eval_columns.hex_col}
+      - ${eval_columns.timezone_col}
   round_decimals: 4
 
 build_slice_frame:
@@ -188,6 +190,7 @@ stratify_columns:
 assign_metadata_location:
   keep_right_columns:
     - hex_id
+    - ${eval_columns.timezone_col}
     # Other columns will be added at runtime
   merge_kwargs:
     how: left

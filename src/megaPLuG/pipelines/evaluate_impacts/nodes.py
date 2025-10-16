@@ -1084,11 +1084,12 @@ def localize_time_from_hexes(
     df: pd.DataFrame, params: dict, pcols: dict
 ) -> pd.DataFrame:
     """Localize a given time column using the location provided by hexagons."""
-    df = calc_time_zones_from_hexes(
-        df=df,
-        hex_col=pcols["hex_col"],
-        tz_col=pcols["timezone_col"],
-    )
+    if params["get_tz"]:
+        df = calc_time_zones_from_hexes(
+            df=df,
+            hex_col=pcols["hex_col"],
+            tz_col=pcols["timezone_col"],
+        )
     df = calc_local_time(
         df=df,
         time_cols=params["time_cols_source"],
