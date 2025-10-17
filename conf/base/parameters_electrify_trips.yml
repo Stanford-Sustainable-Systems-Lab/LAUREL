@@ -15,21 +15,22 @@ load_dwell_set:
   verify_sorting: False
 
 dask_electrify_trips:
-  use_dask: False
+  use_dask: True
   cluster:
-    n_workers: 8
+    n_workers: 4
     processes: True
     threads_per_worker: 1 # Must stay at 1, since our code is not thread safe
-  n_partitions: 250 # Works well for the full continental on a laptop
+    memory_limit: 8GiB
+  n_partitions: 300 # 300 works well for the full continental on a laptop
 
 filter_vehicles:
   filters:
     vin_gvw:
       value_isin:
         - 8
-    home_base_state:
-      value_isin:
-        - CA
+    # home_base_state:
+    #   value_isin:
+    #     - CA
     # home_base_hex:
     #   value_isin:
     #     - 613222834799378431
