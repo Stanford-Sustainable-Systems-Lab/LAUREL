@@ -50,7 +50,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             Node(
                 func=load_dwell_set,
-                inputs=["dwells_with_locations", "params:load_dwell_set"],
+                inputs=["dwells_with_locations_dask", "params:load_dwell_set"],
                 outputs="dwell_obj",
                 name="load_dwell_set_electrify_trips",
             ),
@@ -194,7 +194,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=write_scenario_partition,
                 inputs=["dwells_with_charging", "params:results_partition"],
-                outputs="dwells_with_charging_partition",
+                outputs="dwells_with_charging_partition_dask",
                 name="write_scenario_partition_dwells",
             ),
             Node(
