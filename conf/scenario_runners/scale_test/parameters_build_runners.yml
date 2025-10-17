@@ -18,7 +18,7 @@ slurm_resources:
 cmd_line_calls:
   prefix: uv run
   kedro:
-    pipeline: evaluate_impacts
+    tags: scenario_run
     #params: partition_data_dir=$GROUP_SCRATCH/passow/megaPLuG
 
 scenario_params:
