@@ -242,7 +242,7 @@ sample_profiles:
   bootstrap_id_col: bootstrap_id
   sample_self: True
   sample_class: True
-  max_first_stage_options: 1000
+  max_first_stage_options: 2000 # TODO: Test this value to see if it impacts profiles much. Higher should provide more smoothness, lower should give faster runtime.
   dwell_prob_obs_elect_col: p_obs_elect_g_lclass_vclass
   n_dwells_expected_elect_col: n_dwells_expected_elect
   time_col: ${slice_events.slice_time_col}
