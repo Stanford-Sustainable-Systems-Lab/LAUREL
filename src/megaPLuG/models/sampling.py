@@ -109,6 +109,11 @@ def sample_sparse_multinomial_core(
     indptr: NDArray,
     loc_grp_arr: NDArray | None = None,
 ) -> tuple[NDArray, NDArray, NDArray]:
+    """Sample a from a multinomial distribution for each row/column of a sparse array.
+
+    Note that this function will return no samples when there are no samples available.
+    This allows it to not error out.
+    """
     # Pre-allocate arrays to store the sample weights for dwells for each location
     #  We know that, at most, we'll have one entry for each expected sample. However,
     #  we may have less because the multinomial may sample any given dwell more than once.
@@ -129,19 +134,20 @@ def sample_sparse_multinomial_core(
                 i = loc_grp_arr[hex]
             else:
                 i = hex
+
             flat_idx_first = indptr[i]
-
             flat_idx_last = indptr[i + 1]
-            probs = data[flat_idx_first:flat_idx_last]
-            inds = indices[flat_idx_first:flat_idx_last]
-            w = np.random.multinomial(n=n, pvals=probs)
+            if flat_idx_last > flat_idx_first:  # If any items available to sample
+                probs = data[flat_idx_first:flat_idx_last]
+                inds = indices[flat_idx_first:flat_idx_last]
+                w = np.random.multinomial(n=n, pvals=probs)
 
-            out_sel = np.nonzero(w)[0]
-            w_cursor_next = w_cursor + out_sel.size
-            w_data[w_cursor:w_cursor_next] = w[out_sel]
-            w_indices[w_cursor:w_cursor_next] = inds[out_sel]
+                out_sel = np.nonzero(w)[0]
+                w_cursor_next = w_cursor + out_sel.size
+                w_data[w_cursor:w_cursor_next] = w[out_sel]
+                w_indices[w_cursor:w_cursor_next] = inds[out_sel]
 
-            w_cursor = w_cursor_next
+                w_cursor = w_cursor_next
 
         # Increment the indptr regardless
         w_indptr[hex + 1] = w_cursor
