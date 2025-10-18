@@ -100,7 +100,7 @@ compute_known_adoption_totals:
           - 2030
     keep_only_filter_cols: False
 
-compute_dwell_rate:
+compute_dwell_rate_vclass:
   time_unit: ${slice_events.slice_freq}
   dwell_count_col: n_dwells
   obs_dur_col: obs_duration

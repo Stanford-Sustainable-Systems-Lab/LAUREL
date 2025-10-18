@@ -28,7 +28,7 @@ from .nodes import (
     build_time_ordered_slice,
     compute_class_dwell_counts,
     compute_class_probs,
-    compute_dwell_rate,
+    compute_dwell_rate_vclass,
     compute_known_adoption_totals,
     filter_dwells_post_prob,
     filter_dwells_pre_prob,
@@ -222,16 +222,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="compute_known_adoption_totals",
             ),
             Node(
-                func=compute_dwell_rate,
+                func=compute_dwell_rate_vclass,
                 inputs=[
                     "veh_classes_adopt",
                     "dwell_obj_filtered",
                     "vehicles_evaluated",
-                    "params:compute_dwell_rate",
+                    "params:compute_dwell_rate_vclass",
                     "params:dwell_scaling",
                 ],
                 outputs="veh_classes_rate",
-                name="compute_dwell_rate",
+                name="compute_dwell_rate_vclass",
             ),
             Node(
                 func=merge_dataframes_node,

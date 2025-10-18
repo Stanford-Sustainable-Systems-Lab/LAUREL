@@ -373,14 +373,14 @@ def compute_known_adoption_totals(
     return adopt_elect
 
 
-def compute_dwell_rate(
+def compute_dwell_rate_vclass(
     veh_classes: pd.DataFrame,
     dw: DwellSet,
     vehs: pd.DataFrame,
     params: dict,
     pcols: dict,
 ) -> pd.DataFrame:
-    """Compute the rate of dwells per unit time."""
+    """Compute the rate of dwells by vehicle class per unit time."""
     dw_count_col = params["dwell_count_col"]
     obs_dur_col = params["obs_dur_col"]
     vclass_cols = pcols["veh_class_cols"]
