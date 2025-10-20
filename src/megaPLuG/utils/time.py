@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 
 import h3.api.basic_str as h3_str
 import h3.api.numpy_int as h3
@@ -151,6 +152,24 @@ def total_time_units(s: pd.Series, unit: str) -> pd.Series:
 def total_hours(s: pd.Series) -> pd.Series:
     """Get the total number of hours from a series of timedeltas."""
     return total_time_units(s, unit="1h")
+
+
+def get_total_time_units_filtered(
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    unit: str,
+    filterer: Callable[["pd.Series[pd.Timestamp]"], "pd.Series[bool]"] | None = None,
+) -> int:
+    """Compute the rate of dwells by location per unit time."""
+    end_ceil = end.ceil(unit)
+    start_floor = start.floor(unit)
+    times = pd.date_range(start=start_floor, end=end_ceil, freq=unit).to_series()
+
+    if filterer is not None:
+        tot_t_units = filterer(times).sum()
+    else:
+        tot_t_units = len(times)
+    return tot_t_units
 
 
 @jit
