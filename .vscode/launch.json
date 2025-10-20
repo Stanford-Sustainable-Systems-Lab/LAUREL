@@ -63,6 +63,14 @@
             "args": ["run", "--async", "--pipeline=describe_locations", "--to-outputs=hex_base_corresp", "--env=scenarios/test/task_0"]
         },
         {
+            "name": "Kedro: Describe Dwells",
+            "type": "debugpy",
+            "request": "launch",
+            "console": "integratedTerminal",
+            "module": "kedro",
+            "args": ["run", "--async", "--pipeline=describe_dwells", "--env=scenarios/test/task_0"]
+        },
+        {
             "name": "Kedro: Electrify Trips",
             "type": "debugpy",
             "request": "launch",
