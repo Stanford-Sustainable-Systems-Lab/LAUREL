@@ -1,8 +1,3 @@
-"""
-This is a boilerplate pipeline 'describe_dwells'
-generated using Kedro 1.0.0
-"""
-
 from kedro.pipeline import Node, Pipeline  # noqa
 
 from megaPLuG.models.dwell_sets import save_dwell_set
