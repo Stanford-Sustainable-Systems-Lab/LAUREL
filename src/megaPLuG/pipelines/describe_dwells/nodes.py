@@ -133,6 +133,9 @@ def _calc_rolling_dwell_ratios(
     return ratio_ser
 
 
+### vvv Functions below here not used as of 10/20/2025, but preserved for later use vvv
+
+
 def calc_inter_visit_stats(dw: DwellSet) -> DwellSet:
     """Describe vehicle-location pairs by inter-visit summary statistics."""
     tqdm.pandas()
