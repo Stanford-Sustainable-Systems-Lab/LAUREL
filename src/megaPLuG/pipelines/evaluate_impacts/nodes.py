@@ -832,24 +832,6 @@ def sample_profiles_node(
     return boot_profs, hex_confidence
 
 
-def compute_location_dwell_counts(
-    clusts: pd.DataFrame, classes: pd.DataFrame, params: dict
-) -> pd.DataFrame:
-    """Compute expected and available dwell counts per location for use in sampling."""
-    lclass_cols = params["loc_class_cols"]
-    n_dwl_expected_class_col = params["out_columns"]["n_elect_dwells_expected"]
-    mrg = classes.groupby(lclass_cols)[n_dwl_expected_class_col].sum()
-    clusts = clusts.merge(mrg, how="left", on=lclass_cols)
-
-    mrg = clusts.groupby(lclass_cols).size()
-    mrg.name = "n_locs_in_class"
-    clusts = clusts.merge(mrg, how="left", on=lclass_cols)
-    clusts["n_dwells_expected"] = (
-        clusts[n_dwl_expected_class_col] / clusts["n_locs_in_class"]
-    )
-    return clusts
-
-
 def build_eval_columns(pcols: dict, group_cols: list) -> dict:
     """Build a set of evaluation columns to use throughout the pipeline."""
     pcols.update({"group_cols": group_cols})
