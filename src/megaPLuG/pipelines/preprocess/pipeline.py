@@ -5,15 +5,11 @@ generated using Kedro 0.19.1
 
 from kedro.pipeline import Node, Pipeline
 
-from megaPLuG.models.dwell_sets import save_dwell_set
-
 from .nodes import (
     build_vius_scaling_totals,
     calc_derived_trip_cols,
-    coalesce_interrupted_dwells,
     concat_optional_stops,
     concat_stop_locations,
-    create_dwells,
     describe_optional_stop_trips,
     format_trips_columns,
     get_optional_stop_trips,
@@ -111,34 +107,6 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="create_dwells_optional_stops",
     )
 
-    dwell_pipe = Pipeline(
-        [
-            # If you want optional stops, then use "trips_with_optional" as the input.
-            # Otherwise, use "trips_formatted". Also, if you want optional stops, run
-            # the `optional_stops` and this `create_dwells` pipeline together, using the
-            # "create_dwells_optional_stops" tag for convenience.
-            Node(
-                func=create_dwells,
-                inputs=["trips_with_optional", "params:create_dwells"],
-                outputs="dwell_obj_preprocess",
-                name="create_dwells",
-            ),
-            Node(
-                func=coalesce_interrupted_dwells,
-                inputs=["dwell_obj_preprocess", "params:coalesce_interrupted_dwells"],
-                outputs="dwell_obj_coalesced",
-                name="coalesce_interrupted_dwells",
-            ),
-            Node(
-                func=save_dwell_set,
-                inputs="dwell_obj_coalesced",
-                outputs="dwells",
-                name="save_dwell_set_preprocess",
-            ),
-        ],
-        tags=["create_dwells", "create_dwells_optional_stops"],
-    )
-
     scale_pipe = Pipeline(
         [
             Node(
@@ -154,4 +122,4 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="vius_scaling",
     )
 
-    return format_pipe + veh_pipe + opt_stops_pipe + dwell_pipe + scale_pipe
+    return format_pipe + veh_pipe + opt_stops_pipe + scale_pipe

@@ -4,14 +4,9 @@ generated using Kedro 0.19.3
 """
 
 import logging
-from copy import deepcopy
 
 import geopandas as gpd
-import numpy as np
 import pandas as pd
-from sklearn.cluster import HDBSCAN
-from sklearn.preprocessing import StandardScaler
-from tqdm import tqdm
 
 from megaPLuG.models.dwell_sets import DwellSet
 from megaPLuG.utils.geo import (
@@ -23,18 +18,6 @@ from megaPLuG.utils.params import build_df_from_dict
 from megaPLuG.utils.time import total_hours
 
 logger = logging.getLogger(__name__)
-
-
-def filter_substantial_dwells(dw: DwellSet, params: dict) -> DwellSet:
-    """Filter to retain only substantial dwells to be described."""
-    dw.data["dwell_hrs"] = total_hours(dw.data[dw.end] - dw.data[dw.start])
-    dw.data["long_enough"] = dw.data["dwell_hrs"] > params["thresh_hrs"]
-    accum_cols = [dw.trip_dist, dw.trip_dur, dw.reset]
-    dw.accum_masked("long_enough", accum_cols=accum_cols, inplace=True)
-    dw.data = dw.data.drop(columns=accum_cols)
-    dw.data = dw.data.rename(columns={f"{col}_long_enough": col for col in accum_cols})
-    dw.drop_masked(keep_mask_col="long_enough", inplace=True)
-    return dw
 
 
 def get_vehicle_observation_frames(
@@ -53,155 +36,6 @@ def get_vehicle_observation_frames(
     veh_obs = veh_obs.rename(columns=params["column_namer"])
     vehs = vehs.merge(veh_obs, how="left", on=dw.veh)
     return vehs
-
-
-def calc_inter_visit_stats(dw: DwellSet) -> DwellSet:
-    """Describe vehicle-location pairs by inter-visit summary statistics."""
-    tqdm.pandas()
-    # TODO: Consider moving this within DwellSet class and using a Numba for loop
-    dw.data = dw.data.groupby(dw.veh, group_keys=False, sort=False).progress_apply(
-        calc_inter_visit_times, hex_col=dw.hex, end_col=dw.end, start_col=dw.start
-    )
-
-    dw.data["cum_veh_miles"] = dw.data.groupby(dw.veh, sort=False)[
-        dw.trip_dist
-    ].cumsum()
-    dw.data["inter_visit_miles"] = dw.data.groupby([dw.veh, dw.hex], sort=False)[
-        "cum_veh_miles"
-    ].diff()
-    dw.data = dw.data.drop(columns=["cum_veh_miles"])
-    return dw
-
-
-def calc_inter_visit_times(
-    grp: pd.DataFrame, hex_col: str, end_col: str, start_col: str
-) -> pd.DataFrame:
-    """Calculate inter-visit times, assuming that `grp` is from a single vehicle and sorted by time."""
-    prev_end_time = grp.groupby(hex_col, sort=False)[end_col].shift(1)
-    grp.loc[:, "inter_visit_hrs"] = total_hours(grp[start_col] - prev_end_time)
-    return grp
-
-
-def calc_rolling_dwell_ratios(dw: DwellSet, params: dict) -> DwellSet:
-    """Calculate the rolling dwell ratios for each vehicle."""
-    roll_kwargs = {
-        "window": params["window"],
-        "on": dw.start,
-        "center": params["center"],
-        "closed": params["closed"],
-    }
-    hrs_col = params["dwell_hrs_col"]
-
-    logger.info("Calculating numerators")
-    numer = (
-        dw.data.groupby([dw.veh, dw.hex], sort=False)
-        .rolling(**roll_kwargs)[hrs_col]
-        .sum()
-    )
-    numer.name = f"{hrs_col}_sum_numer"
-    logger.info("Calculating denominators")
-    denom = dw.data.groupby(dw.veh, sort=False).rolling(**roll_kwargs)[hrs_col].sum()
-    denom.name = f"{hrs_col}_sum_denom"
-
-    logger.info("Merging results")
-    dw.data = dw.data.merge(numer, how="left", on=[dw.veh, dw.hex, dw.start])
-    dw.data = dw.data.merge(denom, how="left", on=[dw.veh, dw.start])
-    out_col = params["output_ratio_col"]
-    dw.data[out_col] = dw.data[f"{hrs_col}_sum_numer"] / dw.data[f"{hrs_col}_sum_denom"]
-    return dw
-
-
-def describe_veh_loc_pairs(dw: DwellSet) -> pd.DataFrame:
-    """Describe each vehicle location pair with summary statistics."""
-    veh_locs = dw.data.groupby([dw.veh, dw.hex], sort=False).agg(
-        n_visits=pd.NamedAgg("dwell_hrs", "count"),
-        mean_inter_miles=pd.NamedAgg("inter_visit_miles", "mean"),
-        med_inter_miles=pd.NamedAgg("inter_visit_miles", "median"),
-        max_inter_miles=pd.NamedAgg("inter_visit_miles", "max"),
-        mean_inter_times=pd.NamedAgg("inter_visit_hrs", "mean"),
-        med_inter_times=pd.NamedAgg("inter_visit_hrs", "median"),
-        max_inter_times=pd.NamedAgg("inter_visit_hrs", "max"),
-        med_dwell_hrs=pd.NamedAgg("dwell_hrs", "median"),
-        tot_dwell_hrs=pd.NamedAgg("dwell_hrs", "sum"),
-        max_dwell_hrs_roll_ratio=pd.NamedAgg("dwell_hrs_roll_ratio", "max"),
-    )
-    veh_locs["dwell_hrs_ratio"] = veh_locs.groupby(dw.veh, sort=False)[
-        "tot_dwell_hrs"
-    ].transform(lambda s: s / s.sum())
-    veh_locs["visits_ratio"] = veh_locs.groupby(dw.veh, sort=False)[
-        "n_visits"
-    ].transform(lambda s: s / s.sum())
-    return veh_locs
-
-
-def cluster_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Cluster vehicle-location pairs to uncover latent groups."""
-    # Prepare for clustering by standardizing variables
-    logger.info("Select feature variables")
-    clusterable = deepcopy(veh_locs.dropna(axis=0))
-    drop_cols = np.setdiff1d(clusterable.columns, params["feature_cols"])
-    clusterable = clusterable.drop(columns=drop_cols)
-
-    spars = params["sample"]
-    if spars["active"]:
-        n = spars["n"]
-        logger.info(f"Sample {n} observations")
-        clusterable = clusterable.sample(n=n, random_state=spars["seed"])
-
-    logger.info("Log-transform and mean-std scale features.")
-    for col in clusterable.columns:
-        if not col.endswith("_ratio"):
-            # Ratio columns would not benefit from spread reduction of log1p
-            clusterable.loc[:, col] = clusterable[col] + 1
-        if not col.endswith("_entropy"):
-            clusterable.loc[:, col] = np.log10(clusterable[col])
-    scaler = StandardScaler()
-    clusterable = pd.DataFrame(
-        data=scaler.fit_transform(clusterable),
-        index=clusterable.index,
-        columns=clusterable.columns,
-    )
-
-    # Perform clustering
-    n_obs = len(clusterable)
-    logger.info(f"Beginning clustering on {n_obs} observations")
-    min_clust_size = int(n_obs / params["min_cluster_size_denom"])
-    clusterer = HDBSCAN(min_cluster_size=min_clust_size)
-    clusterer = clusterer.fit(clusterable.values)
-
-    # Merge results back on to original dataframe
-    clusters = pd.DataFrame(
-        data=clusterer.labels_,
-        index=clusterable.index,
-        columns=[params["cluster_col"]],
-    )
-    clusters[params["cluster_col"]] = pd.Categorical(clusters[params["cluster_col"]])
-    veh_locs = veh_locs.merge(clusters, left_index=True, right_index=True)
-    return veh_locs
-
-
-def group_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Assign groups to the vehicle-location pairs based on thresholds."""
-    clst_col = params["cluster_col"]
-    veh_locs[clst_col] = veh_locs[params["ratio_col"]] > params["ratio_thresh"]
-    veh_locs[clst_col] = veh_locs[clst_col].astype(int)
-    return veh_locs
-
-
-def label_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Set the vehicles' important locations, like home base, if one exists."""
-    corpars = params["location"]
-    cl_loc_cor = build_df_from_dict(
-        d=corpars["vals"],
-        id_cols=list(corpars["id_cols"].values()),
-        value_col="location",
-    )
-    cl_loc_cor["location"] = pd.Categorical(cl_loc_cor["location"])
-    orig_idx = veh_locs.index.names
-    veh_locs = veh_locs.reset_index()
-    veh_locs = veh_locs.merge(cl_loc_cor, how="left", on=corpars["id_cols"]["cluster"])
-    veh_locs = veh_locs.set_index(orig_idx)
-    return veh_locs
 
 
 def classify_vehicles(
