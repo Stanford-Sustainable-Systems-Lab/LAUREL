@@ -14,7 +14,7 @@ import h3.api.numpy_int as h3
 import numpy as np
 import pandas as pd
 import requests
-from dask.diagnostics import ProgressBar
+from dask.diagnostics.progress import ProgressBar
 from sklearn.preprocessing import OneHotEncoder
 
 from megaPLuG.utils.geo import METERS_PER_MILE

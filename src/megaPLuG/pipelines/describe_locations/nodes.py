@@ -11,7 +11,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 from dask.dataframe.dispatch import make_meta
-from dask.diagnostics import ProgressBar
+from dask.diagnostics.progress import ProgressBar
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
