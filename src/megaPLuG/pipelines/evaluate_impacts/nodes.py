@@ -477,7 +477,7 @@ def compute_class_probs(
     fuser = ElectProbLocalizer(cls, config=cfg)
     cls["p_elect_g_vclass_lclass_cls"] = fuser.fit_transform()
 
-    # Get number of dwells expected by class combination.
+    # Get number of dwells expected by class combination (\Delta_{C(h), k}).
     dw_rate_col = pcols["dwell_rate"]
     tgt_veh_col = pcols["n_vehs_in_class"]
     cls["n_dwells_expected"] = (
