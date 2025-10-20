@@ -350,37 +350,6 @@ def mark_location_regions(
     return vehs
 
 
-def calc_vehicle_scaling_weights(
-    vehs: pd.DataFrame,
-    scaler: pd.DataFrame,
-    params: dict,
-) -> pd.DataFrame:
-    """Calculate vehicle scaling weights based on vehicle count totals.
-
-    Right now, this uses region and weight class.
-    """
-    if len(params["summaries"]) > 1:
-        raise RuntimeError("One summary only is expected.")
-    grp_cols = params["group_cols"]
-
-    orig_idx = vehs.index.names
-    vehs = vehs.reset_index()
-    trip_summ = vehs.groupby(grp_cols, observed=True).agg(params["summaries"])
-
-    tot_cols = params["total_cols"]
-    summ_col = list(params["summaries"].keys())[0]
-    trip_summ = trip_summ.rename(columns={summ_col: tot_cols["source"]})
-    scaler = scaler.merge(trip_summ, how="left", on=grp_cols)
-    scaler[params["weight_col"]] = (
-        scaler[tot_cols["target"]] / scaler[tot_cols["source"]]
-    )
-
-    mrg = scaler.loc[:, grp_cols + [params["weight_col"]]]
-    vehs = vehs.merge(mrg, how="left", on=grp_cols)
-    vehs = vehs.set_index(orig_idx)
-    return vehs
-
-
 def prepare_shared_locations(shared: gpd.GeoDataFrame, params: dict) -> pd.DataFrame:
     """Prepare the charging locations shared by all vehicles."""
     shared = shared.rename(columns={v: k for k, v in params["col_renamer"].items()})
