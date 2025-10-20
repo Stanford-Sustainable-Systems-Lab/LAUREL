@@ -105,31 +105,32 @@ def coalesce_interrupted_dwells(dw: DwellSet, params: dict) -> DwellSet:
 
 def calc_rolling_dwell_ratios(dw: DwellSet, params: dict) -> DwellSet:
     """Calculate the rolling dwell ratios for each vehicle."""
-    roll_kwargs = {
-        "window": params["window"],
-        "on": dw.start,
-        "center": params["center"],
-        "closed": params["closed"],
-    }
-    hrs_col = params["dwell_hrs_col"]
+    dw.data["dur_hrs_col"] = total_hours(dw.data[dw.end] - dw.data[dw.start])
 
-    logger.info("Calculating numerators")
-    numer = (
-        dw.data.groupby([dw.veh, dw.hex], sort=False)
-        .rolling(**roll_kwargs)[hrs_col]
-        .sum()
-    )
-    numer.name = f"{hrs_col}_sum_numer"
-    logger.info("Calculating denominators")
-    denom = dw.data.groupby(dw.veh, sort=False).rolling(**roll_kwargs)[hrs_col].sum()
-    denom.name = f"{hrs_col}_sum_denom"
-
-    logger.info("Merging results")
-    dw.data = dw.data.merge(numer, how="left", on=[dw.veh, dw.hex, dw.start])
-    dw.data = dw.data.merge(denom, how="left", on=[dw.veh, dw.start])
     out_col = params["output_ratio_col"]
-    dw.data[out_col] = dw.data[f"{hrs_col}_sum_numer"] / dw.data[f"{hrs_col}_sum_denom"]
+    dw.data[out_col] = dw.data.groupby(dw.veh, sort=False, group_keys=False).apply(
+        func=_calc_rolling_dwell_ratios,
+        val_col="dur_hrs_col",
+        grp_col=dw.hex,
+        time_col=dw.start,
+        **params["rolling_kwargs"],
+    )
+
+    dw.data = dw.data.drop(columns=["dur_hrs_col"])
     return dw
+
+
+def _calc_rolling_dwell_ratios(
+    dwells: pd.DataFrame, val_col: str, grp_col: str, time_col: str, **roll_kwargs: dict
+) -> pd.Series:
+    """Calculate the rolling dwell ratios for a single vehicle."""
+    roller = dwells.loc[:, [time_col, grp_col, val_col]]
+    roller = roller.set_index(time_col)
+    numer = roller.groupby(grp_col)[val_col].rolling(**roll_kwargs).sum()
+    denom = roller[val_col].rolling(**roll_kwargs).sum()
+    ratio = numer / denom
+    ratio_ser = pd.Series(data=ratio.values, index=dwells.index, name="roll_ratio")
+    return ratio_ser
 
 
 def calc_inter_visit_stats(dw: DwellSet) -> DwellSet:

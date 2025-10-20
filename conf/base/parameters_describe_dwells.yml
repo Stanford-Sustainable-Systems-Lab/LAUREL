@@ -24,12 +24,11 @@ coalesce_interrupted_dwells:
     inplace: True
 
 rolling_dwell_ratios:
-  window: 28d
-  center: True
-  closed: both
-  dwell_hrs_col: dwell_hrs
+  rolling_kwargs:
+    window: 28d
+    center: True
+    closed: both
   output_ratio_col: dwell_hrs_roll_ratio
-  numba_threads: 4
 
 cluster_veh_loc_pairs:
   min_cluster_size_denom: 200 # [n_obs]/[this number] gives the minimum cluster size 
