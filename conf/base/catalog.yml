@@ -128,6 +128,15 @@ trips_routed:
   save_args:
     write_index: False
 
+trips_with_optional:
+  type: dask.ParquetDataset
+  filepath: "${runtime_params:partition_data_dir, 'data/02_intermediate'}/trips_routed"
+  save_args:
+    write_index: True
+    write_metadata_file: True
+  load_args:
+    calculate_divisions: True
+
 parking_formatted:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
   filepath: data/02_intermediate/parking.gpkg
