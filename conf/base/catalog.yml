@@ -92,6 +92,14 @@ naics_focus_leaves:
   type: pandas.CSVDataset
   filepath: data/01_raw/Data_Axle_Establishments/naics_tree_focus_leaves.csv
 
+naics_freight_intensive:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/Data_Axle_Establishments/freight_intensive_naics.csv
+
+reference_clusters:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/Data_Axle_Establishments/reference_clusters.csv
+
 # Preprocessed datasets
 establishments_formatted:
   type: megaPLuG.datasets.geoparquet.GeoParquetDataset
@@ -397,6 +405,16 @@ vehicle_peak_load_by_substation:
   save_args:
     index: True
     layer: vehicle_peak_load_by_substation
+
+vehicle_peak_load_by_substation_partition:
+  type: partitions.PartitionedDataset
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/vehicle_peak_load/substation/"
+  dataset:
+    type: megaPLuG.datasets.geopackage.GeoPackageDataset
+    save_args:
+      index: True
+      layer: vehicle_peak_load_by_substation
+  filename_suffix: ".gpkg"
 
 capacity_consumed_percent_by_substation:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
