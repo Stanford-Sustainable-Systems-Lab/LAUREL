@@ -109,28 +109,6 @@ concat_optional_stops:
     - end_timestamp_utc
   dist_col: trip_miles
 
-create_dwells:
-  debug_subsample:
-    active: False
-    n: 1000
-  drop_cols:
-    - starting_h3_8
-  col_renamer:
-    hex_id: ending_h3_8
-  from_trips_cols:
-    veh: veh_id
-    hex: hex_id
-    start_trip: start_timestamp_utc
-    end_trip: end_timestamp_utc
-    trip_dist: trip_miles
-    trip_dur: trip_hrs
-  load_into_memory: False
-
-coalesce_interrupted_dwells:
-    max_short_dist_miles: 0.62 # 1 kM, the longest distance across an h3 res 8 hex
-    max_short_dur_hrs: 0.1 # 6 minutes
-    inplace: True
-
 get_vius_by_home_base_state:
   col_renamer:
     home_base_state: HBSTATE_LABEL
