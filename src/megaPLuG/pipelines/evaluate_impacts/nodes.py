@@ -31,8 +31,8 @@ from megaPLuG.utils.h3 import cells_to_region_polygons
 from megaPLuG.utils.time import (
     calc_local_time,
     calc_time_zones_from_hexes,
+    get_total_time_units_filtered,
     total_hours,
-    total_time_units,
 )
 
 logger = logging.getLogger(__name__)
@@ -269,10 +269,7 @@ def filter_dwells_pre_prob(dw: DwellSet, params: dict, pcols: dict) -> DwellSet:
 
     # Dwells which have at least some time within our time spans of interest
     if params["filter_out_weekends"]:
-        FIRST_DAY_OF_WEEKEND = 5
-        is_weekday = (dw.data[dw.start].dt.weekday < FIRST_DAY_OF_WEEKEND) | (
-            dw.data[dw.end].dt.weekday < FIRST_DAY_OF_WEEKEND
-        )
+        is_weekday = _is_weekday(dw.data[dw.start]) | _is_weekday(dw.data[dw.end])
         dw.data = dw.data.loc[is_weekday, :]
 
     # Perform filtering
@@ -286,6 +283,13 @@ def filter_dwells_pre_prob(dw: DwellSet, params: dict, pcols: dict) -> DwellSet:
         logger.info(f"Rows dropped: {abs_diff}, {pct_diff}%")
 
     return dw
+
+
+def _is_weekday(tser: "pd.Series[pd.Timestamp]") -> "pd.Series[bool]":
+    """Masks the weekdays in a timestamp pandas Series."""
+    FIRST_DAY_OF_WEEKEND = 5
+    is_weekday = tser.dt.weekday < FIRST_DAY_OF_WEEKEND
+    return is_weekday
 
 
 def filter_locs_pre_prob(locs: pd.DataFrame, params: dict) -> pd.DataFrame:
@@ -382,18 +386,32 @@ def compute_dwell_rate_vclass(
 ) -> pd.DataFrame:
     """Compute the rate of dwells by vehicle class per unit time."""
     dw_count_col = params["dwell_count_col"]
-    obs_dur_col = params["obs_dur_col"]
     vclass_cols = pcols["veh_class_cols"]
+    odur_cols = params["obs_dur_cols"]
 
     n_dwells = dw.data.groupby(dw.veh).size()
     n_dwells.name = dw_count_col
     n_dwells = n_dwells.to_frame()
-    mrg = vehs.loc[:, [obs_dur_col] + vclass_cols]
+    mrg = vehs.loc[:, list(odur_cols.values()) + vclass_cols]
     n_dwells = n_dwells.merge(mrg, how="right", left_index=True, right_index=True)
 
     t_unit = params["time_unit"]
     obs_t_units_col = f"obs_{t_unit}_units"
-    n_dwells[obs_t_units_col] = total_time_units(n_dwells[obs_dur_col], unit=t_unit)
+
+    if params["filter_out_weekends"]:
+        filterer = _is_weekday
+    else:
+        filterer = None
+
+    n_dwells[obs_t_units_col] = n_dwells.apply(
+        lambda row: get_total_time_units_filtered(
+            start=row[odur_cols["start"]],
+            end=row[odur_cols["end"]],
+            unit=t_unit,
+            filterer=filterer,
+        ),
+        axis=1,
+    )
     dw_per_t_unit = n_dwells.groupby(vclass_cols, observed=True).agg(
         n_dwells=pd.NamedAgg(dw_count_col, "sum"),
         obs_units=pd.NamedAgg(obs_t_units_col, "sum"),

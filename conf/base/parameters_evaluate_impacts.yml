@@ -102,8 +102,11 @@ compute_known_adoption_totals:
 
 compute_dwell_rate_vclass:
   time_unit: ${slice_events.slice_freq}
+  filter_out_weekends: ${filter_dwells_pre_prob_eval.filter_out_weekends}
   dwell_count_col: n_dwells
-  obs_dur_col: obs_duration
+  obs_dur_cols:
+    start: obs_time_first
+    end: obs_time_last
   target_vehs_col: ${compute_known_adoption_totals.totals_column}
   dwell_rate_col: ${compute_class_probs.columns.dwell_rate}
 
