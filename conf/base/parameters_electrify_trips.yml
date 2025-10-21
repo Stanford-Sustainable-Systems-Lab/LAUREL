@@ -144,7 +144,7 @@ assign_modes:
   veh_based_mode_avail:
     mode_name: depot
     ratio_thresh: 0.2
-    ratio_col: dwell_hrs_roll_ratio
+    ratio_col: max_dwell_hrs_roll_ratio
   mode_mask_col: avail_modes_bool
   max_power_col: max_power_kw_avail
   max_power_source_col: max_power_kw

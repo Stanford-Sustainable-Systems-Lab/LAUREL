@@ -111,7 +111,7 @@ def coalesce_interrupted_dwells(dw: DwellSet, params: dict) -> DwellSet:
 
 
 def calc_rolling_dwell_ratios(dw: DwellSet, params: dict) -> DwellSet:
-    """Calculate the rolling dwell ratios for each vehicle."""
+    """Calculate the maximum rolling dwell ratios for each vehicle-location pair."""
     dw.data["dur_hrs_col"] = total_hours(dw.data[dw.end] - dw.data[dw.start])
 
     out_col = params["output_ratio_col"]
@@ -158,14 +158,22 @@ def _calc_rolling_dwell_ratios_part(
 def _calc_rolling_dwell_ratios_one_veh(
     dwells: pd.DataFrame, val_col: str, loc_col: str, time_col: str, **roll_kwargs: dict
 ) -> pd.Series:
-    """Calculate the rolling dwell ratios for a single vehicle."""
+    """Calculate the maximum rolling dwell ratios for each location for a single vehicle."""
     roller = dwells.loc[:, [time_col, loc_col, val_col]]
     roller = roller.set_index(time_col)
-    numer = roller.groupby(loc_col)[val_col].rolling(**roll_kwargs).sum()
-    denom = roller[val_col].rolling(**roll_kwargs).sum()
-    ratio = numer / denom
-    ratio_ser = pd.Series(data=ratio.values, index=dwells.index, name="roll_ratio")
-    return ratio_ser
+    loc_specific = roller.groupby(loc_col)[val_col].rolling(**roll_kwargs).sum()
+    loc_specific.name = "loc_specific"
+    loc_specific = loc_specific.reset_index(loc_col)
+    overall = roller[val_col].rolling(**roll_kwargs).sum()
+    overall.name = "overall"
+
+    ratior = pd.concat([loc_specific, overall], axis=1, ignore_index=False)
+    ratior["ratio"] = ratior["loc_specific"] / ratior["overall"]
+
+    loc_max_ratios = ratior.groupby(loc_col)["ratio"].max()
+    out = dwells[loc_col].map(loc_max_ratios)
+
+    return out
 
 
 def map_location_groups(

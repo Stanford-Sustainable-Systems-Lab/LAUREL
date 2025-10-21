@@ -41,7 +41,7 @@ rolling_dwell_ratios:
     window: 28d
     center: True
     closed: both
-  output_ratio_col: dwell_hrs_roll_ratio
+  output_ratio_col: max_dwell_hrs_roll_ratio
 
 map_location_groups:
   location_group_col: cluster_id
