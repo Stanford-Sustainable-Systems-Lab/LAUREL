@@ -16,6 +16,9 @@ create_dwells:
     end_trip: end_timestamp_utc
     trip_dist: trip_miles
     trip_dur: trip_hrs
+  set_index_kwargs:
+    partition_size: 104857600 # which is 100MiB in bytes
+  verify_sorting: False
   load_into_memory: False
 
 coalesce_interrupted_dwells:

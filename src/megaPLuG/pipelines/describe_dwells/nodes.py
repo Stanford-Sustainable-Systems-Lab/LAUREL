@@ -29,12 +29,9 @@ def create_dwells(trips: dd.DataFrame, params: dict) -> DwellSet:
     colnames = params["from_trips_cols"]
     dw = DwellSet.from_trips(
         trips=trips,
-        veh=colnames["veh"],
-        hex=colnames["hex"],
-        start_trip=colnames["start_trip"],
-        end_trip=colnames["end_trip"],
-        trip_dist=colnames["trip_dist"],
-        trip_dur=colnames["trip_dur"],
+        verify_sorting=params["verify_sorting"],
+        **colnames,
+        **params["set_index_kwargs"],
     )
     return dw
 
