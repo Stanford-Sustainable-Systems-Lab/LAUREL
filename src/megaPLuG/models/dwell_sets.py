@@ -494,11 +494,11 @@ class DwellSet:
         dwell for each vehicle requires a reset before.
         """
         self.data[self.reset] = False
-        reset_col_idx = self.data.columns.get_loc(self.reset)
         if self.is_dask:
             self.data = self.data.groupby(self.veh, group_keys=False, sort=False).apply(
                 DwellSet._set_default_reset_col_grp,
-                reset_col_idx=reset_col_idx,
+                reset_col=self.reset,
+                include_groups=False,
                 meta=dd.utils.make_meta(self.data),
             )
         else:
@@ -507,13 +507,13 @@ class DwellSet:
                 self.veh, group_keys=False, sort=False
             ).progress_apply(
                 DwellSet._set_default_reset_col_grp,
-                reset_col_idx=reset_col_idx,
+                reset_col=self.reset,
+                include_groups=False,
             )
 
     @staticmethod
-    def _set_default_reset_col_grp(
-        grp: pd.DataFrame, reset_col_idx: int
-    ) -> pd.DataFrame:
+    def _set_default_reset_col_grp(grp: pd.DataFrame, reset_col: str) -> pd.DataFrame:
+        reset_col_idx = grp.columns.get_loc(reset_col)
         grp.iat[0, reset_col_idx] = True
         return grp
 
