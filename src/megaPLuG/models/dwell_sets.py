@@ -69,6 +69,7 @@ class DwellSet:
         trip_dur: str,
         reset: str | None = None,
         verify_sorting: bool = True,
+        sorted: bool = False,
         *args,
         **kwargs,
     ):
@@ -96,13 +97,26 @@ class DwellSet:
         self._end = _return_if_present(end)
         self._trip_dist = _return_if_present(trip_dist)
         self._trip_dur = _return_if_present(trip_dur)
+
+        self.verify_sorting = verify_sorting
+
+        if not sorted:
+            if self.is_dask:
+                # Includes index setting on vehicle id
+                self.sort_by_veh_time(force=True)
+            else:
+                self.sort_by_veh_time()  # Allows for skipping sorting if already sorted
+        else:
+            logger.warning(
+                "DwellSet is assumed to be sorted by (vehicle_id, time) with vehicle_id as index."
+            )
+
         if reset is None:
             self._reset = DEFAULT_COLUMN_NAMES["reset"]
             self.set_default_reset_col()
         else:
             self._reset = _return_if_present(reset)
 
-        self.verify_sorting = verify_sorting
         self.sum_cols = [self.trip_dist, self.trip_dur]
 
     def copy_without_data(self: Self) -> Self:
@@ -121,7 +135,8 @@ class DwellSet:
                 logger.info("DwellSet is already sorted by vehicle and time.")
         if force or not is_sorted:
             logger.info("Sorting DwellSet by vehicle and time.")
-            if self.data.index.name in self.get_tracked_cols():
+            idx_name = self.data.index.name
+            if idx_name in self.get_tracked_cols() and idx_name is not None:
                 drop = False
             else:
                 drop = True
@@ -650,6 +665,7 @@ class DwellSet:
         end_trip: str,
         trip_dist: str,
         trip_dur: str,
+        verify_sorting: bool = True,
         sorted: bool = False,
         *args,
         **kwargs,
@@ -663,10 +679,8 @@ class DwellSet:
             end=start_trip,  # This is almost true, since the dwell end is the shifted start_trip
             trip_dist=trip_dist,
             trip_dur=trip_dur,
+            verify_sorting=verify_sorting,
         )
-        if not sorted:
-            dw.sort_by_veh_time()
-            dw.set_default_reset_col()
 
         def _shift_by_grp(grp: pd.DataFrame, src: str, tgt: str) -> pd.DataFrame:
             grp[tgt] = grp[src].shift(-1)
