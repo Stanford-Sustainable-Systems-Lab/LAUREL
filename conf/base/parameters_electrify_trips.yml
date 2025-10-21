@@ -164,16 +164,6 @@ mode_location_corresp:
   max_power_col: max_power_kw_avail
   max_power_source_col: max_power_kw
 
-merge_avail_modes:
-  keep_right_columns:
-    - location
-    - avail_modes_bool
-    - max_power_kw_avail
-  merge_kwargs:
-    how: left
-    'on':
-      - location
-
 calc_energy_use:
   consump_col: consump_rate_kwh_per_mi
   energy_col: energy_use_kwh
