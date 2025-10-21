@@ -182,23 +182,3 @@ def mark_location_regions(
     vehs = vehs.merge(base_regs, how="left", on=veh_col)
     vehs[loc_reg_col] = vehs[loc_reg_col].fillna(params["na_region_fill"])
     return vehs
-
-
-def prepare_shared_locations(shared: gpd.GeoDataFrame, params: dict) -> pd.DataFrame:
-    """Prepare the charging locations shared by all vehicles."""
-    shared = shared.rename(columns={v: k for k, v in params["col_renamer"].items()})
-    shared[params["loc_col"]] = params["shared_location_type"]
-    shared[params["loc_col"]] = pd.Categorical(shared[params["loc_col"]])
-    return shared
-
-
-def mark_locations(dw: DwellSet, params: dict) -> DwellSet:
-    """Mark locations-of-interest for each vehicle (e.g. home base)."""
-    ocol = params["loc_col_out"]
-    dw.data[ocol] = params["na_fill"]
-    for col in params["veh_loc_cols"]:
-        cond_ser = dw.data[col].isna()
-        dw.data[ocol] = dw.data[ocol].where(cond=cond_ser, other=dw.data[col])
-    dw.data = dw.data.drop(columns=params["veh_loc_cols"])
-    dw.data[ocol] = pd.Categorical(dw.data[ocol])
-    return dw
