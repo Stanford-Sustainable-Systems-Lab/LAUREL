@@ -129,16 +129,11 @@ assign_modes:
   mode_col: ${charging_modes.name_column}
   loc_group_col: cluster_id
   loc_based_mode_avail:
-    enroute:
-      loc_groups:
-        - 1
-        - 2
-        - 3
-        - 4
-      invert_selection: False
+    enroute: True
     truck_stop:
       loc_groups:
         - 49
+        - 45
       invert_selection: False
     none: True
   veh_based_mode_avail:
