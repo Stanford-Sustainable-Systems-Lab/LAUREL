@@ -339,7 +339,7 @@ class DwellSet:
 
         for col in accum_cols:
             new_col = _get_new_col_name(col)
-            df[new_col] = outs[col]
+            df.loc[:, new_col] = outs[col]
             is_float_col = np.issubdtype(df[new_col].dtype, np.floating)
             if not is_float_col:
                 df[new_col] = df[new_col].convert_dtypes()
