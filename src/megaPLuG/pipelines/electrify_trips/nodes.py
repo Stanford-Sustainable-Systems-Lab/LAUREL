@@ -13,7 +13,6 @@ from megaPLuG.models.charging_algorithms import ForwardLookingChargingChoiceStra
 from megaPLuG.models.dwell_sets import CumAggFunc, DwellSet
 from megaPLuG.utils.data import merge_dataframes_node
 from megaPLuG.utils.mode_masks import bool_arr_to_bits
-from megaPLuG.utils.params import build_df_from_dict
 from megaPLuG.utils.time import total_hours
 
 logger = logging.getLogger(__name__)
@@ -87,41 +86,109 @@ def prepare_modes(modes: dict) -> pd.DataFrame:
     return modes_df
 
 
-def prepare_mode_loc_corresp(modes: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Assign modes to each dwell using a boolean vector of mode availability."""
-    avail_dict = params["charge_modes_avail"]
-    avails = build_df_from_dict(
-        d=avail_dict["values"],
-        id_cols=avail_dict["id_columns"],
-        value_col=avail_dict["value_col"],
+def assign_modes(dw: DwellSet, modes: pd.DataFrame, params: dict) -> DwellSet:
+    """Assign charging modes to each dwell."""
+    all_modes = modes[params["mode_col"]].to_list()
+    modes_in_use = [mode for mode in all_modes if mode in dw.data.columns]
+    if len(modes_in_use) > 0:
+        raise ValueError(f"Mode columns already in use: {modes_in_use}")
+
+    # Build one boolean column for each location-only mode
+    mode_locs = params["loc_based_mode_avail"]
+    for mode, selector in mode_locs.items():
+        if mode not in all_modes:
+            raise ValueError(f"Charging mode '{mode}' not available.")
+        if isinstance(selector, bool):
+            dw.data[mode] = selector
+        elif isinstance(selector, dict):
+            locs = selector["loc_groups"]
+            invert = selector.get("invert_selection", False)
+            dw.data[mode] = dw.data[params["loc_group_col"]].isin(locs)
+            if invert:
+                dw.data[mode] = ~dw.data[mode]
+        else:
+            raise ValueError(
+                "Available modes must be boolean or dict of location groups."
+            )
+
+    # Add a boolean column for the vehicle-based depot mode
+    mode_vehs = params["veh_based_mode_avail"]
+    vmode_col = mode_vehs["mode_name"]
+    dw.data[vmode_col] = dw.data[mode_vehs["ratio_col"]] > mode_vehs["ratio_thresh"]
+
+    # Check that all modes are accounted for
+    modes_missed = [mode for mode in all_modes if mode not in dw.data.columns]
+    if len(modes_missed) > 0:
+        raise ValueError(f"The following charging modes are unassigned: {modes_missed}")
+
+    # Build mode bitmask column
+    if dw.is_dask:
+        all_mask = bool_arr_to_bits(np.ones(shape=(len(modes),), dtype=np.bool_))
+        meta = dw.data._meta.assign(mode_mask_bits=all_mask.dtype)
+        dw.data = dw.data.map_partitions(
+            lambda part: part.assign(
+                mode_mask_bits=bool_arr_to_bits(
+                    part[all_modes].to_numpy(dtype=np.bool_)
+                )
+            ),
+            meta=meta,
+        )
+    else:
+        dw.data["mode_mask_bits"] = bool_arr_to_bits(
+            dw.data[all_modes].to_numpy(dtype=np.bool_)
+        )
+    dw.data = dw.data.rename(columns={"mode_mask_bits": params["mode_mask_col"]})
+
+    # Build maximum power column
+    power_mapper = build_mode_power_lut(
+        mode_names=modes[params["mode_col"]],
+        mode_powers=modes[params["max_power_source_col"]],
+    )
+    if dw.is_dask:
+        meta = (params["max_power_col"], modes[params["max_power_source_col"]].dtype)
+        dw.data[params["max_power_col"]] = dw.data[params["mode_mask_col"]].map(
+            power_mapper, meta=meta
+        )
+    else:
+        dw.data[params["max_power_col"]] = dw.data[params["mode_mask_col"]].map(
+            power_mapper
+        )
+
+    # Drop boolean columns
+    dw.data = dw.data.drop(columns=all_modes)
+
+    return dw
+
+
+def build_mode_power_lut(
+    mode_names: pd.Series, mode_powers: pd.Series
+) -> dict[int, float]:
+    """Map every mode availability bitmask to its maximum deliverable power."""
+    name_ls = mode_names.tolist()
+    power_arr = mode_powers.to_numpy(dtype=float)
+
+    combos = pd.DataFrame(
+        np.array(np.meshgrid(*[[False, True]] * len(name_ls))).T.reshape(
+            -1, len(name_ls)
+        ),
+        columns=name_ls,
+        dtype=bool,
     )
 
-    poss = modes["mode_name"].to_numpy()
-    max_power_source = params["max_power_source_col"]
-    power_arr = modes[max_power_source].to_numpy()
-    # Build boolean availability matrix (rows: locations, cols: modes)
-    # Using vectorized comprehension via list for clarity then stack (acceptable size)
-    bool_rows = []
-    for av in avails[avail_dict["value_col"]].values:
-        bool_rows.append(np.isin(poss, av))
-    if bool_rows:
-        bool_arr = np.vstack(bool_rows)
-    else:
-        bool_arr = np.zeros((0, poss.shape[0]), dtype=bool)
+    bitmask_col = "mode_mask_bits"
+    combos[bitmask_col] = bool_arr_to_bits(combos[name_ls].to_numpy(dtype=np.bool_))
+    combos["max_power"] = (
+        combos[name_ls].to_numpy(dtype=float) * power_arr[None, :]
+    ).max(axis=1)
 
-    # Build bitmask column via njit function
-    bitmask_col = params["value_col_bool"]  # reuse existing param name
-    avails[bitmask_col] = bool_arr_to_bits(bool_arr)
+    res_ser = pd.Series(
+        combos["max_power"].to_numpy(dtype=float),
+        index=combos[bitmask_col].to_numpy(),
+        dtype=float,
+    )
+    res_dict = res_ser.to_dict()
 
-    # Max power derivation: elementwise multiply then row max
-    if bool_arr.shape[0]:
-        avails[params["max_power_col"]] = (bool_arr * power_arr[None, :]).max(axis=1)
-    else:
-        avails[params["max_power_col"]] = np.array([], dtype=float)
-
-    # Location categorical treatment (unchanged)
-    avails[params["loc_col"]] = pd.Categorical(avails[params["loc_col"]])
-    return avails
+    return res_dict
 
 
 def merge_dwellset_node(dw: DwellSet, right: pd.DataFrame, params: dict) -> DwellSet:

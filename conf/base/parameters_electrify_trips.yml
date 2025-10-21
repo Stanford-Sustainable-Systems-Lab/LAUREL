@@ -125,6 +125,30 @@ charging_modes:
   name_column: mode_name
   id_column: charge_mode_id
 
+assign_modes:
+  mode_col: ${charging_modes.name_column}
+  loc_group_col: cluster_id
+  loc_based_mode_avail:
+    enroute:
+      loc_groups:
+        - 1
+        - 2
+        - 3
+        - 4
+      invert_selection: False
+    truck_stop:
+      loc_groups:
+        - 49
+      invert_selection: False
+    none: True
+  veh_based_mode_avail:
+    mode_name: depot
+    ratio_thresh: 0.2
+    ratio_col: dwell_hrs_roll_ratio
+  mode_mask_col: avail_modes_bool
+  max_power_col: max_power_kw_avail
+  max_power_source_col: max_power_kw
+
 mode_location_corresp:
   charge_modes_avail:
     id_columns:

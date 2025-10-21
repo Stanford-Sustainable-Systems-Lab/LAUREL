@@ -14,18 +14,6 @@ observation_frames:
     dist_traveled_col: total_obs_miles
     obs_time_col: obs_duration
 
-group_veh_loc_pairs:
-  cluster_col: cluster
-  ratio_thresh: 0.2
-  ratio_col: max_dwell_hrs_roll_ratio
-
-label_veh_loc_pairs:
-  location:
-    id_cols:
-      cluster: cluster
-    vals:
-      1: depot
-
 classify_vehicles:
   veh_col: veh_id
   loc_col: location

@@ -12,6 +12,7 @@ from megaPLuG.utils.distributed import start_dask_node
 from megaPLuG.utils.params import set_entity_params
 
 from .nodes import (
+    assign_modes,
     calc_dwell_durations,
     calc_energy_use,
     filter_dwells,
@@ -21,7 +22,6 @@ from .nodes import (
     mark_shift_powers,
     mark_shift_refreshes,
     merge_dwellset_node,
-    prepare_mode_loc_corresp,
     prepare_modes,
     simulate_charging_choice,
 )
@@ -97,20 +97,10 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="prepare_modes",
             ),
             Node(
-                func=prepare_mode_loc_corresp,
-                inputs=["charging_modes", "params:mode_location_corresp"],
-                outputs="mode_loc_corresp",
-                name="prepare_mode_loc_corresp",
-            ),
-            Node(
-                func=merge_dwellset_node,
-                inputs=[
-                    "dwell_obj_w_dur",
-                    "mode_loc_corresp",
-                    "params:merge_avail_modes",
-                ],
+                func=assign_modes,
+                inputs=["dwell_obj_w_dur", "charging_modes", "params:assign_modes"],
                 outputs="dwell_obj_w_avail_modes",
-                name="merge_dwellset_node_avail_modes",
+                name="assign_modes",
             ),
             Node(
                 func=calc_energy_use,
