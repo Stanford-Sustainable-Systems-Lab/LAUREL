@@ -206,7 +206,7 @@ mark_shift_powers:
   refresh_col: is_refresh
   crit_col: is_critical
   max_power_col: max_power_kw_avail
-  max_power_col_shift: max_power_kw_avail_shift
+  max_power_col_shift: max_power_kw_avail_shift_w_skips
   final_value: 0
   fill_value: ${charging_modes.enroute.max_power_kw}
 
@@ -216,7 +216,7 @@ simulate_charging_choice:
     consumed_kwh: energy_use_kwh
     consumed_kwh_next: energy_use_kwh_next
     consumed_kwh_shift: energy_use_kwh_shift
-    power_kw_shift_max_remaining: max_power_kw_avail_shift
+    power_kw_shift_max_remaining: max_power_kw_avail_shift_w_skips
     max_delay_recoverable_hrs: max_delay_recoverable_hrs
     dwell_hrs: dwell_time_hrs
     modes_avail: avail_modes_bool
@@ -259,5 +259,5 @@ filter_dwells_post:
     - energy_use_kwh
     - energy_use_kwh_next
     - energy_use_kwh_shift
-    - max_power_kw_avail_shift
+    - max_power_kw_avail_shift_w_skips
     - is_critical

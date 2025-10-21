@@ -355,21 +355,27 @@ def filter_dwells(dw: DwellSet, params: dict) -> DwellSet:
 
 
 def mark_shift_powers(dw: DwellSet, params: dict) -> DwellSet:
-    """Mark the maximum available power in the remainder of the shift."""
+    """Mark the maximum available power in the remainder of the shift.
+
+    This node begins to enforce the auto-skipping of charging at dwells which are
+    neither refreshes nor critical. We need to keep these dwells in the pipeline for
+    use in the scaling probabilities later, but we want to skip even considering
+    charging at them for the sake of computational efficiency.
+    """
     refr_col = params["refresh_col"]
     crit_col = params["crit_col"]
     max_pow_col = params["max_power_col"]
-    power_avail = dw.data[crit_col] | dw.data[refr_col]
-    dw.data[max_pow_col] = dw.data[max_pow_col].where(power_avail, other=0.0)
+    dont_auto_skip = dw.data[crit_col] | dw.data[refr_col]
+    dw.data["power_w_skips"] = dw.data[max_pow_col].where(dont_auto_skip, other=0.0)
     dw.accum_masked(
         keep_mask_col=refr_col,
-        accum_cols=max_pow_col,
+        accum_cols="power_w_skips",
         reverse=True,
         agg_func=CumAggFunc.MAX,
         write_all=True,
         inplace=True,
     )
-    acc_col = f"{max_pow_col}_{refr_col}"
+    acc_col = f"power_w_skips_{refr_col}"
     dw.data[acc_col] = dw.data[acc_col].where(
         ~dw.data[refr_col], other=params["final_value"]
     )
@@ -381,10 +387,7 @@ def mark_shift_powers(dw: DwellSet, params: dict) -> DwellSet:
     shift_col = params["max_power_col_shift"]
     dw.data[shift_col] = dw.data.groupby(dw.veh)[acc_col].shift(-1, **kws)
 
-    if dw.is_dask:
-        dw.data = dw.data.drop(columns=acc_col)
-    else:
-        dw.data = dw.data.drop(columns=acc_col)
+    dw.data = dw.data.drop(columns=["power_w_skips", acc_col])
     return dw
 
 
