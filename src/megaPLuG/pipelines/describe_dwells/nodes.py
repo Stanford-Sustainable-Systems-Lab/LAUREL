@@ -55,14 +55,16 @@ def coalesce_interrupted_dwells(dw: DwellSet, params: dict) -> DwellSet:
     max_dur = params["max_short_dur_hrs"]
 
     logger.info("Setting shift id column")
-    # WARNING: This code is not yet Dask compatible, especially due to inplace args
-    dw.data[nxt_col] = dw.data.groupby(dw.veh)[dw.hex].shift(-1, fill_value=0)
+    shift_kwargs = {"fill_value": 0}
+    if dw.is_dask:
+        shift_kwargs["meta"] = ("x", dw.data[dw.hex].dtype)
+    dw.data[nxt_col] = dw.data.groupby(dw.veh)[dw.hex].shift(-1, **shift_kwargs)
     dw.data[mask_col] = ~(
         (dw.data[nxt_col] == dw.data[dw.hex])
         & (dw.data[dw.trip_dist] < max_dist)
         & (dw.data[dw.trip_dur] < max_dur)
     )
-    dw.data.drop(columns=[nxt_col], inplace=params["inplace"])
+    dw.data = dw.data.drop(columns=[nxt_col])
 
     # Comments suggest some modifications to apply if distance and duration of dropped
     # trips should be retained.
@@ -80,17 +82,24 @@ def coalesce_interrupted_dwells(dw: DwellSet, params: dict) -> DwellSet:
         reverse=True,
         agg_func=agg_funcs,
         write_all=False,
-        inplace=params["inplace"],
+        inplace=True,
     )
     mod_col = f"{dw.end}_{mask_col}"
-    dw.data[mod_col] = pd.to_datetime(
-        dw.data[mod_col].astype("datetime64[ns]"), utc=True
-    )
+
+    mod_times = dw.data[mod_col].astype("datetime64[ns]")
+    orig_hex_dtype = dw.data[dw.hex].dtype
+    if dw.is_dask:
+        dw.data[mod_col] = dd.to_datetime(mod_times, utc=True)
+    else:
+        dw.data[mod_col] = pd.to_datetime(mod_times, utc=True)
+
+    # Needed because in datetime conversion, hex_id gets float-ified, somehow
+    dw.data[dw.hex] = dw.data[dw.hex].astype(orig_hex_dtype)
 
     logger.info("Dropping coalesced dwells")
     dw.data[mask_col] = dw.data[mask_col].astype("boolean")
     dw.data[mask_col] = dw.data[mask_col].replace(False, pd.NA)
-    dw.data.dropna(subset=mask_col, inplace=params["inplace"])
+    dw.data = dw.data.dropna(subset=mask_col)
     dw.data[mask_col] = dw.data[mask_col].astype(bool)
     drop_cols = [mask_col] + accum_cols
     dw.data = dw.data.drop(columns=drop_cols)
@@ -105,25 +114,53 @@ def calc_rolling_dwell_ratios(dw: DwellSet, params: dict) -> DwellSet:
     dw.data["dur_hrs_col"] = total_hours(dw.data[dw.end] - dw.data[dw.start])
 
     out_col = params["output_ratio_col"]
-    dw.data[out_col] = dw.data.groupby(dw.veh, sort=False, group_keys=False).apply(
-        func=_calc_rolling_dwell_ratios,
-        val_col="dur_hrs_col",
-        grp_col=dw.hex,
-        time_col=dw.start,
-        **params["rolling_kwargs"],
-    )
+
+    kws = {
+        "val_col": "dur_hrs_col",
+        "veh_col": dw.veh,
+        "loc_col": dw.hex,
+        "time_col": dw.start,
+        "out_col": out_col,
+    }
+    kws.update(params["rolling_kwargs"])
+    if dw.is_dask:
+        meta = dd.utils.make_meta(dw.data)
+        meta[out_col] = np.array([], dtype=np.float64)
+        kws["meta"] = meta
+        dw.data = dw.data.map_partitions(func=_calc_rolling_dwell_ratios_part, **kws)
+    else:
+        dw.data = _calc_rolling_dwell_ratios_part(dw.data, **kws)
 
     dw.data = dw.data.drop(columns=["dur_hrs_col"])
     return dw
 
 
-def _calc_rolling_dwell_ratios(
-    dwells: pd.DataFrame, val_col: str, grp_col: str, time_col: str, **roll_kwargs: dict
+def _calc_rolling_dwell_ratios_part(
+    part: pd.DataFrame,
+    out_col: str,
+    val_col: str,
+    veh_col: str,
+    loc_col: str,
+    time_col: str,
+    **roll_kwargs: dict,
+) -> pd.DataFrame:
+    part[out_col] = part.groupby(veh_col, sort=False, group_keys=False).apply(
+        func=_calc_rolling_dwell_ratios_one_veh,
+        val_col=val_col,
+        loc_col=loc_col,
+        time_col=time_col,
+        **roll_kwargs,
+    )
+    return part
+
+
+def _calc_rolling_dwell_ratios_one_veh(
+    dwells: pd.DataFrame, val_col: str, loc_col: str, time_col: str, **roll_kwargs: dict
 ) -> pd.Series:
     """Calculate the rolling dwell ratios for a single vehicle."""
-    roller = dwells.loc[:, [time_col, grp_col, val_col]]
+    roller = dwells.loc[:, [time_col, loc_col, val_col]]
     roller = roller.set_index(time_col)
-    numer = roller.groupby(grp_col)[val_col].rolling(**roll_kwargs).sum()
+    numer = roller.groupby(loc_col)[val_col].rolling(**roll_kwargs).sum()
     denom = roller[val_col].rolling(**roll_kwargs).sum()
     ratio = numer / denom
     ratio_ser = pd.Series(data=ratio.values, index=dwells.index, name="roll_ratio")
