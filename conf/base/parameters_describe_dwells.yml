@@ -7,6 +7,8 @@ create_dwells:
     n: 1000
   drop_cols:
     - starting_h3_8
+    - vin_gvw
+    - veh_type
   col_renamer:
     hex_id: ending_h3_8
   from_trips_cols:
