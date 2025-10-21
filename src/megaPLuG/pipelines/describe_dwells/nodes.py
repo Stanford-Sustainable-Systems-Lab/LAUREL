@@ -4,6 +4,7 @@ from copy import deepcopy
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
+from dask.distributed import Client
 from sklearn.cluster import HDBSCAN
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
@@ -14,7 +15,7 @@ from megaPLuG.utils.time import total_hours
 logger = logging.getLogger(__name__)
 
 
-def create_dwells(trips: dd.DataFrame, params: dict) -> DwellSet:
+def create_dwells(trips: dd.DataFrame, params: dict, client: Client) -> DwellSet:
     """Create dwell data from trips data."""
     if params["debug_subsample"]["active"]:
         trips = trips.loc[0 : params["debug_subsample"]["n"]]
@@ -165,6 +166,25 @@ def _calc_rolling_dwell_ratios_one_veh(
     ratio = numer / denom
     ratio_ser = pd.Series(data=ratio.values, index=dwells.index, name="roll_ratio")
     return ratio_ser
+
+
+def map_location_groups(
+    dw: DwellSet, hex_corresp: pd.DataFrame, params: dict
+) -> DwellSet:
+    """Map location groups onto the DwellSet."""
+    grp_col = params["location_group_col"]
+    map_ser = hex_corresp[grp_col]
+
+    if dw.is_dask:
+        meta = (grp_col, map_ser.dtype)
+        dw.data[grp_col] = dw.data[dw.hex].map(map_ser, meta=meta)
+    else:
+        dw.data[grp_col] = dw.data[dw.hex].map(map_ser)
+
+    mpars = params["missing_values"]
+    if mpars["fill_missing"]:
+        dw.data[grp_col] = dw.data[grp_col].fillna(mpars["fill_value"])
+    return dw
 
 
 ### vvv Functions below here not used as of 10/20/2025, but preserved for later use vvv

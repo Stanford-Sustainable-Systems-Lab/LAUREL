@@ -1,6 +1,14 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/1.0.0/configuration/parameters.html
 
+dask_describe_dwells:
+  use_dask: True
+  cluster:
+    n_workers: 4
+    processes: True
+    threads_per_worker: 1 # Must stay at 1, since our code is not thread safe
+    memory_limit: 8GiB
+
 create_dwells:
   debug_subsample:
     active: False
@@ -34,6 +42,12 @@ rolling_dwell_ratios:
     center: True
     closed: both
   output_ratio_col: dwell_hrs_roll_ratio
+
+map_location_groups:
+  location_group_col: cluster_id
+  missing_values:
+    fill_missing: False
+    fill_value: ${cluster_hexes.clusterer_kwargs.n_clusters}
 
 cluster_veh_loc_pairs:
   min_cluster_size_denom: 200 # [n_obs]/[this number] gives the minimum cluster size 

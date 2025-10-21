@@ -686,3 +686,11 @@ dask_cluster_eval:
 dask_client_eval:
   type: MemoryDataset
   copy_mode: assign
+
+dask_cluster_dwells:
+  type: MemoryDataset
+  copy_mode: assign
+
+dask_client_dwells:
+  type: MemoryDataset
+  copy_mode: assign
