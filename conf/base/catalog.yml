@@ -571,6 +571,10 @@ dwell_obj_crit_dwells:
   type: MemoryDataset
   copy_mode: assign
 
+dwell_obj_shift_powers:
+  type: MemoryDataset
+  copy_mode: assign
+
 dwell_obj_w_charging:
   type: MemoryDataset
   copy_mode: assign
