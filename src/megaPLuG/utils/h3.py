@@ -1,7 +1,7 @@
 from collections.abc import Callable
 
 import dask.dataframe as dd
-import dask_geopandas
+import dask_geopandas as dgpd
 import geopandas as gpd
 import h3.api.numpy_int as h3
 import numpy as np
@@ -36,7 +36,7 @@ def cells_to_polygons(s: pd.Series) -> gpd.GeoSeries:
 
 def add_geometries(
     data: pd.DataFrame | dd.DataFrame, hex_col: str, geom_type: str = "point"
-) -> gpd.GeoDataFrame | dask_geopandas.GeoDataFrame:
+) -> gpd.GeoDataFrame | dgpd.GeoDataFrame:
     """Convert the underlying dataset into a GeoDataFrame."""
     if geom_type == "point":
         f = cells_to_points
@@ -46,8 +46,12 @@ def add_geometries(
         raise RuntimeError("Only 'point' and 'polygon' geometries are supported.")
 
     if isinstance(data, dd.DataFrame):
-        data = dask_geopandas.from_dask_dataframe(df=data, geometry=None)
-        data = data.map_partitions(_cells_to_geom_wrapper, f=f, hex_col=hex_col)
+        data = dgpd.from_dask_dataframe(df=data, geometry=None)
+        meta = dd.utils.make_meta(data)
+        meta_geo = gpd.GeoDataFrame(data=meta, geometry=gpd.GeoSeries(index=meta.index))
+        data = data.map_partitions(
+            _cells_to_geom_wrapper, f=f, hex_col=hex_col, meta=meta_geo
+        )
     elif isinstance(data, pd.DataFrame):
         data = gpd.GeoDataFrame(data=data, geometry=None)
         data = _cells_to_geom_wrapper(gdf=data, f=f, hex_col=hex_col)
