@@ -44,6 +44,7 @@ def format_substation_boundaries_pg_and_e(
         },
     )
     subs[params["add_state_col"]["name"]] = params["add_state_col"]["value"]
+    subs[params["add_source_col"]["name"]] = params["add_source_col"]["value"]
     return subs
 
 
@@ -87,22 +88,189 @@ def describe_substation_usage(
 def format_substations_contin(subs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
     """Get substation polygons from points and state boundaries."""
     subs = subs.rename(columns={v: k for k, v in params["col_renamer"].items()})
-    subs["substation_id_contin"] = subs["substation_id_contin"].astype(int)
+    subs["substation_id"] = subs["substation_id"].astype(int)
+    subs[params["add_source_col"]["name"]] = params["add_source_col"]["value"]
+    subs = subs.loc[:, params["keep_cols"]]
+    return subs
 
-    # Calculate Voronoi polygons, then merge them back onto the substation dataframe
-    orig_geom_name = subs.geometry.name
-    subs = subs.to_crs(params["proj_crs"])
-    vor_polys = subs.geometry.voronoi_polygons()
+
+def fill_out_substations(
+    poly_subs: gpd.GeoDataFrame, point_subs: gpd.GeoDataFrame, params: dict
+) -> gpd.GeoDataFrame:
+    pcols = params["columns"]
+    sub_id_col = pcols["substation_id"]
+    source_col = pcols["source"]
+
+    point_subs_proj = point_subs.to_crs(params["proj_crs"])
+    poly_subs_proj = poly_subs.to_crs(params["proj_crs"])
+
+    rem_subs = build_remainder_polys(
+        points=point_subs_proj,
+        poly_mask=poly_subs_proj.geometry,
+        buff_dist=params["buff_dist_meters"],
+        id_col=sub_id_col,
+    )
+
+    sub_ls = [poly_subs_proj, rem_subs]
+    renamer = {sub_id_col: f"{sub_id_col}_{source_col}"}
+    sub_ls = [gdf.rename(columns=renamer) for gdf in sub_ls]
+    all_subs = pd.concat(sub_ls, axis=0, ignore_index=True, join="inner")
+    all_subs.index.name = sub_id_col
+
+    return all_subs
+
+
+def build_remainder_polys(  # noqa: PLR0915
+    points: gpd.GeoDataFrame, poly_mask: gpd.GeoSeries, buff_dist: float, id_col: str
+) -> gpd.GeoDataFrame:
+    """Build substation territories to cover the whole analysis area using point-based
+    substation data to fill in the remainder of what is left after polygon-based substation
+    data is used.
+    """
+    if points.crs != poly_mask.crs:
+        raise ValueError("Coordinate reference systems must be the same.")
+
+    orig_col_names = points.columns
+    orig_pt_geom_name = points.geometry.name
+    poly_shp = poly_mask.union_all()
+
+    # Filtering only point-based substations which are not covered by known substation polygons
+    rem_pts = points.loc[~points.geometry.intersects(poly_shp)]
+
+    # Building Vornoi polygons
+    rem_pts.geometry.name = "location"
+    vor_polys = rem_pts.geometry.voronoi_polygons()
     substs_polys = gpd.GeoDataFrame(geometry=vor_polys)
-    substs_polys.rename_geometry("substation_polygons", inplace=True)
-    subs_polys = subs.sjoin(substs_polys, how="left", predicate="intersects")
+    substs_polys.rename_geometry("territory", inplace=True)
+    subs_polys = rem_pts.sjoin(substs_polys, how="left", predicate="intersects")
     subs_polys = subs_polys.merge(
         substs_polys, how="left", left_on="index_right", right_index=True
     )
-    subs_polys.set_geometry("substation_polygons", inplace=True)
-    subs_polys = subs_polys.drop(columns=[orig_geom_name])
-    subs_polys = subs_polys.rename_geometry(orig_geom_name)
-    return subs_polys
+    subs_polys = subs_polys.rename_geometry("location")
+
+    # Differencing Voronoi polygons against the known substation polygons
+    coll = subs_polys.copy()
+    coll = coll.set_index(id_col)
+    coll = coll.set_geometry("territory")
+    coll.geometry = coll.geometry.difference(poly_shp)
+
+    # Mark the substation shards whose territory polygon does not contain the given substation location
+    coll = coll.explode(index_parts=True)
+    names_replace = list(coll.index.names)
+    names_replace[-1] = "shard_id"
+    coll.index.names = names_replace
+    coll.loc[:, "disconnected"] = ~coll["territory"].contains(coll["location"])
+    coll = coll.drop(columns=["index_right"])
+
+    # Generate a new shard index
+    joint_idx = coll.index.map(lambda idx: f"{idx[0]}_{idx[1]}")
+    joint_idx.name = "donor_id"
+    coll = coll.reset_index()
+    coll.index = joint_idx
+    coll = coll.reset_index()
+
+    # Get donors (disconnected shards) and acceptors (connected shards)
+    coll = coll.set_geometry("territory")
+    donors = coll.loc[coll["disconnected"], ["donor_id", coll.geometry.name]]
+    donors = donors.rename_geometry("donor_territory")
+
+    acceptors = coll.loc[~coll["disconnected"], ["donor_id", coll.geometry.name]]
+    acceptors = acceptors.rename(columns={"donor_id": "acceptor_id"})
+    acceptors = acceptors.rename_geometry("acceptor_territory")
+
+    # Compact donors together if they are within a distance of each other
+    donors_compact = donors.copy()
+    donors_compact["donor_territory_buffered"] = donors_compact[
+        "donor_territory"
+    ].buffer(distance=buff_dist)
+    donors_compact = donors_compact.set_geometry("donor_territory_buffered")
+    donors_compact = donors_compact.dissolve().explode().reset_index(drop=True)
+    donors_compact = donors_compact.drop(columns=["donor_id"])
+    donors_compact.index.name = "donor_compact_id"
+    donors_compact = donors_compact.reset_index()
+    donors_compact["donor_compact_id"] = donors_compact["donor_compact_id"].astype(str)
+    donors_to_comp_donors = donors_compact.sjoin(
+        donors, how="left", predicate="intersects"
+    )
+    donors_to_comp_donors = donors_to_comp_donors.loc[
+        :, ["donor_compact_id", "donor_id"]
+    ]
+
+    donors = donors.merge(donors_to_comp_donors, how="left", on="donor_id")
+    donors["area"] = donors.geometry.area
+    donors = donors.sort_values(by=["area"], ascending=False)
+    donors_small = donors.dissolve(by="donor_compact_id", aggfunc="first")
+    donors_small = donors_small.drop(columns=["area", "donor_id"])
+    donors_small = donors_small.reset_index()
+
+    # Find the acceptors which touch each compacted donor area
+    donors_small["donor_territory_buffered"] = donors_small["donor_territory"].buffer(
+        distance=buff_dist
+    )
+    donors_small = donors_small.set_geometry("donor_territory_buffered")
+    intersects = donors_small.sjoin(acceptors, how="left", predicate="intersects")
+    intersects = intersects.drop(columns=["index_right"])
+    # intersects = intersects.set_geometry("donor_territory")
+    intersects = intersects.rename(columns={"acceptor_id": "acceptor_id_intersects"})
+
+    # Find the touching acceptor's centroid which is closest to each donor polygon
+    near_acceptors = acceptors.loc[
+        acceptors["acceptor_id"].isin(intersects["acceptor_id_intersects"])
+    ]
+    near_acceptors.loc[:, "acceptor_centroid"] = near_acceptors.geometry.centroid
+    near_acceptors = near_acceptors.set_geometry("acceptor_centroid")
+    near_acceptors = near_acceptors.drop(columns=["acceptor_territory"])
+    nearest = intersects.sjoin_nearest(near_acceptors, how="left")
+    nearest = nearest.rename(columns={"acceptor_id": "acceptor_id_nearest"})
+
+    # Select a single acceptor for each donor, the (centroid-)nearest touching acceptor
+    nearest_touching = (
+        nearest["acceptor_id_nearest"] == nearest["acceptor_id_intersects"]
+    )
+    donors_to_acceptors = nearest.loc[
+        nearest_touching, ["donor_compact_id", "acceptor_id_nearest"]
+    ]
+    donors_to_acceptors = donors_to_acceptors.rename(
+        columns={"acceptor_id_nearest": "acceptor_id"}
+    )
+
+    # Connect original donor_id to final acceptor_id through the two stages
+    two_stager = donors_to_comp_donors.merge(
+        donors_to_acceptors, how="left", on="donor_compact_id"
+    )
+
+    # Assign the chosen acceptor to each of the original shards.
+    grouped = coll.merge(two_stager, how="left", on="donor_id")
+    grouped.loc[:, "donor_compact_id"] = grouped["donor_id"].where(
+        grouped["donor_compact_id"].isna(), grouped["donor_compact_id"]
+    )
+    grouped.loc[:, "acceptor_id"] = grouped["donor_id"].where(
+        grouped["acceptor_id"].isna(), grouped["acceptor_id"]
+    )
+
+    # Dissolve to compact donors
+    grouped["area"] = grouped["territory"].area
+    grouped = grouped.sort_values(
+        by=["donor_compact_id", "area"], ascending=[True, False]
+    )
+    diss_1 = grouped.dissolve(by="donor_compact_id", aggfunc="first")
+
+    # Dissolve to connect donors with acceptors
+    diss_1 = diss_1.sort_values(
+        by=["acceptor_id", "disconnected"], ascending=[True, True]
+    )
+    diss_2 = diss_1.dissolve(by="acceptor_id", aggfunc="first")
+    diss_2["location"].crs = diss_2["territory"].crs  # Resetting lost crs
+
+    # Drop temporary columns
+    dissolved = diss_2.drop(
+        columns=["donor_id", "shard_id", "disconnected", "area", "location"]
+    )
+    dissolved = dissolved.rename_geometry(orig_pt_geom_name)
+    dissolved = dissolved.reset_index(drop=True)
+    dissolved = dissolved.loc[:, orig_col_names]
+
+    return dissolved
 
 
 def format_states(states: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
@@ -244,6 +412,14 @@ def fill_missingness(df: pd.DataFrame, params: dict) -> pd.DataFrame:
             else:
                 df_filt.loc[:, col] = col_data.fillna(val)
     return df_filt
+
+
+def prepare_shared_locations(shared: gpd.GeoDataFrame, params: dict) -> pd.DataFrame:
+    """Prepare the charging locations shared by all vehicles."""
+    shared = shared.rename(columns={v: k for k, v in params["col_renamer"].items()})
+    shared[params["loc_col"]] = params["shared_location_type"]
+    shared[params["loc_col"]] = pd.Categorical(shared[params["loc_col"]])
+    return shared
 
 
 def format_estabs(

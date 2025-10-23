@@ -15,6 +15,9 @@ format_substations_pg_and_e:
   add_state_col:
     name: state_code
     value: CA
+  add_source_col:
+    name: source
+    value: pg_and_e
 
 format_substation_profiles:
   col_renamer:
@@ -42,12 +45,20 @@ pg_and_e.geo_partition:
 # For continental substations
 format_substations_contin:
   col_renamer:
-    substation_id_contin: id
-  proj_crs: ${clip_to_extent.crs}
+    substation_id: id
+    substation_name: name
+  add_source_col:
+    name: source
+    value: hifld
+  keep_cols:
+    - substation_id
+    - substation_name
+    - source
+    - geometry
 
 subs_contin.select_columns:
   keep_cols:
-    - substation_id_contin
+    - substation_id
 
 filter_contin_subs:
   filters:
@@ -61,6 +72,13 @@ filter_contin_subs:
         - SUBSTATION
         - NOT AVAILABLE
   keep_only_filter_cols: False
+
+fill_out_substations:
+  columns:
+      substation_id: substation_id
+      source: source
+  proj_crs: ${clip_to_extent.crs}
+  buff_dist_meters: 1000
 
 continental.geo_partition:
   dir: continental

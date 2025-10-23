@@ -22,6 +22,7 @@ from .nodes import (
     describe_substation_usage,
     embed_hexes,
     fill_missingness,
+    fill_out_substations,
     format_estabs,
     format_highways,
     format_states,
@@ -80,22 +81,43 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "substations_continent_select",
                     "params:format_substations_contin",
                 ],
-                outputs="substations_continent_formatted_unclipped",
+                outputs="substations_continent_formatted",
                 name="format_substation_geographies_contin",
+            ),
+            Node(
+                func=fill_out_substations,
+                inputs=[
+                    "substations_standard_pg_and_e",
+                    "substations_continent_formatted",
+                    "params:fill_out_substations",
+                ],
+                outputs="substations_filled_out",
+                name="fill_out_substations",
             ),
             Node(
                 func=clip_to_extent,
                 inputs=[
-                    "substations_continent_formatted_unclipped",
+                    "substations_filled_out",
                     "states_formatted",
                     "params:clip_to_extent",
                 ],
-                outputs="substations_continent_formatted",
+                outputs="substation_geographies",
                 name="clip_to_extent_subs_contin",
             ),
         ],
         tags="continental_substations",
     )
+
+    # truck_stops_pipe = Pipeline(
+    #     [
+    #         Node(
+    #             func=prepare_shared_locations,
+    #             inputs=["parking_formatted", "params:prepare_shared_locations"],
+    #             outputs="shared_locations",
+    #             name="prepare_shared_locations",
+    #         ),
+    #     ],
+    # )
 
     estab_pipe = Pipeline(
         [
@@ -256,7 +278,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             namespace="subs_contin",
             parameters=polys_to_hexes_pipe_fixed_params,
             inputs={
-                "polys_formatted": "substations_continent_formatted",
+                "polys_formatted": "substation_geographies",
             },
         ),
     ]
