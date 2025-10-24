@@ -116,6 +116,7 @@ def fill_out_substations(
     sub_ls = [gdf.rename(columns=renamer) for gdf in sub_ls]
     all_subs = pd.concat(sub_ls, axis=0, ignore_index=True, join="inner")
     all_subs.index.name = sub_id_col
+    all_subs = all_subs.reset_index()
 
     return all_subs
 
