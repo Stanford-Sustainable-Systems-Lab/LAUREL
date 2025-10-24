@@ -52,6 +52,7 @@ def add_geometries(
         data = data.map_partitions(
             _cells_to_geom_wrapper, f=f, hex_col=hex_col, meta=meta_geo
         )
+        data = data.set_crs(H3_CRS)
     elif isinstance(data, pd.DataFrame):
         data = gpd.GeoDataFrame(data=data, geometry=None)
         data = _cells_to_geom_wrapper(gdf=data, f=f, hex_col=hex_col)
