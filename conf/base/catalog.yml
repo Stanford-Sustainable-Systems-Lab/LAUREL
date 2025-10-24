@@ -210,6 +210,15 @@ urban_areas_formatted:
   load_args:
     layer: urban_areas
 
+substations_formatted:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/02_intermediate/substations_formatted.gpkg
+  save_args:
+    index: False
+    layer: substations
+  load_args:
+    layer: substations
+
 hex_base_corresp:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/hex_base_corresp.feather
