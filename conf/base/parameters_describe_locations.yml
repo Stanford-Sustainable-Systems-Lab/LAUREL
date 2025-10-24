@@ -56,7 +56,7 @@ format_substations_contin:
     - source
     - geometry
 
-subs_contin.select_columns:
+substations.select_columns:
   keep_cols:
     - substation_id
 

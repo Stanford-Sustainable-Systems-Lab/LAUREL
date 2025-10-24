@@ -101,8 +101,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "states_formatted",
                     "params:clip_to_extent",
                 ],
-                outputs="substation_geographies",
-                name="clip_to_extent_subs_contin",
+                outputs="substations_formatted",
+                name="clip_to_extent_substations",
             ),
         ],
         tags="continental_substations",
@@ -275,10 +275,10 @@ def create_pipeline(**kwargs) -> Pipeline:
         ),
         Pipeline(
             polys_to_hexes_pipe,
-            namespace="subs_contin",
+            namespace="substations",
             parameters=polys_to_hexes_pipe_fixed_params,
             inputs={
-                "polys_formatted": "substation_geographies",
+                "polys_formatted": "substations_formatted",
             },
         ),
     ]
@@ -308,7 +308,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "states_hexes_tz",
                     "highways.area_hexes",
                     "urban_areas.area_hexes",
-                    "subs_contin.area_hexes",
+                    "substations.area_hexes",
                 ],
                 outputs="hex_base_corresp_w_missing",
                 name="concat_columns",
