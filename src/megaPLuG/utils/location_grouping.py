@@ -11,14 +11,12 @@ class LocGroupingUniformityEvaluator:
         self.loc_col = dwell_locs.name or "location_id"
         self.grp_col = loc_groups.name or "group_id"
 
-        dw_df = dwell_locs.to_frame(name=self.loc_col)
-        dw_df[self.grp_col] = dw_df[self.loc_col].map(loc_groups)
-
-        loc_obs = (
-            dw_df.groupby([self.grp_col, self.loc_col])
-            .size()
-            .to_frame("n_dwells_observed")
+        loc_obs = loc_groups.to_frame(name=self.grp_col)
+        loc_counts = dwell_locs.value_counts()
+        loc_obs["n_dwells_observed"] = (
+            loc_obs.index.map(loc_counts).fillna(0).astype(int)
         )
+
         loc_obs["n_dwells_uniform"] = loc_obs.groupby(self.grp_col)[
             "n_dwells_observed"
         ].transform(lambda ser: ser.sum() / ser.size)
