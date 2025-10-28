@@ -100,6 +100,10 @@ reference_clusters:
   type: pandas.CSVDataset
   filepath: data/01_raw/Data_Axle_Establishments/reference_clusters.csv
 
+land_use_groups:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/Annual_NLCD_LndCov_2023_CU_C1V1/land_use_groups.csv
+
 # Preprocessed datasets
 establishments_formatted:
   type: megaPLuG.datasets.geoparquet.GeoParquetDataset
