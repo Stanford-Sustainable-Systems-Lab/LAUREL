@@ -256,6 +256,9 @@ def create_pipeline(**kwargs) -> Pipeline:
             inputs={
                 "polys_formatted": "states_formatted",
             },
+            outputs={
+                "area_hexes": "states_area_hexes",
+            },
         ),
         Pipeline(
             polys_to_hexes_pipe,
@@ -263,6 +266,9 @@ def create_pipeline(**kwargs) -> Pipeline:
             parameters=polys_to_hexes_pipe_fixed_params,
             inputs={
                 "polys_formatted": "highways_formatted",
+            },
+            outputs={
+                "area_hexes": "highways_area_hexes",
             },
         ),
         Pipeline(
@@ -272,6 +278,9 @@ def create_pipeline(**kwargs) -> Pipeline:
             inputs={
                 "polys_formatted": "urban_areas_formatted",
             },
+            outputs={
+                "area_hexes": "urban_areas_area_hexes",
+            },
         ),
         Pipeline(
             polys_to_hexes_pipe,
@@ -280,6 +289,9 @@ def create_pipeline(**kwargs) -> Pipeline:
             inputs={
                 "polys_formatted": "substations_formatted",
             },
+            outputs={
+                "area_hexes": "substations_area_hexes",
+            },
         ),
     ]
 
@@ -287,7 +299,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             Node(
                 func=get_timezones,
-                inputs=["states.area_hexes", "params:get_timezones"],
+                inputs=["states_area_hexes", "params:get_timezones"],
                 outputs="states_hexes_tz_raw",
                 name="get_timezones",
             ),
@@ -306,9 +318,9 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=concat_columns,
                 inputs=[
                     "states_hexes_tz",
-                    "highways.area_hexes",
-                    "urban_areas.area_hexes",
-                    "substations.area_hexes",
+                    "highways_area_hexes",
+                    "urban_areas_area_hexes",
+                    "substations_area_hexes",
                 ],
                 outputs="hex_base_corresp_w_missing",
                 name="concat_columns",

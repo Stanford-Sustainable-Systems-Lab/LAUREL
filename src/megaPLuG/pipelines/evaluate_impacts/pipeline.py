@@ -372,7 +372,11 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "eval_columns",
                     "dask_client_eval",
                 ],
-                outputs=["bootstrap_profiles", "sampling_source"],
+                outputs=[
+                    "bootstrap_profiles",
+                    "bootstrap_cumulatives",
+                    "sampling_source",
+                ],
                 name="sample_profiles_node",
             ),
             Node(
@@ -390,6 +394,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["sampling_source", "params:results_partition"],
                 outputs="sampling_source_partition",
                 name="write_scenario_partition_sampling_sources",
+            ),
+            Node(
+                func=write_scenario_partition,
+                inputs=["bootstrap_cumulatives", "params:results_partition"],
+                outputs="report_by_region_cumulatives_partition",
+                name="write_scenario_partition_hexes_cumuls",
             ),
             Node(
                 func=write_scenario_partition,

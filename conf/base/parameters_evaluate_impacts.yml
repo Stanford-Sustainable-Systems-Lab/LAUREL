@@ -178,6 +178,9 @@ eval_columns:
   diff_cols:
     power: power_kw_diff
     plugged: plugged_diff
+  cum_cols:
+    power: energy_kwh
+    plugged: plugged_hrs
   duration_col: duration
 
 substation.group_columns:

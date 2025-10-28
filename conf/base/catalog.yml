@@ -352,9 +352,9 @@ substation.report_by_region_quantiles_partition:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
-substation.report_by_region_energies_partition:
+substation.report_by_region_cumulatives_partition:
   type: partitions.PartitionedDataset
-  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_energies/substation"
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_cumulatives/substation"
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
@@ -373,9 +373,9 @@ state_op_dist.report_by_region_quantiles_partition:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
-state_op_dist.report_by_region_energies_partition:
+state_op_dist.report_by_region_cumulatives_partition:
   type: partitions.PartitionedDataset
-  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_energies/state_op_dist"
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_cumulatives/state_op_dist"
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"

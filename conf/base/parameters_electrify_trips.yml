@@ -201,6 +201,8 @@ filter_dwells:
     - minimum_times_plug_out_mins
     - consump_rate_kwh_per_mi
     - battery_capacity_kwh
+    - ${assign_modes.loc_group_col}
+    - ${assign_modes.veh_based_mode_avail.ratio_col}
 
 mark_shift_powers:
   refresh_col: is_refresh
