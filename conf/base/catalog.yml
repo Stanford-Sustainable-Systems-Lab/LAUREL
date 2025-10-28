@@ -227,6 +227,15 @@ hex_base_corresp:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/hex_base_corresp.feather
 
+hex_land_use:
+  type: dask.ParquetDataset
+  filepath: data/02_intermediate/hex_land_use/
+  save_args:
+    write_index: True
+    write_metadata_file: True
+  load_args:
+    calculate_divisions: True
+
 substations_continent_formatted:
     type: megaPLuG.datasets.geopackage.GeoPackageDataset
     filepath: data/02_intermediate/substation_geographies/continental.gpkg
