@@ -273,6 +273,15 @@ hex_region_corresp_partition:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
+hex_base_corresp_dask:
+  type: dask.ParquetDataset
+  filepath: data/02_intermediate/hex_base_corresp_dask/
+  save_args:
+    write_index: True
+    write_metadata_file: True
+  load_args:
+    calculate_divisions: True
+
 vius_scaling:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vius_scaling.feather
