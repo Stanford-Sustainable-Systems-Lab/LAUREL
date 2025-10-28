@@ -9,6 +9,7 @@ from numba import jit
 from numpy.typing import NDArray
 
 from megaPLuG.models.summarize import IntervalBeginSpreader
+from megaPLuG.utils.time import total_time_units
 
 logger = logging.getLogger(__name__)
 
@@ -409,7 +410,7 @@ def sample_profiles(
     sample_class: bool = True,
     seed: int | None = None,
     **event_diffs: dict[str, NDArray],
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     if sample_self or sample_class:
         np.random.seed(seed=seed)
 
@@ -470,15 +471,44 @@ def sample_profiles(
         dur_name=dur_col,
         **sparse_profs,
     )
+
+    prof_cols = list(event_diffs.keys())
+    cums = calculate_value_time_units(
+        profs=profs_df,
+        group_cols=[region_name],
+        dur_col=dur_col,
+        prof_cols=prof_cols,
+    )
+
     discs = discretize_sparse_profiles(
         profs=profs_df,
         time_col=time_col,
         dur_col=dur_col,
-        prof_cols=list(event_diffs.keys()),
+        prof_cols=prof_cols,
         group_cols=[region_name],
         freq=discrete_freq,
     )
-    return discs
+    return discs, cums
+
+
+def calculate_value_time_units(
+    profs: pd.DataFrame,
+    group_cols: list[str],
+    dur_col: str,
+    prof_cols: list[str],
+    time_unit: str = "1h",
+) -> pd.DataFrame:
+    """Calculate the total value-[time units] (e.g. kWh) for each region-profile pair."""
+    tot_hrs = total_time_units(profs[dur_col], unit=time_unit)
+    cum_cols = {col: profs[col] * tot_hrs for col in prof_cols}
+
+    for gcol in group_cols:
+        cum_cols.update({gcol: profs[gcol]})
+
+    val_hrs = pd.concat(cum_cols, axis=1)
+
+    totals_df = val_hrs.groupby(group_cols)[prof_cols].sum()
+    return totals_df
 
 
 def discretize_sparse_profiles(
