@@ -17,7 +17,7 @@ class LocGroupingUniformityEvaluator:
             loc_obs.index.map(loc_counts).fillna(0).astype(int)
         )
 
-        loc_obs["n_dwells_uniform"] = loc_obs.groupby(self.grp_col)[
+        loc_obs["n_dwells_uniform"] = loc_obs.groupby(self.grp_col, observed=True)[
             "n_dwells_observed"
         ].transform(lambda ser: ser.sum() / ser.size)
         loc_obs["obs_uniform_ratio"] = (
@@ -40,7 +40,7 @@ class LocGroupingUniformityEvaluator:
         if kind == "overall":
             return self.loc_obs["exceeds_cutoff"].sum() / len(self.loc_obs)
         if kind == "group":
-            loc_exc = self.loc_obs.groupby(self.grp_col).agg(
+            loc_exc = self.loc_obs.groupby(self.grp_col, observed=True).agg(
                 exceeds_cutoff=pd.NamedAgg(column="exceeds_cutoff", aggfunc="sum"),
                 group_size=pd.NamedAgg(column="exceeds_cutoff", aggfunc="count"),
             )
