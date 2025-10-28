@@ -28,7 +28,8 @@ dependencies = [
     "ipykernel>=6.29.5",
     "aiohttp>=3.11.18",
     "statsmodels>=0.14.5",
-    "rasterstats>=0.20.0",
+    "rasterio>=1.4.3",
+    "exactextract>=0.2.2",
 ]
 readme = "README.md"
 requires-python = ">= 3.11"
