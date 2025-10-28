@@ -675,7 +675,7 @@ def sample_profiles_node(
     params: dict,
     pcols: dict,
     client: Client,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Sample load profiles using self and class dwells."""
     sample_self = params["sample_self"]
     sample_class = params["sample_class"]
@@ -783,9 +783,10 @@ def sample_profiles_node(
     logger.info("Perform bootstrap sampling")
     master_seed = params.get("master_seed", None)
     boot_profs = {}
+    boot_cums = {}
 
     if n_boots == 1:
-        boot_profs[0] = sample_profiles(**kws, seed=master_seed)
+        boot_profs[0], boot_cums[0] = sample_profiles(**kws, seed=master_seed)
     elif n_boots > 1:
 
         def _sample_profiles_distrib(kws: dict, boot_id: int):
@@ -803,7 +804,7 @@ def sample_profiles_node(
         for boot_id, (future, result) in tqdm(
             enumerate(as_completed(futures, with_results=True)), total=len(futures)
         ):
-            boot_profs[boot_id] = result
+            boot_profs[boot_id], boot_cums[boot_id] = result
     else:
         raise ValueError("Number of bootstraps must be >= 1.")
 
@@ -816,20 +817,28 @@ def sample_profiles_node(
     boot_profs = boot_profs.droplevel("index")
     boot_profs = boot_profs.reset_index()
 
-    # Reset names to originals
-    renamer = {d: pcols["profile_cols"][k] for k, d in pcols["diff_cols"].items()}
-    boot_profs = boot_profs.rename(columns=renamer)
+    boot_cums = pd.concat(boot_cums, names=[params["bootstrap_id_col"]], copy=False)
+    boot_cums = boot_cums.reset_index()
 
+    # Reset names to originals
     loc_counts_names = locs_counts.loc[:, [reg_col_compact, reg_col]].drop_duplicates()
     reg_name_restorer = loc_counts_names.set_index(reg_col_compact)[reg_col]
+
+    renamer = {d: pcols["profile_cols"][k] for k, d in pcols["diff_cols"].items()}
+    boot_profs = boot_profs.rename(columns=renamer)
     boot_profs[reg_col] = boot_profs[reg_col_compact].map(reg_name_restorer)
     boot_profs = boot_profs.drop(columns=[reg_col_compact])
+
+    renamer = {d: pcols["cum_cols"][k] for k, d in pcols["diff_cols"].items()}
+    boot_cums = boot_cums.rename(columns=renamer)
+    boot_cums[reg_col] = boot_cums[reg_col_compact].map(reg_name_restorer)
+    boot_cums = boot_cums.drop(columns=[reg_col_compact])
 
     # Report on confidence of sampling
     conf_cols = [pcols["hex_col"], "m_hex_observed", "m_hex_expected"]
     hex_confidence = locs_counts.loc[:, conf_cols]
 
-    return boot_profs, hex_confidence
+    return boot_profs, boot_cums, hex_confidence
 
 
 def build_eval_columns(pcols: dict, group_cols: list) -> dict:
