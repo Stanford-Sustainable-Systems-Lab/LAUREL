@@ -164,6 +164,14 @@ format_estabs:
     - hex_id
     - geometry
 
+get_osm_estabs:
+  name_naics_labeller:
+    49311000: "\\b(?:distribution|fulfillment|fulfilment|logistics|freight|returns?|return|order|e-?commerce)\\s+(?:center|centre|facility|hub|park|warehouse)\\b"
+    44719007: "\\b(?:love'?s(?:\\s+travel\\s+stops?)?|pilot(?:\\s+travel\\s+center)?|flying\\s+j|pilot\\s+flying\\s+j|ta(?:\\s+travel\\s+center)?|road\\s+ranger|sapp\\s+bros?\\.?)\\b"
+  naics_col: naics_8
+  hex_col: hex_id
+  proj_crs: ${clip_to_extent.crs}
+
 reassign_hqs:
   columns:
     naics: naics_8
