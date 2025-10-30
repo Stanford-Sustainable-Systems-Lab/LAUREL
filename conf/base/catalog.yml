@@ -84,6 +84,10 @@ establishments_parent_bus_status:
     dtype:
       PARENT_NUMBER: float64
 
+establishments_openstreetmap:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/02_intermediate/establishments_openstreetmap.gpkg
+
 naics_descriptions:
   type: pandas.CSVDataset
   filepath: data/01_raw/Data_Axle_Establishments/metadata/naics_descriptions.csv
