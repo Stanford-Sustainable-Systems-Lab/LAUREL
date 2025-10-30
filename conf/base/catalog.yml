@@ -87,6 +87,11 @@ establishments_parent_bus_status:
 establishments_openstreetmap:
   type: megaPLuG.datasets.geopackage.GeoPackageDataset
   filepath: data/02_intermediate/establishments_openstreetmap.gpkg
+  load_args:
+    index: False
+    layer: establishments
+  save_args:
+    layer: establishments
 
 naics_descriptions:
   type: pandas.CSVDataset
