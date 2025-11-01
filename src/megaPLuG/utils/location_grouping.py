@@ -43,10 +43,15 @@ class LocGroupingUniformityEvaluator:
             loc_exc = self.loc_obs.groupby(self.grp_col, observed=True).agg(
                 exceeds_cutoff=pd.NamedAgg(column="exceeds_cutoff", aggfunc="sum"),
                 group_size=pd.NamedAgg(column="exceeds_cutoff", aggfunc="count"),
+                uniform_dwell_rate=pd.NamedAgg(
+                    column="n_dwells_uniform", aggfunc="first"
+                ),
             )
+            loc_exc["group_frac"] = loc_exc["group_size"] / loc_exc["group_size"].sum()
             loc_exc["exceeds_cutoff_frac"] = (
                 loc_exc["exceeds_cutoff"] / loc_exc["group_size"]
             )
+
             return loc_exc
         raise NotImplementedError("Summary type not yet implemented.")
 
