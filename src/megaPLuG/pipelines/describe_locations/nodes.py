@@ -13,7 +13,6 @@ import pandas as pd
 from dask.dataframe.dispatch import make_meta
 from dask.diagnostics.progress import ProgressBar
 from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
 
 from megaPLuG.utils.h3 import (
     H3_CRS,
@@ -508,6 +507,24 @@ def reassign_hqs(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
     return estabs
 
 
+# def get_osm_estabs(params: dict) -> pd.DataFrame:
+#     """Get additional establishments from OpenStreetMap"""
+#     tstop_naics = 44719007
+#     tstop_filts = [
+#         osmium.filter.KeyFilter("name"),
+#         osmium.filter.TagFilter(("amenity", "fuel")),
+#         RegexTagFilter(tag="name", pattern=params["name_naics_labeller"][tstop_naics]),
+#     ]
+
+#     tstops = get_gdf_from_filtered_osm(
+#         osm_path=OSM_PATH,
+#         filters=tstop_filts,
+#         tags=["name"],
+#         temp_path=TEMP_PATH,
+#     )
+#     tstops[params["naics_col"]] = tstop_naics
+
+
 def collapse_naics_classes(
     estabs: gpd.GeoDataFrame, naics_leaves: pd.DataFrame, params: dict
 ) -> gpd.GeoDataFrame:
@@ -516,28 +533,37 @@ def collapse_naics_classes(
     estabs[ncols["out"]] = get_naics_leaf_class(
         codes=estabs[ncols["raw"]].values,
         leaves=naics_leaves[ncols["leaf"]].values,
+        fill_leaf=params["fill_leaf"],
     ).astype(int)
     return estabs
 
 
-def embed_hexes(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
+def pivot_hex_estabs(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
     """Create embeddings for each hexagon based on the total employment in each establishment type."""
     pcols = params["columns"]
     emp_col = pcols["n_employees"]
+
+    med_emp_by_naics = (
+        estabs.loc[estabs[emp_col] > 0].groupby(pcols["naics"])[emp_col].median()
+    )
+    fill_emps = (estabs[emp_col] == 0) | estabs[emp_col].isna()
+    estabs[emp_col] = estabs[emp_col].where(
+        ~fill_emps, estabs[pcols["naics"]].map(med_emp_by_naics)
+    )
+    estabs[emp_col] = estabs[emp_col].fillna(0)
     estabs[emp_col] = estabs[emp_col] + (estabs[emp_col] == 0) * params["zero_emp_buff"]
 
     logger.info("Computing embedding for each hexagon")
     estabs_hex = estabs.groupby([pcols["hex_id"], pcols["naics"]])[emp_col].sum()
     estabs_hex = estabs_hex.unstack(pcols["naics"], fill_value=0).astype(int)
 
+    # Establishing lexical sorting of NAICS code strings
     pre = params["naics_prefix"]
     naics_to_str = {
         col: f"{pre}{col}" for col in estabs_hex.columns if isinstance(col, int)
     }
     estabs_hex = estabs_hex.rename(columns=naics_to_str)
-    estabs_hex = estabs_hex.sort_index(
-        axis=1
-    )  # Establishing lexical sorting of NAICS code strings
+    estabs_hex = estabs_hex.sort_index(axis=1)
 
     mrg_cols = [pcols["hex_id"], pcols["geom"]] + params["keep_metadata_cols"]
     hex_mrg = estabs.loc[:, mrg_cols].drop_duplicates(pcols["hex_id"])
@@ -546,65 +572,132 @@ def embed_hexes(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
         hex_mrg, how="left", left_index=True, right_index=True
     )
     estabs_hex = gpd.GeoDataFrame(data=estabs_hex, geometry=pcols["geom"])
-
-    if params["include_neighbors"]:
-        logger.info("Computing neighbor embeddings for each hexagon")
-        naics_cols = sorted(list(naics_to_str.values()))
-        ngbr_embs = get_neighbor_embeddings(
-            hexes=estabs_hex.index.values.astype(np.uint64),
-            embs=estabs_hex.loc[:, naics_cols].values,
-            include_center=False,
-            distance=1,
-        )
-        ngbr_df = pd.DataFrame(
-            data=ngbr_embs, columns=naics_cols, index=estabs_hex.index
-        )
-        estabs_hex = estabs_hex.merge(
-            ngbr_df,
-            how="left",
-            left_index=True,
-            right_index=True,
-            suffixes=("", params["neighbor_merge_suffix"]),
-        )
-
     return estabs_hex
 
 
-def cluster_hexes(embs: gpd.GeoDataFrame, params: dict) -> pd.DataFrame:
-    """Cluster hexagons together based on embeddings."""
-    scaler = StandardScaler(**params["scaler_kwargs"])
+def pivot_hex_land_use(land_use: dd.DataFrame, params: dict) -> pd.DataFrame:
+    """Pivot the hexagon land use to wide format and select only groups of interest."""
+    ccol = params["input_cols"]["categories"]
+    fcol = params["input_cols"]["fractions"]
+    hcol = params["input_cols"]["hex"]
+    land_use["land_use_group"] = land_use[ccol].map(
+        params["code_group_corresp"], meta=(ccol, "str")
+    )
+    land_use["land_use_group"] = land_use["land_use_group"].astype("category")
+    land_use = land_use.drop(columns=[ccol])
+    meta_uint64 = land_use._meta.copy()
+    meta_uint64.index = meta_uint64.index.astype(np.uint64)
+    land_use = land_use.map_partitions(
+        lambda part: part.set_axis(part.index.astype(np.uint64), axis=0),
+        meta=meta_uint64,
+    )
+
+    land_use = land_use.rename_axis(index={f"{hcol}_str": hcol})
+
+    def groupby_part(part: pd.DataFrame) -> pd.DataFrame:
+        return part.groupby([hcol, "land_use_group"], observed=True)[fcol].sum()
+
+    land_use = land_use.map_partitions(groupby_part)
+    land_use_hex = land_use.compute()
+    land_use_hex = land_use_hex.unstack("land_use_group", fill_value=0.0)
+    return land_use_hex
+
+
+def group_hexes(
+    land_use: pd.DataFrame, estabs: pd.DataFrame, params: dict
+) -> pd.DataFrame:
+    """Group hexagons by rules and clustering to create homogeneous classes."""
+    # Mark developed hexes
+    dpars = params["development"]
+    land_use["is_developed"] = land_use[dpars["col"]] >= dpars["frac_thresh"]
+
+    # Select only developed hexes and fill in their estabilishments
+    hex_dev = land_use.loc[
+        land_use["is_developed"]
+    ]  # Applies known pattern of only trusting that establishments can only exist where there is a minimum level of development
+    hex_dev = hex_dev.join(estabs)
+    naics_cols = [
+        col for col in estabs.columns if col.startswith(params["naics_prefix"])
+    ]
+    for ncol in naics_cols:
+        hex_dev[ncol] = hex_dev[ncol].fillna(0)
+
+    # Get neighbor establishments for developed hexes
+    nbr_embs = get_neighbor_embeddings(
+        hexes=hex_dev.index.values.astype(np.uint64),
+        embs=hex_dev.loc[:, naics_cols].values,
+        include_center=False,
+        distance=1,
+    )
+    nbr_df = pd.DataFrame(data=nbr_embs, columns=naics_cols, index=hex_dev.index)
+
+    def get_nbr_cols(cols: list[str]) -> list[str]:
+        return [f"{col}_nbr" for col in cols]
+
+    renamer = {orig: new for orig, new in zip(naics_cols, get_nbr_cols(naics_cols))}
+    mrg = nbr_df.rename(columns=renamer)
+    hex_dev = pd.concat([hex_dev, mrg], axis=1)
+
+    # Mark hexes with any establishments at all
+    all_fi_cols = naics_cols + get_nbr_cols(naics_cols)
+    hex_dev["has_any_estabs"] = hex_dev.loc[:, all_fi_cols].sum(axis=1) > 0
+
+    # Mark hexes with any freight-intensive establishments
+    naics_fi_cols = list(set(naics_cols).difference([str(params["default_naics"])]))
+    all_fi_cols = naics_fi_cols + get_nbr_cols(naics_fi_cols)
+    hex_dev["has_any_fi"] = hex_dev.loc[:, all_fi_cols].sum(axis=1) > 0
+
+    # Mark hexes with special establishments
+    hex_dev["has_any_special"] = False
+    for name, code in params["special_naics"].items():
+        str_code = params["naics_prefix"] + str(code)
+        spec_cols = [str_code] + get_nbr_cols([str_code])
+        hex_dev["has_any_special"] |= hex_dev.loc[:, spec_cols].sum(axis=1) > 0
+
+    # Cluster non-special freight-intensive hexes
+    gcol = params["loc_group_col"]
+    feature_cols = naics_cols + get_nbr_cols(naics_cols)
+    features = hex_dev.loc[
+        hex_dev["has_any_fi"] & ~hex_dev["has_any_special"], feature_cols
+    ]
+
+    feature_sparse = features.astype(pd.SparseDtype("float", 0.0))
+    X_train = feature_sparse.sparse.to_coo()
+    X_transf = X_train.log1p()
     clusterer = KMeans(**params["clusterer_kwargs"])
+    clusterer = clusterer.fit(X=X_transf)
+    clusts = pd.Series(clusterer.labels_, index=features.index, name=gcol)
 
-    fcols = []
-    if params["features"]["include_own_naics"]:
-        fcols.extend(
-            [col for col in embs.columns if col.startswith(params["naics_prefix"])]
-        )
-    if params["features"]["include_ngbr_naics"]:
-        fcols.extend(
-            [col for col in embs.columns if col.endswith(params["ngbr_suffix"])]
-        )
+    clust_prefix = "clust_"
+    clusts = clust_prefix + clusts.astype(str)
 
-    other_feats = params["features"]["other_features"]
-    if other_feats is not None:
-        fcols.extend(other_feats)
+    # Collate categories for developed hexes
+    hex_dev[gcol] = "no_estabs"
+    hex_dev[gcol] = hex_dev[gcol].where(~hex_dev["has_any_estabs"], "some_estabs")
+    # TODO: Mapping clusts directly onto land_use produces better homogeneity. Why?
+    hex_dev[gcol] = hex_dev[gcol].where(
+        ~hex_dev["has_any_fi"], hex_dev.index.map(clusts)
+    )
 
-    X_train = embs.loc[:, fcols].values
-    X_transf = np.log10(1 + X_train)
-    train_scaled = scaler.fit_transform(X=X_transf)
-    embs[params["cluster_col"]] = clusterer.fit_predict(X=train_scaled)
+    for name, code in params["special_naics"].items():
+        str_code = params["naics_prefix"] + str(code)
+        spec_cols = [str_code]
+        any_special = hex_dev.loc[:, spec_cols].sum(axis=1) > 0
+        hex_dev[gcol] = hex_dev[gcol].where(~any_special, name)
 
-    return embs.loc[:, [params["cluster_col"]]]
+    # Collate categories for all hexes
+    land_use[gcol] = land_use.index.map(hex_dev[gcol])
+    land_use[gcol] = land_use[gcol].fillna("undeveloped")
+    land_use[gcol] = land_use[gcol].astype("category")
+
+    return land_use.loc[:, [gcol]]
 
 
-def apply_clusters(
-    hexes: pd.DataFrame, clusts: pd.DataFrame, params: dict
+def apply_groups(
+    hexes: pd.DataFrame, groups: pd.DataFrame, params: dict
 ) -> pd.DataFrame:
     """Apply clusters to locations of observed dwells."""
     assert hexes.index.name == params["hex_col"]
-    assert clusts.index.name == params["hex_col"]
-    out = hexes.merge(clusts, how="left", left_index=True, right_index=True)
-    cl_col = params["clust_col"]
-    if params["fill_cluster"]:
-        out[cl_col] = out[cl_col].fillna(params["fill_cluster_value"]).astype(int)
+    assert groups.index.name == params["hex_col"]
+    out = hexes.merge(groups, how="left", left_index=True, right_index=True)
     return out

@@ -14,13 +14,11 @@ from megaPLuG.utils.distributed import load_in_memory_node
 from megaPLuG.utils.time import get_timezones
 
 from .nodes import (
-    apply_clusters,
+    apply_groups,
     clip_to_extent,
-    cluster_hexes,
     collapse_naics_classes,
     concat_columns,
     describe_substation_usage,
-    embed_hexes,
     fill_missingness,
     fill_out_substations,
     format_estabs,
@@ -30,7 +28,10 @@ from .nodes import (
     format_substation_profiles,
     format_substations_contin,
     format_urban,
+    group_hexes,
     hexify_polygons,
+    pivot_hex_estabs,
+    pivot_hex_land_use,
     reassign_hqs,
 )
 
@@ -148,7 +149,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=collapse_naics_classes,
                 inputs=[
                     "estabs_hqed",
-                    "naics_focus_leaves",
+                    "naics_freight_intensive",
                     "params:collapse_naics_classes",
                 ],
                 outputs="estabs_leafed",
@@ -337,28 +338,35 @@ def create_pipeline(**kwargs) -> Pipeline:
     cluster_pipe = Pipeline(
         [
             Node(
-                func=embed_hexes,
-                inputs=["estabs_leafed", "params:embed_hexes"],
-                outputs="hex_embeds",
-                name="embed_hexes",
+                func=pivot_hex_estabs,
+                inputs=["estabs_leafed", "params:pivot_hex_estabs"],
+                outputs="estabs_pivoted",
+                name="pivot_hex_estabs",
             ),
             Node(
-                func=cluster_hexes,
-                inputs=["hex_embeds", "params:cluster_hexes"],
+                func=pivot_hex_land_use,
+                inputs=["hex_land_use", "params:pivot_hex_land_use"],
+                outputs="land_use_pivoted",
+                name="pivot_hex_land_use",
+            ),
+            Node(
+                func=group_hexes,
+                inputs=["land_use_pivoted", "estabs_pivoted", "params:group_hexes"],
                 outputs="hex_clusters",
-                name="cluster_hexes",
+                name="group_hexes",
             ),
             Node(
-                func=apply_clusters,
+                func=apply_groups,
                 inputs=[
                     "hex_base_corresp",
                     "hex_clusters",
-                    "params:apply_clusters",
+                    "params:apply_groups",
                 ],
                 outputs="hex_cluster_corresp",
-                name="apply_clusters",
+                name="apply_groups",
             ),
         ],
+        tags="establishments",
     )
 
     return (

@@ -193,8 +193,9 @@ collapse_naics_classes:
     raw: naics_8
     out: naics_focus
     leaf: naics_leaf
+  fill_leaf: 0
   
-embed_hexes:
+pivot_hex_estabs:
   columns:
     n_employees: n_employees
     naics: naics_focus
@@ -204,28 +205,45 @@ embed_hexes:
     - state
   zero_emp_buff: 1 # Number of "fake" employees to add to establishments without employees
   naics_prefix: naics_
-  include_neighbors: True
-  neighbor_merge_suffix: _ngbr
 
-cluster_hexes:
-  cluster_col: cluster_id
-  naics_prefix: naics_
-  ngbr_suffix: _ngbr
-  features:
-    include_own_naics: True
-    include_ngbr_naics: True
-    other_features: # Leaving nothing here implies a value of None
-  scaler_kwargs:
-    with_mean: True
-    with_std: True
+pivot_hex_land_use:
+  input_cols:
+    categories: unique
+    fractions: frac
+    hex: hex_id
+  code_group_corresp: # Values are my groupings, comments are original meaning
+    11: wild # open_water
+    12: wild # ice_snow
+    21: developed # developed_open
+    22: developed # developed_low
+    23: developed # developed_med
+    24: developed # developed_high
+    31: wild # barren_land
+    41: wild # forest_deciduous
+    42: wild # forest_evergreen
+    43: wild # forest_mixed
+    52: wild # shrub_scrub
+    71: wild # grassland
+    81: cultivated # pasture_hay
+    82: cultivated # cultivated_crops
+    90: wild # woody_wetlands
+    95: wild # emergent_herbaceous_wetlands
+
+group_hexes:
+  development:
+    col: developed
+    frac_thresh: 0.025
+  naics_prefix: ${pivot_hex_estabs.naics_prefix}
+  default_naics: 0
+  special_naics:
+    truck_stop: 44719007
   clusterer_kwargs:
-    n_clusters: 50 #500
+    n_clusters: 18 # Optimized for lowest exceedance of threshold probability
     random_state: 42
     init: k-means++
     verbose: 1 # Scikit-learn uses an integer system for verbosity, with 0 being no prints
+  loc_group_col: loc_group_id
 
-apply_clusters:
+apply_groups:
   hex_col: hex_id
-  clust_col: cluster_id
-  fill_cluster: False
-  fill_cluster_value: ${cluster_hexes.clusterer_kwargs.n_clusters} # Fill with max(clust_id) + 1
+  group_col: ${group_hexes.loc_group_col}
