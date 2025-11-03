@@ -7,23 +7,10 @@ from kedro.pipeline import Node, Pipeline
 
 from .nodes import (
     build_vius_scaling_totals,
-    strip_vehicle_attrs,
 )
 
 
 def create_pipeline(**kwargs) -> Pipeline:
-    veh_pipe = Pipeline(
-        [
-            Node(
-                func=strip_vehicle_attrs,
-                inputs=["trips_formatted", "params:strip_vehicle_attrs"],
-                outputs="vehicles_raw",
-                name="strip_vehicle_attrs",
-            ),
-        ],
-        tags="strip_vehicles",
-    )
-
     scale_pipe = Pipeline(
         [
             Node(
@@ -39,4 +26,4 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="vius_scaling",
     )
 
-    return veh_pipe + scale_pipe
+    return scale_pipe

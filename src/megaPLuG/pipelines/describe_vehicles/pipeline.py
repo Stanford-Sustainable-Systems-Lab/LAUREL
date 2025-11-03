@@ -15,6 +15,7 @@ from .nodes import (
     mark_location_regions,
     mark_vehicle_centers,
     mark_weight_class_group,
+    strip_vehicle_attrs,
 )
 
 
@@ -26,6 +27,12 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["dwells", "params:load_dwell_set"],
                 outputs="dwell_obj_desc_vehs",
                 name="load_dwell_set_desc_vehs",
+            ),
+            Node(
+                func=strip_vehicle_attrs,
+                inputs=["trips_formatted", "params:strip_vehicle_attrs"],
+                outputs="vehicles_raw",
+                name="strip_vehicle_attrs",
             ),
             Node(
                 func=mark_vehicle_centers,

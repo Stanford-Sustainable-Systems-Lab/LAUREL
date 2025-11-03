@@ -5,6 +5,7 @@ generated using Kedro 0.19.3
 
 import logging
 
+import dask.dataframe as dd
 import geopandas as gpd
 import pandas as pd
 
@@ -18,6 +19,20 @@ from megaPLuG.utils.params import build_df_from_dict
 from megaPLuG.utils.time import total_hours
 
 logger = logging.getLogger(__name__)
+
+
+def strip_vehicle_attrs(
+    trips: dd.DataFrame, params: dict
+) -> tuple[dd.DataFrame, pd.DataFrame]:
+    """Get vehicle-specific attributes which stay constant."""
+    n_trips_by_veh = trips[params["veh_id_col"]].value_counts().compute()
+    drop_idx = n_trips_by_veh.loc[n_trips_by_veh < params["min_trips_per_veh"]].index
+
+    veh_cols = [params["veh_id_col"]] + params["veh_attr_cols"]
+    vehs = trips.loc[:, veh_cols].drop_duplicates().compute()
+    vehs = vehs.set_index(params["veh_id_col"]).sort_index()
+    vehs = vehs.drop(index=drop_idx)
+    return vehs
 
 
 def get_vehicle_observation_frames(
