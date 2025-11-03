@@ -8,7 +8,6 @@ import logging
 import dask.dataframe as dd
 import dask_geopandas as dgpd
 import geopandas as gpd
-import h3.api.numpy_int as h3
 import numpy as np
 import pandas as pd
 from dask.diagnostics.progress import ProgressBar
@@ -22,7 +21,7 @@ from megaPLuG.models.routing.router import (
 )
 from megaPLuG.models.routing.server import GraphhopperContainerRouter
 from megaPLuG.utils.geo import METERS_PER_MILE
-from megaPLuG.utils.h3 import H3_CRS, H3_DEFAULT_RESOLUTION, cells_to_points
+from megaPLuG.utils.h3 import add_geometries, cells_to_points
 from megaPLuG.utils.time import SECS_PER_HOUR
 
 logger = logging.getLogger(__name__)
@@ -117,40 +116,13 @@ def get_routes_node(
     return routed
 
 
-def prepare_stop_locations_private(
-    stops: pd.DataFrame, params: dict
-) -> gpd.GeoDataFrame:
-    """Prepare the stop locations for optional stops."""
-    pcols = params["columns"]
-    pts = gpd.points_from_xy(
-        x=stops[pcols["lon"]],
-        y=stops[pcols["lat"]],
-        crs=H3_CRS,
-    )
-    stops = gpd.GeoDataFrame(stops, geometry=pts)
-    stops = stops.rename_geometry(pcols["park_point"])
-
-    stops[pcols["hex"]] = stops.geometry.apply(
-        lambda pt: h3.latlng_to_cell(pt.y, pt.x, res=H3_DEFAULT_RESOLUTION)
-    )
-    stops = stops.loc[:, params["keep_cols"]]
-    return stops
-
-
-def concat_stop_locations(
-    stops_publ: gpd.GeoDataFrame, stops_priv: gpd.GeoDataFrame, params: dict
-) -> gpd.GeoDataFrame:
+def format_stop_locations(stops: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
     """Concatenate together the locations for optional stops from several sources."""
-    assert isinstance(stops_publ, gpd.GeoDataFrame)
-    assert isinstance(stops_priv, gpd.GeoDataFrame)
-
-    stops = pd.concat([stops_publ, stops_priv], axis=0)
     pcols = params["columns"]
-    # Some sets of stop locations are so close together, that they fall within the
-    # same hex. The grid results will not differ if we only use one of these.
-    stops = stops.drop_duplicates(subset=pcols["hex"], keep="first")
-    stops[pcols["park_id"]] = pd.RangeIndex(stop=stops.shape[0])
-    return stops
+    stops_geo = add_geometries(stops, hex_col=pcols["hex"], geom_type="point")
+    stops_geo = stops_geo.rename_geometry(pcols["park_point"])
+    stops_geo[pcols["park_id"]] = pd.RangeIndex(stop=stops_geo.shape[0])
+    return stops_geo
 
 
 def get_optional_stop_trips(
