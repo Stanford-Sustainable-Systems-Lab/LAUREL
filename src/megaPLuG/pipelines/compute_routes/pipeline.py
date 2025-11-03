@@ -12,11 +12,17 @@ from megaPLuG.models.routing.nodes import (
 from megaPLuG.utils.distributed import start_dask_node, stop_dask_node
 
 from .nodes import (
+    concat_optional_stops,
+    concat_stop_locations,
+    describe_optional_stop_trips,
     filter_routable_trips,
+    get_optional_stop_trips,
     get_routes_node,
     get_trip_orig_dest_points,
     import_graph,
     partition_trips,
+    prepare_stop_locations_private,
+    prepare_stop_locations_public,
 )
 
 
@@ -99,4 +105,61 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="routing",
     )
 
-    return import_pipe + pre_route_pipe + route_pipe
+    opt_stops_pipe = Pipeline(
+        [
+            Node(
+                func=prepare_stop_locations_public,
+                inputs=["parking_public", "params:prepare_stop_locations_public"],
+                outputs="parking_formatted_public",
+                name="prepare_stop_locations_public",
+            ),
+            Node(
+                func=prepare_stop_locations_private,
+                inputs=["parking_private", "params:prepare_stop_locations_private"],
+                outputs="parking_formatted_private",
+                name="prepare_stop_locations_private",
+            ),
+            Node(
+                func=concat_stop_locations,
+                inputs=[
+                    "parking_formatted_public",
+                    "parking_formatted_private",
+                    "params:concat_stop_locations",
+                ],
+                outputs="parking_formatted",
+                name="concat_stop_locations",
+            ),
+            Node(
+                func=get_optional_stop_trips,
+                inputs=[
+                    "trips_routed",  # Use the `compute_routes` pipeline to get this
+                    "parking_formatted",
+                    "params:get_optional_stop_trips",
+                ],
+                outputs="optional_stop_trips_raw",
+                name="get_optional_stop_trips",
+            ),
+            Node(
+                func=describe_optional_stop_trips,
+                inputs=[
+                    "optional_stop_trips_raw",
+                    "params:describe_optional_stop_trips",
+                ],
+                outputs="optional_stop_trips",
+                name="describe_optional_stop_trips",
+            ),
+            Node(
+                func=concat_optional_stops,
+                inputs=[
+                    "trips_formatted",
+                    "optional_stop_trips",
+                    "params:concat_optional_stops",
+                ],
+                outputs="trips_with_optional",
+                name="concat_optional_stops",
+            ),
+        ],
+        tags="insert_optional_stops",
+    )
+
+    return import_pipe + pre_route_pipe + route_pipe + opt_stops_pipe
