@@ -8,6 +8,7 @@ import logging
 import dask.dataframe as dd
 import dask_geopandas as dgpd
 import geopandas as gpd
+import h3.api.numpy_int as h3
 import numpy as np
 import pandas as pd
 from dask.dataframe.dispatch import make_meta
@@ -563,6 +564,19 @@ def concat_osm_estabs(*args: list[pd.DataFrame], params: dict) -> pd.DataFrame:
     dup_subset = [params["hex_col"], params["naics_col"], "name"]
     locats_centers = locats_centers.loc[~locats_centers.duplicated(subset=dup_subset)]
     return locats_centers
+
+
+def prepare_stop_locations_public(
+    parks: gpd.GeoDataFrame, params: dict
+) -> gpd.GeoDataFrame:
+    """Prepare the stop locations for optional stops."""
+    pcols = params["columns"]
+    parks[pcols["hex"]] = parks.geometry.apply(
+        lambda pt: h3.latlng_to_cell(pt.y, pt.x, res=H3_DEFAULT_RESOLUTION)
+    )
+    parks = parks.rename_geometry(pcols["park_point"])
+    parks = parks.loc[:, params["keep_cols"]]
+    return parks
 
 
 def collapse_naics_classes(
