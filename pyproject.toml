@@ -33,7 +33,7 @@ dependencies = [
     "osmium>=4.2.0",
 ]
 readme = "README.md"
-requires-python = ">= 3.11"
+requires-python = ">= 3.12"
 
 [project.scripts]
 megaPLuG = "megaPLuG.__main__:main"
