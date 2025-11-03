@@ -165,6 +165,8 @@ format_estabs:
     - geometry
 
 get_osm_estabs:
+  osm_path: data/01_raw/OpenStreetMap/us-251029.osm.pbf
+  temp_path: data/01_raw/OpenStreetMap/temp_reader.osm.pbf
   name_naics_labeller:
     49311000: "\\b(?:distribution|fulfillment|fulfilment|logistics|freight|returns?|return|order|e-?commerce)\\s+(?:center|centre|facility|hub|park|warehouse)\\b"
     44719007: "\\b(?:love'?s(?:\\s+travel\\s+stops?)?|pilot(?:\\s+travel\\s+center)?|flying\\s+j|pilot\\s+flying\\s+j|ta(?:\\s+travel\\s+center)?|road\\s+ranger|sapp\\s+bros?\\.?)\\b"

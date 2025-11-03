@@ -12,16 +12,19 @@ import numpy as np
 import pandas as pd
 from dask.dataframe.dispatch import make_meta
 from dask.diagnostics.progress import ProgressBar
+from osmium.filter import KeyFilter, TagFilter
 from sklearn.cluster import KMeans
 
 from megaPLuG.utils.h3 import (
     H3_CRS,
     H3_DEFAULT_RESOLUTION,
+    coords_to_cells,
     coords_to_cells_wrapper,
     region_polygons_to_cells,
 )
 from megaPLuG.utils.hex_neighbors import get_neighbor_embeddings
 from megaPLuG.utils.naics import get_naics_leaf_class
+from megaPLuG.utils.open_street_map import RegexTagFilter, get_gdf_from_filtered_osm
 
 logger = logging.getLogger(__name__)
 
@@ -507,22 +510,59 @@ def reassign_hqs(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
     return estabs
 
 
-# def get_osm_estabs(params: dict) -> pd.DataFrame:
-#     """Get additional establishments from OpenStreetMap"""
-#     tstop_naics = 44719007
-#     tstop_filts = [
-#         osmium.filter.KeyFilter("name"),
-#         osmium.filter.TagFilter(("amenity", "fuel")),
-#         RegexTagFilter(tag="name", pattern=params["name_naics_labeller"][tstop_naics]),
-#     ]
+def get_osm_estabs_truck_stops(osm_params: dict, params: dict) -> gpd.GeoDataFrame:
+    """Get additional establishments from OpenStreetMap."""
+    naics_code = params["naics_code"]
+    filts = [
+        KeyFilter("name"),
+        TagFilter(("amenity", "fuel")),
+        RegexTagFilter(tag="name", pattern=params["name_naics_labeller"][naics_code]),
+    ]
 
-#     tstops = get_gdf_from_filtered_osm(
-#         osm_path=OSM_PATH,
-#         filters=tstop_filts,
-#         tags=["name"],
-#         temp_path=TEMP_PATH,
-#     )
-#     tstops[params["naics_col"]] = tstop_naics
+    gdf = get_gdf_from_filtered_osm(
+        osm_path=osm_params["osm_path"],
+        filters=filts,
+        tags=["name"],
+        temp_path=osm_params["temp_path"],
+    )
+    gdf[params["naics_col"]] = naics_code
+    return gdf
+
+
+def get_osm_estabs_warehouses(osm_params: dict, params: dict) -> gpd.GeoDataFrame:
+    """Get additional establishments from OpenStreetMap."""
+    naics_code = params["naics_code"]
+    filts = [
+        KeyFilter("name"),
+        RegexTagFilter(tag="name", pattern=params["name_naics_labeller"][naics_code]),
+    ]
+
+    gdf = get_gdf_from_filtered_osm(
+        osm_path=osm_params["osm_path"],
+        filters=filts,
+        tags=["name", "amenity"],
+        temp_path=osm_params["temp_path"],
+    )
+    gdf[params["naics_col"]] = naics_code
+
+    gdf_filt = gdf.loc[gdf["amenity"] != "social_facility"]
+    gdf_filt = gdf_filt.drop(columns=["amenity"])
+    return gdf_filt
+
+
+def concat_osm_estabs(*args: list[pd.DataFrame], params: dict) -> pd.DataFrame:
+    locats_filt = pd.concat(*args, ignore_index=True)
+    locats_centers = locats_filt.to_crs(params["proj_crs"])
+    locats_centers[locats_centers.geometry.name] = locats_centers.geometry.centroid
+    locats_centers = locats_centers.to_crs(H3_CRS)
+    locats_centers[params["hex_col"]] = coords_to_cells(
+        lat=locats_centers.geometry.y.values,
+        lng=locats_centers.geometry.x.values,
+        res=H3_DEFAULT_RESOLUTION,
+    )
+    dup_subset = [params["hex_col"], params["naics_col"], "name"]
+    locats_centers = locats_centers.loc[~locats_centers.duplicated(subset=dup_subset)]
+    return locats_centers
 
 
 def collapse_naics_classes(
