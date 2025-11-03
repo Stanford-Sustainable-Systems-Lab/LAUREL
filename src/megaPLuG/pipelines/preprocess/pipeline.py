@@ -10,6 +10,7 @@ from .nodes import (
 )
 
 
+# TODO: Consider removing this pipeline, or shifting pieces of it to prepare_totals
 def create_pipeline(**kwargs) -> Pipeline:
     scale_pipe = Pipeline(
         [
