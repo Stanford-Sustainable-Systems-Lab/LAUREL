@@ -129,11 +129,22 @@ assign_modes:
   mode_col: ${charging_modes.name_column}
   loc_group_col: cluster_id
   loc_based_mode_avail:
-    enroute: True
+    enroute:
+      loc_groups: # Location groups under 18 clusters (random state 42) which have more than 5 visits/day average
+        - clust_7
+        - clust_16
+        - clust_12
+        - clust_10
+        - clust_8
+        - clust_11
+        - clust_15
+        - clust_5
+        - clust_13
+        - clust_9
+      invert_selection: False
     truck_stop:
       loc_groups:
-        - 49
-        - 45
+        - truck_stop
       invert_selection: False
     none: True
   veh_based_mode_avail:
