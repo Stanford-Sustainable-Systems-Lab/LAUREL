@@ -5,6 +5,8 @@ from megaPLuG.models.dwell_sets import save_dwell_set
 from .nodes import (
     coalesce_interrupted_dwells,
     create_dwells,
+    calc_derived_trip_cols,
+    format_trips_columns,
     calc_rolling_dwell_ratios,
     map_location_groups,
 )
@@ -13,6 +15,24 @@ from megaPLuG.utils.distributed import start_dask_node
 
 
 def create_pipeline(**kwargs) -> Pipeline:
+    format_pipe = Pipeline(
+        [
+            Node(
+                func=format_trips_columns,
+                inputs=["navistar", "params:format_columns"],
+                outputs="trips_formatted_no_derived",
+                name="format_trips_columns",
+            ),
+            Node(
+                func=calc_derived_trip_cols,
+                inputs=["trips_formatted_no_derived", "params:trip_derived_cols"],
+                outputs="trips_formatted",
+                name="calc_derived_trip_cols",
+            ),
+        ],
+        tags="format_trips",
+    )
+
     dwell_pipe = Pipeline(
         [
             Node(
@@ -70,4 +90,4 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags=["create_dwells", "create_dwells_optional_stops"],
     )
 
-    return dwell_pipe
+    return format_pipe + dwell_pipe
