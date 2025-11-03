@@ -7,6 +7,7 @@ authors = [
 ]
 dependencies = [
     "dask>=2024.5.2",
+    "pyarrow~=20.0",
     "geopandas>=1.0.1",
     "h3~=4.1",
     "kedro>=1.0.0",
@@ -30,7 +31,7 @@ dependencies = [
     "statsmodels>=0.14.5",
     "rasterio>=1.4.3",
     "exactextract>=0.2.2",
-    "osmium>=4.2.0",
+    "osmium<4.1",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"
