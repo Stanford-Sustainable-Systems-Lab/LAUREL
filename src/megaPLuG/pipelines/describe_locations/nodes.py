@@ -701,7 +701,8 @@ def group_hexes(
     hex_dev["has_any_estabs"] = hex_dev.loc[:, all_fi_cols].sum(axis=1) > 0
 
     # Mark hexes with any freight-intensive establishments
-    naics_fi_cols = list(set(naics_cols).difference([str(params["default_naics"])]))
+    default_code = params["naics_prefix"] + str(params["default_naics"])
+    naics_fi_cols = list(set(naics_cols).difference([default_code]))
     all_fi_cols = naics_fi_cols + get_nbr_cols(naics_fi_cols)
     hex_dev["has_any_fi"] = hex_dev.loc[:, all_fi_cols].sum(axis=1) > 0
 
