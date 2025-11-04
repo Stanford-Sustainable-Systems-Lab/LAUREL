@@ -62,20 +62,24 @@ get_routes:
         dur: trip_hrs_route
         speed: trip_speed_route_mph
 
-prepare_stop_locations_private:
-  columns:
-    hex: hex_id_park
-    park_point: park_point
-    lon: LONGITUDE
-    lat: LATITUDE
-  keep_cols:
-    - hex_id_park
-    - park_point
+filter_opt_stops:
+  filters:
+    loc_group_id:
+      value_isin:
+        - truck_stop
+  keep_only_filter_cols: False
 
-concat_stop_locations:
+format_opt_stop_locations:
+  col_renamer:
+    hex_id_park: hex_id
   columns:
     park_id: park_id
     hex: hex_id_park
+    park_point: park_point
+  keep_cols:
+    - park_id
+    - hex_id_park
+    - park_point
 
 get_optional_stop_trips:
   projected_crs: EPSG:5072

@@ -119,10 +119,15 @@ def get_routes_node(
 def format_stop_locations(stops: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
     """Concatenate together the locations for optional stops from several sources."""
     pcols = params["columns"]
-    stops_geo = add_geometries(stops, hex_col=pcols["hex"], geom_type="point")
+    stops_ren = stops.reset_index()
+    stops_ren = stops_ren.rename(
+        columns={v: k for k, v in params["col_renamer"].items()}
+    )
+    stops_geo = add_geometries(stops_ren, hex_col=pcols["hex"], geom_type="point")
     stops_geo = stops_geo.rename_geometry(pcols["park_point"])
     stops_geo[pcols["park_id"]] = pd.RangeIndex(stop=stops_geo.shape[0])
-    return stops_geo
+    stops_out = stops_geo.loc[:, params["keep_cols"]]
+    return stops_out
 
 
 def get_optional_stop_trips(

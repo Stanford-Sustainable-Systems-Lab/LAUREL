@@ -9,20 +9,19 @@ from megaPLuG.models.routing.nodes import (
     start_routing_server_node,
     stop_routing_server_node,
 )
+from megaPLuG.utils.data import filter_by_vals_in_cols
 from megaPLuG.utils.distributed import start_dask_node, stop_dask_node
 
 from .nodes import (
     concat_optional_stops,
-    concat_stop_locations,
     describe_optional_stop_trips,
     filter_routable_trips,
+    format_stop_locations,
     get_optional_stop_trips,
     get_routes_node,
     get_trip_orig_dest_points,
     import_graph,
     partition_trips,
-    prepare_stop_locations_private,
-    prepare_stop_locations_public,
 )
 
 
@@ -108,26 +107,16 @@ def create_pipeline(**kwargs) -> Pipeline:
     opt_stops_pipe = Pipeline(
         [
             Node(
-                func=prepare_stop_locations_public,
-                inputs=["parking_public", "params:prepare_stop_locations_public"],
-                outputs="parking_formatted_public",
-                name="prepare_stop_locations_public",
+                func=filter_by_vals_in_cols,
+                inputs=["hex_cluster_corresp", "params:filter_opt_stops"],
+                outputs="parking_filtered",
+                name="filter_truck_stops",
             ),
             Node(
-                func=prepare_stop_locations_private,
-                inputs=["parking_private", "params:prepare_stop_locations_private"],
-                outputs="parking_formatted_private",
-                name="prepare_stop_locations_private",
-            ),
-            Node(
-                func=concat_stop_locations,
-                inputs=[
-                    "parking_formatted_public",
-                    "parking_formatted_private",
-                    "params:concat_stop_locations",
-                ],
+                func=format_stop_locations,
+                inputs=["parking_filtered", "params:format_opt_stop_locations"],
                 outputs="parking_formatted",
-                name="concat_stop_locations",
+                name="format_stop_locations",
             ),
             Node(
                 func=get_optional_stop_trips,
