@@ -246,22 +246,22 @@ hex_land_use:
     calculate_divisions: True
 
 substations_continent_formatted:
-    type: megaPLuG.datasets.geopackage.GeoPackageDataset
-    filepath: data/02_intermediate/substation_geographies/continental.gpkg
-    save_args:
-      index: True
-      layer: substations
-    load_args:
-      layer: substations
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/02_intermediate/substation_geographies/continental.gpkg
+  save_args:
+    index: True
+    layer: substations
+  load_args:
+    layer: substations
 
 substations_standard_pg_and_e:
-    type: megaPLuG.datasets.geopackage.GeoPackageDataset
-    filepath: data/02_intermediate/substation_geographies/pg_and_e.gpkg
-    save_args:
-      index: True
-      layer: substations
-    load_args:
-      layer: substations
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/02_intermediate/substation_geographies/pg_and_e.gpkg
+  save_args:
+    index: True
+    layer: substations
+  load_args:
+    layer: substations
 
 hex_clusters:
   type: pandas.FeatherDataset
