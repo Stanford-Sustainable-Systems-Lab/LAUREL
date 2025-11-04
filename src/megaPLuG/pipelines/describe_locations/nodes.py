@@ -511,6 +511,19 @@ def reassign_hqs(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
     return estabs
 
 
+def prepare_stop_locations_public(
+    parks: gpd.GeoDataFrame, params: dict
+) -> gpd.GeoDataFrame:
+    """Prepare the stop locations for optional stops."""
+    pcols = params["columns"]
+    parks[pcols["hex"]] = parks.geometry.apply(
+        lambda pt: h3.latlng_to_cell(pt.y, pt.x, res=H3_DEFAULT_RESOLUTION)
+    )
+    parks = parks.rename_geometry(pcols["park_point"])
+    parks = parks.loc[:, params["keep_cols"]]
+    return parks
+
+
 def get_osm_estabs_truck_stops(osm_params: dict, params: dict) -> gpd.GeoDataFrame:
     """Get additional establishments from OpenStreetMap."""
     naics_code = params["naics_code"]
@@ -564,19 +577,6 @@ def concat_osm_estabs(*args: list[pd.DataFrame], params: dict) -> pd.DataFrame:
     dup_subset = [params["hex_col"], params["naics_col"], "name"]
     locats_centers = locats_centers.loc[~locats_centers.duplicated(subset=dup_subset)]
     return locats_centers
-
-
-def prepare_stop_locations_public(
-    parks: gpd.GeoDataFrame, params: dict
-) -> gpd.GeoDataFrame:
-    """Prepare the stop locations for optional stops."""
-    pcols = params["columns"]
-    parks[pcols["hex"]] = parks.geometry.apply(
-        lambda pt: h3.latlng_to_cell(pt.y, pt.x, res=H3_DEFAULT_RESOLUTION)
-    )
-    parks = parks.rename_geometry(pcols["park_point"])
-    parks = parks.loc[:, params["keep_cols"]]
-    return parks
 
 
 def collapse_naics_classes(
