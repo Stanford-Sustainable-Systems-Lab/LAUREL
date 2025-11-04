@@ -263,6 +263,10 @@ substations_standard_pg_and_e:
     load_args:
       layer: substations
 
+hex_clusters:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/hex_clusters.feather
+
 hex_cluster_corresp:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/hex_cluster_corresp.feather
