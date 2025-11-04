@@ -150,6 +150,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "estabs_extra",
                     "params:format_extra_estabs",
                 ],
+                # WARNING: Saving this out causes dtype issue when concatenating with the other establishments (uint64 vs. int64)
                 outputs="establishments_extra_formatted",
                 name="format_extra_estabs",
             ),
@@ -183,9 +184,15 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="reassign_hqs",
             ),
             Node(
+                func=concat_extra_estabs,
+                inputs=["estabs_hqed", "establishments_extra_formatted"],
+                outputs="estabs_w_extras",
+                name="concat_extra_estabs_to_main",
+            ),
+            Node(
                 func=collapse_naics_classes,
                 inputs=[
-                    "estabs_hqed",
+                    "estabs_w_extras",
                     "naics_freight_intensive",
                     "params:collapse_naics_classes",
                 ],
