@@ -18,20 +18,25 @@ from .nodes import (
     clip_to_extent,
     collapse_naics_classes,
     concat_columns,
+    concat_extra_estabs,
     describe_substation_usage,
     fill_missingness,
     fill_out_substations,
     format_estabs,
+    format_extra_estabs,
     format_highways,
     format_states,
     format_substation_boundaries_pg_and_e,
     format_substation_profiles,
     format_substations_contin,
     format_urban,
+    get_osm_estabs_truck_stops,
+    get_osm_estabs_warehouses,
     group_hexes,
     hexify_polygons,
     pivot_hex_estabs,
     pivot_hex_land_use,
+    prepare_stop_locations_public,
     reassign_hqs,
 )
 
@@ -109,16 +114,48 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="continental_substations",
     )
 
-    # truck_stops_pipe = Pipeline(
-    #     [
-    #         Node(
-    #             func=prepare_shared_locations,
-    #             inputs=["parking_formatted", "params:prepare_shared_locations"],
-    #             outputs="shared_locations",
-    #             name="prepare_shared_locations",
-    #         ),
-    #     ],
-    # )
+    extra_estabs_pipe = Pipeline(
+        [
+            Node(
+                func=prepare_stop_locations_public,
+                inputs=["parking_public", "params:prepare_stop_locations_public"],
+                outputs="estabs_public_parking",
+                name="prepare_stop_locations_public",
+            ),
+            Node(
+                func=get_osm_estabs_truck_stops,
+                inputs=["params:get_osm_estabs", "params:get_osm_estabs_truck_stops"],
+                outputs="estabs_osm_truck_stops",
+                name="get_osm_estabs_truck_stops",
+            ),
+            Node(
+                func=get_osm_estabs_warehouses,
+                inputs=["params:get_osm_estabs", "params:get_osm_estabs_warehouses"],
+                outputs="estabs_osm_warehouses",
+                name="get_osm_estabs_warehouses",
+            ),
+            Node(
+                func=concat_extra_estabs,
+                inputs=[
+                    "estabs_public_parking",
+                    "estabs_osm_truck_stops",
+                    "estabs_osm_warehouses",
+                ],
+                outputs="estabs_extra",
+                name="concat_extra_estabs",
+            ),
+            Node(
+                func=format_extra_estabs,
+                inputs=[
+                    "estabs_extra",
+                    "params:format_extra_estabs",
+                ],
+                outputs="establishments_extra_formatted",
+                name="format_extra_estabs",
+            ),
+        ],
+        tags=["extra_estabs"],
+    )
 
     estab_pipe = Pipeline(
         [
@@ -372,6 +409,7 @@ def create_pipeline(**kwargs) -> Pipeline:
     return (
         ca_subs_pipe
         + continental_subs_pipe
+        + extra_estabs_pipe
         + estab_pipe
         + state_pipe
         + tz_pipe

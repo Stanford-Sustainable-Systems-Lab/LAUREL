@@ -8,7 +8,6 @@ import logging
 import dask.dataframe as dd
 import dask_geopandas as dgpd
 import geopandas as gpd
-import h3.api.numpy_int as h3
 import numpy as np
 import pandas as pd
 from dask.dataframe.dispatch import make_meta
@@ -516,12 +515,10 @@ def prepare_stop_locations_public(
 ) -> gpd.GeoDataFrame:
     """Prepare the stop locations for optional stops."""
     pcols = params["columns"]
-    parks[pcols["hex"]] = parks.geometry.apply(
-        lambda pt: h3.latlng_to_cell(pt.y, pt.x, res=H3_DEFAULT_RESOLUTION)
-    )
-    parks = parks.rename_geometry(pcols["park_point"])
-    parks = parks.loc[:, params["keep_cols"]]
-    return parks
+    parks_fmt = parks.rename(columns={v: k for k, v in params["col_renamer"].items()})
+    parks_fmt[pcols["naics"]] = params["naics_code"]
+    parks_fmt = parks_fmt.loc[:, params["keep_cols"]]
+    return parks_fmt
 
 
 def get_osm_estabs_truck_stops(osm_params: dict, params: dict) -> gpd.GeoDataFrame:
@@ -530,7 +527,7 @@ def get_osm_estabs_truck_stops(osm_params: dict, params: dict) -> gpd.GeoDataFra
     filts = [
         KeyFilter("name"),
         TagFilter(("amenity", "fuel")),
-        RegexTagFilter(tag="name", pattern=params["name_naics_labeller"][naics_code]),
+        RegexTagFilter(tag="name", pattern=params["tag_regex"]),
     ]
 
     gdf = get_gdf_from_filtered_osm(
@@ -548,7 +545,7 @@ def get_osm_estabs_warehouses(osm_params: dict, params: dict) -> gpd.GeoDataFram
     naics_code = params["naics_code"]
     filts = [
         KeyFilter("name"),
-        RegexTagFilter(tag="name", pattern=params["name_naics_labeller"][naics_code]),
+        RegexTagFilter(tag="name", pattern=params["tag_regex"]),
     ]
 
     gdf = get_gdf_from_filtered_osm(
@@ -564,19 +561,23 @@ def get_osm_estabs_warehouses(osm_params: dict, params: dict) -> gpd.GeoDataFram
     return gdf_filt
 
 
-def concat_osm_estabs(*args: list[pd.DataFrame], params: dict) -> pd.DataFrame:
-    locats_filt = pd.concat(*args, ignore_index=True)
-    locats_centers = locats_filt.to_crs(params["proj_crs"])
-    locats_centers[locats_centers.geometry.name] = locats_centers.geometry.centroid
-    locats_centers = locats_centers.to_crs(H3_CRS)
-    locats_centers[params["hex_col"]] = coords_to_cells(
-        lat=locats_centers.geometry.y.values,
-        lng=locats_centers.geometry.x.values,
+def concat_extra_estabs(*args: list[gpd.GeoDataFrame]) -> gpd.GeoDataFrame:
+    estabs_concat = pd.concat(args, ignore_index=True, axis=0)
+    return estabs_concat
+
+
+def format_extra_estabs(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
+    estabs_centers = estabs.to_crs(params["proj_crs"])
+    estabs_centers[estabs_centers.geometry.name] = estabs_centers.geometry.centroid
+    estabs_centers = estabs_centers.to_crs(H3_CRS)
+    estabs_centers[params["hex_col"]] = coords_to_cells(
+        lat=estabs_centers.geometry.y.values,
+        lng=estabs_centers.geometry.x.values,
         res=H3_DEFAULT_RESOLUTION,
     )
-    dup_subset = [params["hex_col"], params["naics_col"], "name"]
-    locats_centers = locats_centers.loc[~locats_centers.duplicated(subset=dup_subset)]
-    return locats_centers
+    dup_subset = [params["hex_col"], params["naics_col"], params["name_col"]]
+    estabs_centers = estabs_centers.loc[~estabs_centers.duplicated(subset=dup_subset)]
+    return estabs_centers
 
 
 def collapse_naics_classes(

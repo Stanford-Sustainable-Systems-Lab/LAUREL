@@ -165,21 +165,34 @@ format_estabs:
     - geometry
 
 prepare_stop_locations_public:
+  naics_code: 44719007
+  col_renamer:
+    name: NHS Rest S
   columns:
-    hex: hex_id_park
-    park_point: park_point
+    naics: naics_8
   keep_cols:
-    - hex_id_park
-    - park_point
+    - name
+    - naics_8
+    - geometry
 
 get_osm_estabs:
   osm_path: data/01_raw/OpenStreetMap/us-251029.osm.pbf
   temp_path: data/01_raw/OpenStreetMap/temp_reader.osm.pbf
-  name_naics_labeller:
-    49311000: "\\b(?:distribution|fulfillment|fulfilment|logistics|freight|returns?|return|order|e-?commerce)\\s+(?:center|centre|facility|hub|park|warehouse)\\b"
-    44719007: "\\b(?:love'?s(?:\\s+travel\\s+stops?)?|pilot(?:\\s+travel\\s+center)?|flying\\s+j|pilot\\s+flying\\s+j|ta(?:\\s+travel\\s+center)?|road\\s+ranger|sapp\\s+bros?\\.?)\\b"
+
+get_osm_estabs_truck_stops:
+  naics_code: 44719007
+  tag_regex: "\\b(?:love'?s(?:\\s+travel\\s+stops?)?|pilot(?:\\s+travel\\s+center)?|flying\\s+j|pilot\\s+flying\\s+j|ta(?:\\s+travel\\s+center)?|road\\s+ranger|sapp\\s+bros?\\.?)\\b"
+  naics_col: ${format_extra_estabs.naics_col}
+
+get_osm_estabs_warehouses:
+  naics_code: 49311000
+  tag_regex: "\\b(?:distribution|fulfillment|fulfilment|logistics|freight|returns?|return|order|e-?commerce)\\s+(?:center|centre|facility|hub|park|warehouse)\\b"
+  naics_col: ${format_extra_estabs.naics_col}
+
+format_extra_estabs:
   naics_col: naics_8
   hex_col: hex_id
+  name_col: name
   proj_crs: ${clip_to_extent.crs}
 
 reassign_hqs:
