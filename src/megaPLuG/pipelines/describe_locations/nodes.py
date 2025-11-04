@@ -577,6 +577,9 @@ def format_extra_estabs(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFr
     )
     dup_subset = [params["hex_col"], params["naics_col"], params["name_col"]]
     estabs_centers = estabs_centers.loc[~estabs_centers.duplicated(subset=dup_subset)]
+    estabs_centers[params["hex_col"]] = estabs_centers[params["hex_col"]].astype(
+        np.uint64
+    )
     return estabs_centers
 
 
