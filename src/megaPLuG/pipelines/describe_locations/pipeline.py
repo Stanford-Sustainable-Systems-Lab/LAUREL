@@ -141,13 +141,13 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "estabs_osm_truck_stops",
                     "estabs_osm_warehouses",
                 ],
-                outputs="estabs_extra",
+                outputs="establishments_extra",
                 name="concat_extra_estabs",
             ),
             Node(
                 func=format_extra_estabs,
                 inputs=[
-                    "estabs_extra",
+                    "establishments_extra",
                     "params:format_extra_estabs",
                 ],
                 # WARNING: Saving this out causes dtype issue when concatenating with the other establishments (uint64 vs. int64)

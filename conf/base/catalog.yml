@@ -84,6 +84,15 @@ establishments_parent_bus_status:
     dtype:
       PARENT_NUMBER: float64
 
+establishments_extra:
+  type: megaPLuG.datasets.geopackage.GeoPackageDataset
+  filepath: data/02_intermediate/establishments_extra.gpkg
+  save_args:
+    index: False
+    layer: establishments_extra
+  load_args:
+    layer: establishments_extra
+
 naics_descriptions:
   type: pandas.CSVDataset
   filepath: data/01_raw/Data_Axle_Establishments/metadata/naics_descriptions.csv
