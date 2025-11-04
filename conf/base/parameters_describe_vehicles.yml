@@ -4,6 +4,13 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.3/configuration/parameters.html
 
+strip_vehicle_attrs:
+  veh_id_col: veh_id
+  veh_attr_cols:
+    - veh_type
+    - vin_gvw
+  min_trips_per_veh: 2
+
 substantial_dwells:
   thresh_hrs: 4
   drop_cols:

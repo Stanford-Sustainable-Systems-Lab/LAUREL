@@ -1,6 +1,28 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/1.0.0/configuration/parameters.html
 
+format_columns:
+  time_columns:
+    - start_timestamp_utc
+    - end_timestamp_utc
+  category_columns:
+    - vehicle_id
+    - veh_type
+    - vin_gvw
+  h3_columns:
+    - starting_h3_8
+    - ending_h3_8
+  col_renamer:
+    veh_id: vehicle_id
+  veh_id_col: veh_id
+  persist: False
+
+trip_derived_cols:
+  time_cols:
+    trip_start: start_timestamp_utc
+    trip_end: end_timestamp_utc
+  persist: False
+
 dask_describe_dwells:
   use_dask: True
   cluster:

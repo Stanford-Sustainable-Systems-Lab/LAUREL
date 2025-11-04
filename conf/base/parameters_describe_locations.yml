@@ -164,6 +164,14 @@ format_estabs:
     - hex_id
     - geometry
 
+prepare_stop_locations_public:
+  columns:
+    hex: hex_id_park
+    park_point: park_point
+  keep_cols:
+    - hex_id_park
+    - park_point
+
 get_osm_estabs:
   osm_path: data/01_raw/OpenStreetMap/us-251029.osm.pbf
   temp_path: data/01_raw/OpenStreetMap/temp_reader.osm.pbf
