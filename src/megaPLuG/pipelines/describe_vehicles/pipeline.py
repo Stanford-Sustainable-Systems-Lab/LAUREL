@@ -24,7 +24,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             Node(
                 func=load_dwell_set,
-                inputs=["dwells", "params:load_dwell_set"],
+                inputs=["dwells_with_locations_dask", "params:load_dwell_set"],
                 outputs="dwell_obj_desc_vehs",
                 name="load_dwell_set_desc_vehs",
             ),
