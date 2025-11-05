@@ -59,7 +59,8 @@ def create_dwells(trips: dd.DataFrame, params: dict, client: Client) -> DwellSet
         trips = trips.compute()
 
     logger.info("Converting to dwells from trips.")
-    trips = trips.drop(columns=params["drop_cols"])
+    drop_cols = list(set(params["drop_cols"]).intersection(trips.columns))
+    trips = trips.drop(columns=drop_cols)
     trips = trips.rename(columns={v: k for k, v in params["col_renamer"].items()})
     colnames = params["from_trips_cols"]
     dw = DwellSet.from_trips(
