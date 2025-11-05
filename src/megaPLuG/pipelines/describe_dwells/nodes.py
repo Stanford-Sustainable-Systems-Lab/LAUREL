@@ -105,7 +105,12 @@ def coalesce_interrupted_dwells(dw: DwellSet, params: dict) -> DwellSet:
     # Comments suggest some modifications to apply if distance and duration of dropped
     # trips should be retained.
     logger.info("Accumulating columns across coalescing dwells")
-    accum_cols = [dw.reset, dw.end]  # "trip_miles", "trip_hrs", "dwell_hrs"
+    reset_orig_col = f"{dw.reset}_original"
+    dw.data[reset_orig_col] = dw.data[dw.reset].copy()
+    dw.data[dw.reset] = (
+        False  # Necessary to avoid the special reset-handling in accum_masked
+    )
+    accum_cols = [reset_orig_col, dw.end]  # "trip_miles", "trip_hrs", "dwell_hrs"
     agg_funcs = [
         CumAggFunc.MAX,
         CumAggFunc.MAX,
@@ -137,9 +142,13 @@ def coalesce_interrupted_dwells(dw: DwellSet, params: dict) -> DwellSet:
     dw.data[mask_col] = dw.data[mask_col].replace(False, pd.NA)
     dw.data = dw.data.dropna(subset=mask_col)
     dw.data[mask_col] = dw.data[mask_col].astype(bool)
-    drop_cols = [mask_col] + accum_cols
+    drop_cols = [mask_col] + accum_cols + [reset_orig_col, dw.reset]
     dw.data = dw.data.drop(columns=drop_cols)
     renamer = {f"{old}_{mask_col}": old for old in accum_cols}
+    dw.data = dw.data.rename(columns=renamer)
+
+    # Set reset back to its original column name and data type
+    renamer = {reset_orig_col: dw.reset}
     dw.data = dw.data.rename(columns=renamer)
     dw.data[dw.reset] = dw.data[dw.reset].astype(bool)
     return dw
