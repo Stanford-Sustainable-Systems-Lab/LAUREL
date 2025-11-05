@@ -133,3 +133,4 @@ concat_optional_stops:
     - veh_id
     - end_timestamp_utc
   dist_col: trip_miles
+  n_partitions: 300 # For saving out to Parquet

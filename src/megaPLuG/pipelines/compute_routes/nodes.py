@@ -263,4 +263,7 @@ def concat_optional_stops(
     # We keep the first trip because we want to replace original with modified trips
     trips = trips.drop_duplicates(subset=params["trip_id_cols"], keep="first")
     trips = trips.drop(columns=["is_original"])
-    return trips
+
+    # Send back to Dask for later processing
+    trips_out = dd.from_pandas(trips, npartitions=params["n_partitions"])
+    return trips_out
