@@ -84,7 +84,7 @@ def coalesce_interrupted_dwells(dw: DwellSet, params: dict) -> DwellSet:
     implementation would simply drop short trips from the trips dataset before dwells
     were created.
     """
-    nxt_col = f"{dw.hex}_next"
+    prev_col = f"{dw.hex}_prev"
     mask_col = "is_short_circle"
 
     max_dist = params["max_short_dist_miles"]
@@ -94,13 +94,13 @@ def coalesce_interrupted_dwells(dw: DwellSet, params: dict) -> DwellSet:
     shift_kwargs = {"fill_value": 0}
     if dw.is_dask:
         shift_kwargs["meta"] = ("x", dw.data[dw.hex].dtype)
-    dw.data[nxt_col] = dw.data.groupby(dw.veh)[dw.hex].shift(-1, **shift_kwargs)
+    dw.data[prev_col] = dw.data.groupby(dw.veh)[dw.hex].shift(1, **shift_kwargs)
     dw.data[mask_col] = ~(
-        (dw.data[nxt_col] == dw.data[dw.hex])
+        (dw.data[prev_col] == dw.data[dw.hex])
         & (dw.data[dw.trip_dist] < max_dist)
         & (dw.data[dw.trip_dur] < max_dur)
     )
-    dw.data = dw.data.drop(columns=[nxt_col])
+    dw.data = dw.data.drop(columns=[prev_col])
 
     # Comments suggest some modifications to apply if distance and duration of dropped
     # trips should be retained.
