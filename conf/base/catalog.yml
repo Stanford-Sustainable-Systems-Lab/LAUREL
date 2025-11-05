@@ -143,7 +143,7 @@ trips_routed:
 
 trips_with_optional:
   type: dask.ParquetDataset
-  filepath: "${runtime_params:partition_data_dir, 'data/02_intermediate'}/trips_routed"
+  filepath: "${runtime_params:partition_data_dir, 'data/02_intermediate'}/trips_with_optional"
   save_args:
     write_index: True
     write_metadata_file: True
