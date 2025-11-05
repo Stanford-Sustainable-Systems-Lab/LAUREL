@@ -85,7 +85,7 @@ def coalesce_interrupted_dwells(dw: DwellSet, params: dict) -> DwellSet:
     were created.
     """
     prev_col = f"{dw.hex}_prev"
-    mask_col = "is_short_circle"
+    mask_col = "is_not_short_circle"
 
     max_dist = params["max_short_dist_miles"]
     max_dur = params["max_short_dur_hrs"]
