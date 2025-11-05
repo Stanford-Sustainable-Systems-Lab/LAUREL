@@ -29,7 +29,7 @@ dask_describe_dwells:
     n_workers: 4
     processes: True
     threads_per_worker: 1 # Must stay at 1, since our code is not thread safe
-    memory_limit: 8GiB
+    memory_limit: 16GiB # Use 8GiB for laptop, but more was needed with new truck stop system 11/5/2025
 
 create_dwells:
   debug_subsample:
@@ -66,7 +66,7 @@ rolling_dwell_ratios:
   output_ratio_col: max_dwell_hrs_roll_ratio
 
 map_location_groups:
-  location_group_col: cluster_id
+  location_group_col: loc_group_id
   missing_values:
     fill_missing: False
     fill_value: ${group_hexes.clusterer_kwargs.n_clusters}
