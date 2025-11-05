@@ -48,7 +48,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=create_dwells,
                 inputs=[
-                    "trips_formatted",
+                    "trips_with_optional",
                     "params:create_dwells",
                     "dask_client_dwells",
                 ],
