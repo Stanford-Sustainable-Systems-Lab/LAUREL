@@ -687,7 +687,11 @@ def sample_profiles_node(
     hex_col = pcols["hex_col"]
     hex_col_compact = f"{hex_col}_compact"
 
-    reg_col = pcols["group_cols"][0]  # TODO: Enable multi-column
+    if len(pcols["group_cols"] > 1):  # TODO: Enable multi-column
+        raise NotImplementedError(
+            "Only a single grouping column is currently implemented."
+        )
+    reg_col = pcols["group_cols"][0]
     reg_col_compact = f"{reg_col}_compact"
 
     logger.info("Build compact identifiers and correspondence matrices")
