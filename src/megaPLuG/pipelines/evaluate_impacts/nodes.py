@@ -687,7 +687,7 @@ def sample_profiles_node(
     hex_col = pcols["hex_col"]
     hex_col_compact = f"{hex_col}_compact"
 
-    if len(pcols["group_cols"] > 1):  # TODO: Enable multi-column
+    if len(pcols["group_cols"]) > 1:  # TODO: Enable multi-column
         raise NotImplementedError(
             "Only a single grouping column is currently implemented."
         )
