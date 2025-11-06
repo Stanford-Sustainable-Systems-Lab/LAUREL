@@ -32,6 +32,7 @@ dependencies = [
     "rasterio>=1.4.3",
     "exactextract>=0.2.2",
     "osmium<4.1",
+    "setuptools<81",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"
