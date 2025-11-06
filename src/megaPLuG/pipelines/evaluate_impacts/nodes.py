@@ -294,9 +294,7 @@ def _is_weekday(tser: "pd.Series[pd.Timestamp]") -> "pd.Series[bool]":
 
 def filter_locs_pre_prob(locs: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Filter locations to report upon."""
-    grp_col = params["loc_group_col"]
-    locs_report = locs.dropna(subset=grp_col)
-    locs_report[grp_col] = locs_report[grp_col].astype(int)
+    locs_report = locs.dropna(subset=params["drop_na_cols"])
     return locs_report
 
 

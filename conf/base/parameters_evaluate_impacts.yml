@@ -60,15 +60,16 @@ apply_delays:
 filter_dwells_pre_prob_eval:
   filter_out_weekends: True
   drop_na_cols:
-    - cluster_id # This is okay, since everything from here on out is one dwell at a time
+    - loc_group_id # This is okay, since everything from here on out is one dwell at a time
     - charge_kwh # Any dwells with NaN charging should not be counted as electrified
 
 filter_locs_pre_prob:
-  loc_group_col: cluster_id
+  drop_na_cols:
+   - loc_group_id
 
 dwell_scaling:
   loc_class_cols:
-    - cluster_id
+    - loc_group_id
   veh_class_cols:
     - primary_op_dist
     #- vin_gvw
@@ -119,7 +120,7 @@ merge_classes:
 
 compute_class_probs:
   loc_class_cols:
-    - cluster_id
+    - loc_group_id
   veh_class_cols:
     - primary_op_dist
     #- vin_gvw
@@ -188,7 +189,7 @@ state_op_dist.group_columns:
     - primary_op_dist
 
 stratify_columns:
-  - cluster_id
+  - loc_group_id
 
 assign_metadata_location:
   keep_right_columns:
@@ -212,13 +213,13 @@ assign_metadata_vehicle:
 
 merge_dwell_probs:
   keep_right_columns:
-    - cluster_id
+    - loc_group_id
     - primary_op_dist
     - p_obs_elect_g_lclass_vclass
   merge_kwargs:
     how: left
     'on': # Using quotes here because "on" somehow gets interpreted as "True" without quotes
-      - cluster_id
+      - loc_group_id
       - primary_op_dist
 
 slice_events:
@@ -247,7 +248,7 @@ sample_profiles:
   dwell_prob_obs_elect_col: p_obs_elect_g_lclass_vclass
   n_dwells_expected_elect_col: n_dwells_expected_elect
   time_col: ${slice_events.slice_time_col}
-  loc_group_col: cluster_id
+  loc_group_col: loc_group_id
   quantiles:
     - 0.00
     - 0.05
