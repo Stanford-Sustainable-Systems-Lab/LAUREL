@@ -710,7 +710,14 @@ def sample_profiles_node(
     Ga = Ga.tocsr()
 
     # Build Locations x Lclasses mask
-    class_arr = locs_counts[params["loc_group_col"]].values.astype(int)
+    loc_groups = locs_counts[params["loc_group_col"]]
+    if isinstance(loc_groups.dtype, pd.CategoricalDtype):
+        class_arr = loc_groups.cat.codes.values
+        class_map = {
+            category: code for code, category in enumerate(loc_groups.cat.categories)
+        }
+    else:
+        raise NotImplementedError("Only categorical dtypes currently supported.")
     Cy = build_entity_mask_array(ids=class_arr)
     Cy = Cy.tocsr()
 
@@ -745,6 +752,7 @@ def sample_profiles_node(
 
     exp_dwell_rate_col = params["n_dwells_expected_elect_col"]
     loc_cls = classes.groupby(params["loc_group_col"])[exp_dwell_rate_col].sum()
+    loc_cls.index = loc_cls.index.map(class_map)  # In case categories were scrambled
     loc_cls = loc_cls.sort_index()
     n_locs_per_class = Cy.sum(axis=0)
     m_class_expected = loc_cls.values / n_locs_per_class
