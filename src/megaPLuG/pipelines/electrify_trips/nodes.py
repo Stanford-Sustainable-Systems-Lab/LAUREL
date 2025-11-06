@@ -86,7 +86,7 @@ def prepare_modes(modes: dict) -> pd.DataFrame:
     return modes_df
 
 
-def assign_modes(dw: DwellSet, modes: pd.DataFrame, params: dict) -> DwellSet:
+def assign_modes(dw: DwellSet, modes: pd.DataFrame, params: dict) -> DwellSet:  # noqa: PLR0912
     """Assign charging modes to each dwell."""
     all_modes = modes[params["mode_col"]].to_list()
     modes_in_use = [mode for mode in all_modes if mode in dw.data.columns]
@@ -114,7 +114,15 @@ def assign_modes(dw: DwellSet, modes: pd.DataFrame, params: dict) -> DwellSet:
     # Add a boolean column for the vehicle-based depot mode
     mode_vehs = params["veh_based_mode_avail"]
     vmode_col = mode_vehs["mode_name"]
-    dw.data[vmode_col] = dw.data[mode_vehs["ratio_col"]] > mode_vehs["ratio_thresh"]
+    if vmode_col not in dw.data.columns:
+        dw.data[vmode_col] = True
+
+    orig_cols = list(dw.data.columns)
+    dw.data[vmode_col] &= dw.data[mode_vehs["ratio_col"]] > mode_vehs["ratio_thresh"]
+    if dw.is_dask:  # Reset column ordering to keep in sync with the Dask Dataframe meta
+        dw.data = dw.data.map_partitions(
+            lambda part: part.loc[:, orig_cols], meta=dw.data._meta
+        )
 
     # Check that all modes are accounted for
     modes_missed = [mode for mode in all_modes if mode not in dw.data.columns]

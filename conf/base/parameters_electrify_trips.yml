@@ -146,6 +146,10 @@ assign_modes:
       loc_groups:
         - truck_stop
       invert_selection: False
+    depot:
+      loc_groups:
+        - undeveloped
+      invert_selection: True
     none: True
   veh_based_mode_avail:
     mode_name: depot
