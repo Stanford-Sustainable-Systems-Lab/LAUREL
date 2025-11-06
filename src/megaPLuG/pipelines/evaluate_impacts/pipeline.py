@@ -74,14 +74,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="categorize_vehicles_with_params_eval",
             ),
             Node(
-                func=read_scenario_partition,
-                inputs=["hex_region_corresp_partition", "params:geo_partition_eval"],
-                outputs="hex_region_corresp",
-                name="collate_partitions_hexes",
-            ),
-            Node(
                 func=filter_locs_pre_prob,
-                inputs=["hex_region_corresp", "params:filter_locs_pre_prob"],
+                inputs=["hex_cluster_corresp", "params:filter_locs_pre_prob"],
                 outputs="hex_region_corresp_filtered",
                 name="filter_locs_pre_prob",
             ),
