@@ -127,7 +127,7 @@ charging_modes:
 
 assign_modes:
   mode_col: ${charging_modes.name_column}
-  loc_group_col: cluster_id
+  loc_group_col: loc_group_id
   loc_based_mode_avail:
     enroute:
       loc_groups: # Location groups under 18 clusters (random state 42) which have more than 5 visits/day average
