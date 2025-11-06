@@ -66,6 +66,7 @@ filter_dwells_pre_prob_eval:
 filter_locs_pre_prob:
   drop_na_cols:
    - loc_group_id
+   - substation_id
 
 dwell_scaling:
   loc_class_cols:
