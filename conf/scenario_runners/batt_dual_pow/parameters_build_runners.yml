@@ -13,7 +13,7 @@ slurm_resources:
   cpus-per-task: 2
   mem: 64GB
   gpus: 0
-  time: 0-00:45
+  time: 0-01:00
   array: 0-26
 
 cmd_line_calls:
