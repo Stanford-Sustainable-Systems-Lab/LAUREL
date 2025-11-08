@@ -1,7 +1,7 @@
-megaPLuG.pipelines.evaluate\_impacts package
+megaplug.pipelines.evaluate\_impacts package
 ============================================
 
-.. automodule:: megaPLuG.pipelines.evaluate_impacts
+.. automodule:: megaplug.pipelines.evaluate_impacts
    :members:
    :undoc-members:
    :show-inheritance:
@@ -9,18 +9,18 @@ megaPLuG.pipelines.evaluate\_impacts package
 Submodules
 ----------
 
-megaPLuG.pipelines.evaluate\_impacts.nodes module
+megaplug.pipelines.evaluate\_impacts.nodes module
 -------------------------------------------------
 
-.. automodule:: megaPLuG.pipelines.evaluate_impacts.nodes
+.. automodule:: megaplug.pipelines.evaluate_impacts.nodes
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.pipelines.evaluate\_impacts.pipeline module
+megaplug.pipelines.evaluate\_impacts.pipeline module
 ----------------------------------------------------
 
-.. automodule:: megaPLuG.pipelines.evaluate_impacts.pipeline
+.. automodule:: megaplug.pipelines.evaluate_impacts.pipeline
    :members:
    :undoc-members:
    :show-inheritance:

@@ -1,7 +1,7 @@
-megaPLuG.pipelines package
+megaplug.pipelines package
 ==========================
 
-.. automodule:: megaPLuG.pipelines
+.. automodule:: megaplug.pipelines
    :members:
    :undoc-members:
    :show-inheritance:
@@ -12,9 +12,9 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
-   megaPLuG.pipelines.build_runners
-   megaPLuG.pipelines.describe_locations
-   megaPLuG.pipelines.describe_vehicles
-   megaPLuG.pipelines.electrify_trips
-   megaPLuG.pipelines.evaluate_impacts
-   megaPLuG.pipelines.preprocess
+   megaplug.pipelines.build_runners
+   megaplug.pipelines.describe_locations
+   megaplug.pipelines.describe_vehicles
+   megaplug.pipelines.electrify_trips
+   megaplug.pipelines.evaluate_impacts
+   megaplug.pipelines.preprocess

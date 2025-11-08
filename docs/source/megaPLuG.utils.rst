@@ -1,7 +1,7 @@
-megaPLuG.utils package
+megaplug.utils package
 ======================
 
-.. automodule:: megaPLuG.utils
+.. automodule:: megaplug.utils
    :members:
    :undoc-members:
    :show-inheritance:
@@ -9,74 +9,74 @@ megaPLuG.utils package
 Submodules
 ----------
 
-megaPLuG.utils.align module
+megaplug.utils.align module
 ---------------------------
 
-.. automodule:: megaPLuG.utils.align
+.. automodule:: megaplug.utils.align
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.utils.data module
+megaplug.utils.data module
 --------------------------
 
-.. automodule:: megaPLuG.utils.data
+.. automodule:: megaplug.utils.data
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.utils.events module
+megaplug.utils.events module
 ----------------------------
 
-.. automodule:: megaPLuG.utils.events
+.. automodule:: megaplug.utils.events
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.utils.geo module
+megaplug.utils.geo module
 -------------------------
 
-.. automodule:: megaPLuG.utils.geo
+.. automodule:: megaplug.utils.geo
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.utils.h3 module
+megaplug.utils.h3 module
 ------------------------
 
-.. automodule:: megaPLuG.utils.h3
+.. automodule:: megaplug.utils.h3
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.utils.infra module
+megaplug.utils.infra module
 ---------------------------
 
-.. automodule:: megaPLuG.utils.infra
+.. automodule:: megaplug.utils.infra
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.utils.params module
+megaplug.utils.params module
 ----------------------------
 
-.. automodule:: megaPLuG.utils.params
+.. automodule:: megaplug.utils.params
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.utils.plotting module
+megaplug.utils.plotting module
 ------------------------------
 
-.. automodule:: megaPLuG.utils.plotting
+.. automodule:: megaplug.utils.plotting
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.utils.time module
+megaplug.utils.time module
 --------------------------
 
-.. automodule:: megaPLuG.utils.time
+.. automodule:: megaplug.utils.time
    :members:
    :undoc-members:
    :show-inheritance:

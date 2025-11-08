@@ -1,7 +1,7 @@
-megaPLuG.pipelines.describe\_locations package
+megaplug.pipelines.describe\_locations package
 ==============================================
 
-.. automodule:: megaPLuG.pipelines.describe_locations
+.. automodule:: megaplug.pipelines.describe_locations
    :members:
    :undoc-members:
    :show-inheritance:
@@ -9,18 +9,18 @@ megaPLuG.pipelines.describe\_locations package
 Submodules
 ----------
 
-megaPLuG.pipelines.describe\_locations.nodes module
+megaplug.pipelines.describe\_locations.nodes module
 ---------------------------------------------------
 
-.. automodule:: megaPLuG.pipelines.describe_locations.nodes
+.. automodule:: megaplug.pipelines.describe_locations.nodes
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.pipelines.describe\_locations.pipeline module
+megaplug.pipelines.describe\_locations.pipeline module
 ------------------------------------------------------
 
-.. automodule:: megaPLuG.pipelines.describe_locations.pipeline
+.. automodule:: megaplug.pipelines.describe_locations.pipeline
    :members:
    :undoc-members:
    :show-inheritance:

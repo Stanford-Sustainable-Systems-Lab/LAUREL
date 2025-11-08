@@ -38,7 +38,7 @@ readme = "README.md"
 requires-python = ">= 3.12"
 
 [project.scripts]
-megaPLuG = "megaPLuG.__main__:main"
+megaplug = "megaplug.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -71,7 +71,7 @@ allow-direct-references = true
 packages = ["src/megaplug"]
 
 [tool.kedro]
-package_name = "megaPLuG"
+package_name = "megaplug"
 project_name = "megaPLuG"
 kedro_init_version = "1.0.0"
 tools = "['Linting', 'Documentation', 'Data Structure', 'Kedro Viz']"
@@ -89,7 +89,7 @@ ignore = ["E501", "PLR0913"]  # Don't report line-too-long
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["PLR2004"]
-"src/megaPLuG/settings.py" = ["I001", "F401", "E402"]
+"src/megaplug/settings.py" = ["I001", "F401", "E402"]
 
 [tool.pytest.ini_options]
 markers = [
