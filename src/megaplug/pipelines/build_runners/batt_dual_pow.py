@@ -58,8 +58,8 @@ class BatteryDualPowerScenarioReader(ScenarioReader):
         meta = self.get_metadata_values(path=path)
         batt = int(re.search(r"(?<=batt_)(\d+)", meta["batt_kwh"]).group())
         dkw = int(re.search(r"(?<=depot_)(\d+)", meta["depot_kw"]).group())
-        dkw = int(re.search(r"(?<=tstop_)(\d+)", meta["tstop_kw"]).group())
-        return (batt, dkw, mand)
+        tkw = int(re.search(r"(?<=tstop_)(\d+)", meta["tstop_kw"]).group())
+        return (batt, dkw, tkw)
 
     def name_scenario(self: Self, path: Path) -> str:
         meta = self.get_metadata_values(path=path)
