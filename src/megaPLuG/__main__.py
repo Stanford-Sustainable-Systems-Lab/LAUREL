@@ -1,5 +1,5 @@
 """EPA Phase III file for ensuring the package is executable
-as `epa-phase-iii` and `python -m megaPLuG`
+as `epa-phase-iii` and `python -m megaplug`
 """
 
 import importlib

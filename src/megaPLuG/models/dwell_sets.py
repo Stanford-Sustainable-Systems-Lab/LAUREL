@@ -12,7 +12,7 @@ import pandas as pd
 from numba import njit
 from tqdm import tqdm
 
-from megaPLuG.utils.h3 import add_geometries
+from megaplug.utils.h3 import add_geometries
 
 logger = logging.getLogger(__name__)
 

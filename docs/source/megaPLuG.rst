@@ -1,7 +1,7 @@
-megaPLuG package
+megaplug package
 ================
 
-.. automodule:: megaPLuG
+.. automodule:: megaplug
    :members:
    :undoc-members:
    :show-inheritance:
@@ -12,27 +12,27 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
-   megaPLuG.datasets
-   megaPLuG.models
-   megaPLuG.pipelines
-   megaPLuG.scenarios
-   megaPLuG.utils
+   megaplug.datasets
+   megaplug.models
+   megaplug.pipelines
+   megaplug.scenarios
+   megaplug.utils
 
 Submodules
 ----------
 
-megaPLuG.pipeline\_registry module
+megaplug.pipeline\_registry module
 ----------------------------------
 
-.. automodule:: megaPLuG.pipeline_registry
+.. automodule:: megaplug.pipeline_registry
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.settings module
+megaplug.settings module
 ------------------------
 
-.. automodule:: megaPLuG.settings
+.. automodule:: megaplug.settings
    :members:
    :undoc-members:
    :show-inheritance:

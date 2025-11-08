@@ -5,7 +5,7 @@ generated using Kedro 0.18.13
 
 import inspect
 
-from megaPLuG.scenarios.build import (  # noqa: F401
+from megaplug.scenarios.build import (  # noqa: F401
     ScenarioBuilder,
     TestScenarioBuilder,
 )

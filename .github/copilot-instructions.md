@@ -1,9 +1,9 @@
-# AI Coding Agent Instructions for megaPLuG
+# AI Coding Agent Instructions for megaplug
 
 Concise, project-specific guidance so an AI agent can contribute productively within minutes.
 
 ## 1. Project Essence
-megaPLuG is a Kedro 1.x data & simulation project modeling heavy-vehicle trip electrification. Core domain object: `DwellSet` (see `src/megaPLuG/models/dwell_sets.py`) which represents sequential vehicle dwells/trips and supports masked accumulation, forward/backward propagation, and reset-aware transforms (Numba + Dask compatible). Pipelines (directory: `src/megaPLuG/pipelines/*`) orchestrate transformations configured via YAML in `conf/base/*.yml`.
+megaplug is a Kedro 1.x data & simulation project modeling heavy-vehicle trip electrification. Core domain object: `DwellSet` (see `src/megaplug/models/dwell_sets.py`) which represents sequential vehicle dwells/trips and supports masked accumulation, forward/backward propagation, and reset-aware transforms (Numba + Dask compatible). Pipelines (directory: `src/megaplug/pipelines/*`) orchestrate transformations configured via YAML in `conf/base/*.yml`.
 
 ## 2. Architecture & Data Flow
 - Entry point: `kedro run` assembles pipelines via `pipeline_registry.register_pipelines()` (auto-discovers each `pipeline.py`).
@@ -58,11 +58,11 @@ megaPLuG is a Kedro 1.x data & simulation project modeling heavy-vehicle trip el
 - Critical day logic depends on both `is_refresh` and battery capacity; altering threshold params without updating tests may mask infeasible days.
 
 ## 11. Where to Look First
-- Domain logic: `src/megaPLuG/models/dwell_sets.py`
-- Charging strategy: `src/megaPLuG/models/charging_algorithms.py`
-- Pipeline example: `src/megaPLuG/pipelines/electrify_trips/nodes.py`
+- Domain logic: `src/megaplug/models/dwell_sets.py`
+- Charging strategy: `src/megaplug/models/charging_algorithms.py`
+- Pipeline example: `src/megaplug/pipelines/electrify_trips/nodes.py`
 - Parameters: `conf/base/parameters_electrify_trips.yml`
-- Registry: `src/megaPLuG/pipeline_registry.py`
+- Registry: `src/megaplug/pipeline_registry.py`
 
 ## 12. When Unsure
 Prefer inspecting existing analogous nodes/pipelines and mirroring their signature & parameterization before inventing new patterns.

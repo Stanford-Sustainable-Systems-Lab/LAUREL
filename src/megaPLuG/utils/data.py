@@ -9,7 +9,7 @@ import pandas as pd
 from pandas.core import common as com
 from pandas.core.dtypes.common import is_dict_like
 
-from megaPLuG.models.dwell_sets import DwellSet
+from megaplug.models.dwell_sets import DwellSet
 
 logger = logging.getLogger(__name__)
 

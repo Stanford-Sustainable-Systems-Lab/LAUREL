@@ -9,11 +9,11 @@ import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 
-from megaPLuG.models.charging_algorithms import ForwardLookingChargingChoiceStrategy
-from megaPLuG.models.dwell_sets import CumAggFunc, DwellSet
-from megaPLuG.utils.data import merge_dataframes_node
-from megaPLuG.utils.mode_masks import bool_arr_to_bits
-from megaPLuG.utils.time import total_hours
+from megaplug.models.charging_algorithms import ForwardLookingChargingChoiceStrategy
+from megaplug.models.dwell_sets import CumAggFunc, DwellSet
+from megaplug.utils.data import merge_dataframes_node
+from megaplug.utils.mode_masks import bool_arr_to_bits
+from megaplug.utils.time import total_hours
 
 logger = logging.getLogger(__name__)
 

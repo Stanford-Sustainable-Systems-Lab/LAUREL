@@ -9,9 +9,9 @@ from sklearn.cluster import HDBSCAN
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
-from megaPLuG.models.dwell_sets import CumAggFunc, DwellSet
-from megaPLuG.utils.h3 import str_to_h3
-from megaPLuG.utils.time import total_hours
+from megaplug.models.dwell_sets import CumAggFunc, DwellSet
+from megaplug.utils.h3 import str_to_h3
+from megaplug.utils.time import total_hours
 
 logger = logging.getLogger(__name__)
 

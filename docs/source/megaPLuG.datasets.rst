@@ -1,7 +1,7 @@
-megaPLuG.datasets package
+megaplug.datasets package
 =========================
 
-.. automodule:: megaPLuG.datasets
+.. automodule:: megaplug.datasets
    :members:
    :undoc-members:
    :show-inheritance:
@@ -9,26 +9,26 @@ megaPLuG.datasets package
 Submodules
 ----------
 
-megaPLuG.datasets.geodatabase module
+megaplug.datasets.geodatabase module
 ------------------------------------
 
-.. automodule:: megaPLuG.datasets.geodatabase
+.. automodule:: megaplug.datasets.geodatabase
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.datasets.geopackage module
+megaplug.datasets.geopackage module
 -----------------------------------
 
-.. automodule:: megaPLuG.datasets.geopackage
+.. automodule:: megaplug.datasets.geopackage
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.datasets.shapefile module
+megaplug.datasets.shapefile module
 ----------------------------------
 
-.. automodule:: megaPLuG.datasets.shapefile
+.. automodule:: megaplug.datasets.shapefile
    :members:
    :undoc-members:
    :show-inheritance:

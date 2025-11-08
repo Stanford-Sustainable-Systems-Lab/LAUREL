@@ -13,16 +13,16 @@ import pandas as pd
 from dask.diagnostics.progress import ProgressBar
 from routingpy import Graphhopper
 
-from megaPLuG.models.routing.router import (
+from megaplug.models.routing.router import (
     DIST_COL,
     ROUTE_COL,
     TIME_COL,
     get_routes,
 )
-from megaPLuG.models.routing.server import GraphhopperContainerRouter
-from megaPLuG.utils.geo import METERS_PER_MILE
-from megaPLuG.utils.h3 import add_geometries, cells_to_points
-from megaPLuG.utils.time import SECS_PER_HOUR
+from megaplug.models.routing.server import GraphhopperContainerRouter
+from megaplug.utils.geo import METERS_PER_MILE
+from megaplug.utils.h3 import add_geometries, cells_to_points
+from megaplug.utils.time import SECS_PER_HOUR
 
 logger = logging.getLogger(__name__)
 

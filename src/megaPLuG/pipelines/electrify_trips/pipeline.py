@@ -5,11 +5,11 @@ generated using Kedro 0.19.1
 
 from kedro.pipeline import Node, Pipeline
 
-from megaPLuG.models.dwell_sets import load_dwell_set, save_dwell_set
-from megaPLuG.scenarios.io import write_scenario_partition
-from megaPLuG.utils.data import categorize_columns, filter_by_vals_in_cols
-from megaPLuG.utils.distributed import start_dask_node
-from megaPLuG.utils.params import set_entity_params
+from megaplug.models.dwell_sets import load_dwell_set, save_dwell_set
+from megaplug.scenarios.io import write_scenario_partition
+from megaplug.utils.data import categorize_columns, filter_by_vals_in_cols
+from megaplug.utils.distributed import start_dask_node
+from megaplug.utils.params import set_entity_params
 
 from .nodes import (
     assign_modes,

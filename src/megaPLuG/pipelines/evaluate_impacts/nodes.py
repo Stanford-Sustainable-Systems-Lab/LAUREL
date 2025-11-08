@@ -13,22 +13,22 @@ import pandas as pd
 from dask.distributed import Client, as_completed
 from tqdm.auto import tqdm
 
-from megaPLuG.models.dwell_sets import DwellSet
-from megaPLuG.models.group_times import AdaptiveTimeGrouper
-from megaPLuG.models.manage_charging import _MANAGER_MAP, ProfileType
-from megaPLuG.models.probability_localization import (
+from megaplug.models.dwell_sets import DwellSet
+from megaplug.models.group_times import AdaptiveTimeGrouper
+from megaplug.models.manage_charging import _MANAGER_MAP, ProfileType
+from megaplug.models.probability_localization import (
     ElectProbLocalizer,
     ElectProbLocalizerConfig,
 )
-from megaPLuG.models.sampling import (
+from megaplug.models.sampling import (
     build_entity_mask_array,
     normalize_sparse,
     sample_profiles,
 )
-from megaPLuG.models.summarize import IntervalBeginSpreader, NonzeroGroupedSummarizer
-from megaPLuG.utils.data import filter_by_vals_in_cols
-from megaPLuG.utils.h3 import cells_to_region_polygons
-from megaPLuG.utils.time import (
+from megaplug.models.summarize import IntervalBeginSpreader, NonzeroGroupedSummarizer
+from megaplug.utils.data import filter_by_vals_in_cols
+from megaplug.utils.h3 import cells_to_region_polygons
+from megaplug.utils.time import (
     calc_local_time,
     calc_time_zones_from_hexes,
     get_total_time_units_filtered,

@@ -8,7 +8,7 @@ import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 
-from megaPLuG.models.dwell_sets import DwellSet
+from megaplug.models.dwell_sets import DwellSet
 
 logger = logging.getLogger(__name__)
 

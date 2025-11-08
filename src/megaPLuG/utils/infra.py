@@ -3,7 +3,7 @@ import logging
 import geopandas as gpd
 import pandas as pd
 
-from megaPLuG.utils.h3 import cells_to_points
+from megaplug.utils.h3 import cells_to_points
 
 logger = logging.getLogger(__name__)
 

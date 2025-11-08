@@ -25,7 +25,7 @@ class DirectoryPartitionedDataset(PartitionedDataset):
     ```yaml
     # With Dask Parquet
     my_dask_partitioned_data:
-      type: megaPLuG.datasets.directory_partitioned.DirectoryPartitionedDataset
+      type: megaplug.datasets.directory_partitioned.DirectoryPartitionedDataset
       path: data/07_model_output/my_dask_data
       dataset:
         type: dask.ParquetDataset
@@ -37,10 +37,10 @@ class DirectoryPartitionedDataset(PartitionedDataset):
 
     # With GeoPandas Parquet
     my_geo_partitioned_data:
-      type: megaPLuG.datasets.directory_partitioned.DirectoryPartitionedDataset
+      type: megaplug.datasets.directory_partitioned.DirectoryPartitionedDataset
       path: data/07_model_output/my_geo_data
       dataset:
-        type: megaPLuG.datasets.geoparquet.GeoParquetDataset
+        type: megaplug.datasets.geoparquet.GeoParquetDataset
         save_args:
           write_index: False
         load_args:

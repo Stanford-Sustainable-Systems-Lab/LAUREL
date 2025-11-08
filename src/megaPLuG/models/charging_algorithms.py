@@ -7,9 +7,9 @@ import pandas as pd
 from numba import jit
 from tqdm import tqdm
 
-from megaPLuG.models.dwell_sets import DwellSet
-from megaPLuG.utils.data import to_arrays
-from megaPLuG.utils.mode_masks import bits_to_bool_vec
+from megaplug.models.dwell_sets import DwellSet
+from megaplug.utils.data import to_arrays
+from megaplug.utils.mode_masks import bits_to_bool_vec
 
 
 class AbstractChargingChoiceStrategy(ABC):

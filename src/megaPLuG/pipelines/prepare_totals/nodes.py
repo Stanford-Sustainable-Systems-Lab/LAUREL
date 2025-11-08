@@ -6,7 +6,7 @@ generated using Kedro 0.19.11
 import pandas as pd
 from sklearn.preprocessing import OneHotEncoder
 
-from megaPLuG.utils.params import build_df_from_dict
+from megaplug.utils.params import build_df_from_dict
 
 
 def prepare_for_merging(vius: pd.DataFrame, params: dict) -> pd.DataFrame:

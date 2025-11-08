@@ -5,7 +5,7 @@ generated using Kedro 0.19.3
 
 from kedro.pipeline import Node, Pipeline
 
-from megaPLuG.models.dwell_sets import load_dwell_set
+from megaplug.models.dwell_sets import load_dwell_set
 
 from .nodes import (
     classify_vehicles,

@@ -5,8 +5,8 @@ from typing import Self
 
 import openturns as ot
 
-from megaPLuG.scenarios.build import ScenarioBuilder
-from megaPLuG.scenarios.read import ScenarioReader
+from megaplug.scenarios.build import ScenarioBuilder
+from megaplug.scenarios.read import ScenarioReader
 
 
 class SenseScenarioBuilder(ScenarioBuilder):

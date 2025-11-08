@@ -5,8 +5,8 @@ generated using Kedro 0.19.11
 
 from kedro.pipeline import Node, Pipeline
 
-from megaPLuG.utils.data import filter_by_vals_in_cols
-from megaPLuG.utils.params import set_entity_params
+from megaplug.utils.data import filter_by_vals_in_cols
+from megaplug.utils.params import set_entity_params
 
 from .nodes import (
     aggregate_adoption_forecast_totals,

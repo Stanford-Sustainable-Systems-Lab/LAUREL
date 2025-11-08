@@ -1,7 +1,7 @@
-megaPLuG.pipelines.describe\_vehicles package
+megaplug.pipelines.describe\_vehicles package
 =============================================
 
-.. automodule:: megaPLuG.pipelines.describe_vehicles
+.. automodule:: megaplug.pipelines.describe_vehicles
    :members:
    :undoc-members:
    :show-inheritance:
@@ -9,18 +9,18 @@ megaPLuG.pipelines.describe\_vehicles package
 Submodules
 ----------
 
-megaPLuG.pipelines.describe\_vehicles.nodes module
+megaplug.pipelines.describe\_vehicles.nodes module
 --------------------------------------------------
 
-.. automodule:: megaPLuG.pipelines.describe_vehicles.nodes
+.. automodule:: megaplug.pipelines.describe_vehicles.nodes
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.pipelines.describe\_vehicles.pipeline module
+megaplug.pipelines.describe\_vehicles.pipeline module
 -----------------------------------------------------
 
-.. automodule:: megaPLuG.pipelines.describe_vehicles.pipeline
+.. automodule:: megaplug.pipelines.describe_vehicles.pipeline
    :members:
    :undoc-members:
    :show-inheritance:

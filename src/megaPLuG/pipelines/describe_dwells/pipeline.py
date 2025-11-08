@@ -1,6 +1,6 @@
 from kedro.pipeline import Node, Pipeline  # noqa
 
-from megaPLuG.models.dwell_sets import save_dwell_set
+from megaplug.models.dwell_sets import save_dwell_set
 
 from .nodes import (
     coalesce_interrupted_dwells,
@@ -11,7 +11,7 @@ from .nodes import (
     map_location_groups,
 )
 
-from megaPLuG.utils.distributed import start_dask_node
+from megaplug.utils.distributed import start_dask_node
 
 
 def create_pipeline(**kwargs) -> Pipeline:

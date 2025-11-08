@@ -3,8 +3,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Self
 
-from megaPLuG.scenarios.build import ScenarioBuilder
-from megaPLuG.scenarios.read import ScenarioReader
+from megaplug.scenarios.build import ScenarioBuilder
+from megaplug.scenarios.read import ScenarioReader
 
 
 class ScaleTestScenarioBuilder(ScenarioBuilder):

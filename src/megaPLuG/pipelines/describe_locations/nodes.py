@@ -15,16 +15,16 @@ from dask.diagnostics.progress import ProgressBar
 from osmium.filter import KeyFilter, TagFilter
 from sklearn.cluster import KMeans
 
-from megaPLuG.utils.h3 import (
+from megaplug.utils.h3 import (
     H3_CRS,
     H3_DEFAULT_RESOLUTION,
     coords_to_cells,
     coords_to_cells_wrapper,
     region_polygons_to_cells,
 )
-from megaPLuG.utils.hex_neighbors import get_neighbor_embeddings
-from megaPLuG.utils.naics import get_naics_leaf_class
-from megaPLuG.utils.open_street_map import RegexTagFilter, get_gdf_from_filtered_osm
+from megaplug.utils.hex_neighbors import get_neighbor_embeddings
+from megaplug.utils.naics import get_naics_leaf_class
+from megaplug.utils.open_street_map import RegexTagFilter, get_gdf_from_filtered_osm
 
 logger = logging.getLogger(__name__)
 

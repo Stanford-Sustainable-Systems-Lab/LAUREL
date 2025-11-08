@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from megaPLuG.models.group_times import AdaptiveTimeGrouper
+from megaplug.models.group_times import AdaptiveTimeGrouper
 
 MEDIAN = 0.5
 

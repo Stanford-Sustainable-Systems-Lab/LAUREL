@@ -6,7 +6,7 @@ import pandas as pd
 from numba import jit
 from tqdm import tqdm
 
-from megaPLuG.utils.data import IndexIntegerizer, get_basic_dtype_ser
+from megaplug.utils.data import IndexIntegerizer, get_basic_dtype_ser
 
 
 class IntervalBeginSpreader:

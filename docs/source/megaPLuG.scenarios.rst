@@ -1,7 +1,7 @@
-megaPLuG.scenarios package
+megaplug.scenarios package
 ==========================
 
-.. automodule:: megaPLuG.scenarios
+.. automodule:: megaplug.scenarios
    :members:
    :undoc-members:
    :show-inheritance:
@@ -9,42 +9,42 @@ megaPLuG.scenarios package
 Submodules
 ----------
 
-megaPLuG.scenarios.build module
+megaplug.scenarios.build module
 -------------------------------
 
-.. automodule:: megaPLuG.scenarios.build
+.. automodule:: megaplug.scenarios.build
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.scenarios.cmd module
+megaplug.scenarios.cmd module
 -----------------------------
 
-.. automodule:: megaPLuG.scenarios.cmd
+.. automodule:: megaplug.scenarios.cmd
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.scenarios.io module
+megaplug.scenarios.io module
 ----------------------------
 
-.. automodule:: megaPLuG.scenarios.io
+.. automodule:: megaplug.scenarios.io
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.scenarios.nodes module
+megaplug.scenarios.nodes module
 -------------------------------
 
-.. automodule:: megaPLuG.scenarios.nodes
+.. automodule:: megaplug.scenarios.nodes
    :members:
    :undoc-members:
    :show-inheritance:
 
-megaPLuG.scenarios.read module
+megaplug.scenarios.read module
 ------------------------------
 
-.. automodule:: megaPLuG.scenarios.read
+.. automodule:: megaplug.scenarios.read
    :members:
    :undoc-members:
    :show-inheritance:

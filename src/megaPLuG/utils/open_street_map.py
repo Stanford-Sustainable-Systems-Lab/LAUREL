@@ -4,7 +4,7 @@ from pathlib import Path
 import geopandas as gpd
 import osmium
 
-from megaPLuG.utils.h3 import H3_CRS
+from megaplug.utils.h3 import H3_CRS
 
 
 class RegexTagFilter:

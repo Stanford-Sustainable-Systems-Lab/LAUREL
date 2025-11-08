@@ -2,7 +2,7 @@ import logging
 from abc import ABC
 from typing import Self
 
-from megaPLuG.models.routing.containers import (
+from megaplug.models.routing.containers import (
     AbstractContainerRunner,
     ApptainerContainerRunner,
     DockerContainerRunner,

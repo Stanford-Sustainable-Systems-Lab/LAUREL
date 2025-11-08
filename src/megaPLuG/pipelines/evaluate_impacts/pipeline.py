@@ -5,20 +5,20 @@ generated using Kedro 0.19.1
 
 from kedro.pipeline import Node, Pipeline
 
-from megaPLuG.models.dwell_sets import load_dwell_set
-from megaPLuG.pipelines.electrify_trips.nodes import (
+from megaplug.models.dwell_sets import load_dwell_set
+from megaplug.pipelines.electrify_trips.nodes import (
     merge_dataframes_node,
     merge_dwellset_node,
 )
-from megaPLuG.scenarios.io import (
+from megaplug.scenarios.io import (
     read_scenario_partition,
     write_scenario_partition,
 )
-from megaPLuG.utils.data import (
+from megaplug.utils.data import (
     categorize_columns,
     get_merge_params,
 )
-from megaPLuG.utils.distributed import load_in_memory_node, start_dask_node
+from megaplug.utils.distributed import load_in_memory_node, start_dask_node
 
 from .nodes import (
     add_dwell_id,

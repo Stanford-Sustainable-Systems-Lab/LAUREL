@@ -3,7 +3,7 @@ import h3.api.numpy_int as h3
 import pandas as pd
 from shapely import LineString
 
-from megaPLuG.utils.h3 import cells_to_polygons
+from megaplug.utils.h3 import cells_to_polygons
 
 
 def map_dwells(

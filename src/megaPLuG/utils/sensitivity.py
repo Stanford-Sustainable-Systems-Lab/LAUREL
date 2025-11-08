@@ -5,7 +5,7 @@ import pandas as pd
 import seaborn as sns
 from openturns import viewer
 
-from megaPLuG.scenarios.build import ScenarioBuilder
+from megaplug.scenarios.build import ScenarioBuilder
 
 
 class SensitivityAnalysis:

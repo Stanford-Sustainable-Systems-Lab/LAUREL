@@ -8,8 +8,8 @@ import scipy as sp
 from numba import jit
 from numpy.typing import NDArray
 
-from megaPLuG.models.summarize import IntervalBeginSpreader
-from megaPLuG.utils.time import total_time_units
+from megaplug.models.summarize import IntervalBeginSpreader
+from megaplug.utils.time import total_time_units
 
 logger = logging.getLogger(__name__)
 

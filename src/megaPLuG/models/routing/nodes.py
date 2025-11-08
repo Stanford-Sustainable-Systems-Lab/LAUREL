@@ -1,5 +1,5 @@
-from megaPLuG.models.routing.server import GraphhopperContainerRouter
-from megaPLuG.utils.params import import_from_config
+from megaplug.models.routing.server import GraphhopperContainerRouter
+from megaplug.utils.params import import_from_config
 
 
 def start_routing_server_node(params: dict) -> GraphhopperContainerRouter:

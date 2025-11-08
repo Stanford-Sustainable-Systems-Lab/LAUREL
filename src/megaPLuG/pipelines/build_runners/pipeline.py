@@ -5,7 +5,7 @@ generated using Kedro 0.18.13
 
 from kedro.pipeline import Node, Pipeline
 
-from megaPLuG.scenarios.cmd import generate_bash_script
+from megaplug.scenarios.cmd import generate_bash_script
 
 from .nodes import generate_scenario_configs
 

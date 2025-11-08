@@ -3,7 +3,7 @@ import importlib
 import numpy as np
 import pandas as pd
 
-from megaPLuG.models.dwell_sets import DwellSet
+from megaplug.models.dwell_sets import DwellSet
 
 
 # ruff: noqa: PLR0912

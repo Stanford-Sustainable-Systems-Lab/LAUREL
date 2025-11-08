@@ -5,13 +5,13 @@ generated using Kedro 0.19.3
 
 from kedro.pipeline import Node, Pipeline
 
-from megaPLuG.utils.data import (
+from megaplug.utils.data import (
     categorize_columns,
     filter_by_vals_in_cols,
     select_columns,
 )
-from megaPLuG.utils.distributed import load_in_memory_node
-from megaPLuG.utils.time import get_timezones
+from megaplug.utils.distributed import load_in_memory_node
+from megaplug.utils.time import get_timezones
 
 from .nodes import (
     apply_groups,

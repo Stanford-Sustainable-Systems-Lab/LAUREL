@@ -1,7 +1,7 @@
-megaPLuG
+megaplug
 ========
 
 .. toctree::
    :maxdepth: 4
 
-   megaPLuG
+   megaplug

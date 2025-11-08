@@ -5,12 +5,12 @@ generated using Kedro 0.19.3
 
 from kedro.pipeline import Node, Pipeline
 
-from megaPLuG.models.routing.nodes import (
+from megaplug.models.routing.nodes import (
     start_routing_server_node,
     stop_routing_server_node,
 )
-from megaPLuG.utils.data import filter_by_vals_in_cols
-from megaPLuG.utils.distributed import start_dask_node, stop_dask_node
+from megaplug.utils.data import filter_by_vals_in_cols
+from megaplug.utils.distributed import start_dask_node, stop_dask_node
 
 from .nodes import (
     concat_optional_stops,

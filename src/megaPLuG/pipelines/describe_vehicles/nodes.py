@@ -9,14 +9,14 @@ import dask.dataframe as dd
 import geopandas as gpd
 import pandas as pd
 
-from megaPLuG.models.dwell_sets import DwellSet
-from megaPLuG.utils.geo import (
+from megaplug.models.dwell_sets import DwellSet
+from megaplug.utils.geo import (
     METERS_PER_MILE,
     find_time_weighted_centers,
 )
-from megaPLuG.utils.h3 import add_geometries
-from megaPLuG.utils.params import build_df_from_dict
-from megaPLuG.utils.time import total_hours
+from megaplug.utils.h3 import add_geometries
+from megaplug.utils.params import build_df_from_dict
+from megaplug.utils.time import total_hours
 
 logger = logging.getLogger(__name__)
 

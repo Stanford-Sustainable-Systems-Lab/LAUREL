@@ -3,7 +3,7 @@ from typing import Self
 
 import pandas as pd
 
-from megaPLuG.utils.time import calc_local_time, calc_time_attrs
+from megaplug.utils.time import calc_local_time, calc_time_attrs
 
 WEEKEND_FIRST_DAY = 5
 

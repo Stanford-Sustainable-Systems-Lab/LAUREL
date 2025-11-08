@@ -2,7 +2,7 @@ import dask.dataframe as dd
 import pandas as pd
 from dask.distributed import Client, LocalCluster
 
-from megaPLuG.models.dwell_sets import DwellSet
+from megaplug.models.dwell_sets import DwellSet
 
 
 def start_dask_node(params: dict) -> tuple[LocalCluster, Client]:
