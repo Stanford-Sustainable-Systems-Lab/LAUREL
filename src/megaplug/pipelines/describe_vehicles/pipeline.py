@@ -23,27 +23,25 @@ def create_pipeline(**kwargs) -> Pipeline:
     veh_pipe = Pipeline(
         [
             Node(
-                func=load_dwell_set,
-                inputs=["dwells", "params:load_dwell_set"],
-                outputs="dwell_obj_desc_vehs",
-                name="load_dwell_set_desc_vehs",
-            ),
-            Node(
                 func=strip_vehicle_attrs,
                 inputs=["trips_formatted", "params:strip_vehicle_attrs"],
                 outputs="vehicles_raw",
                 name="strip_vehicle_attrs",
             ),
             Node(
-                func=mark_vehicle_centers,
+                func=mark_weight_class_group,
                 inputs=[
                     "vehicles_raw",
-                    "vehicle_location_pairs_labelled",
-                    "params:mark_vehicle_centers",
-                    "params:load_dwell_set",
+                    "params:weight_class_group",
                 ],
-                outputs="vehicles_with_centers",
-                name="mark_vehicle_centers",
+                outputs="vehs_with_weight_class_group",
+                name="mark_weight_class_group",
+            ),
+            Node(  # TODO: Load from dwells_with_locations_dask, then filter out truck stops
+                func=load_dwell_set,
+                inputs=["dwells", "params:load_dwell_set"],
+                outputs="dwell_obj_desc_vehs",
+                name="load_dwell_set_desc_vehs",
             ),
             Node(
                 func=filter_dwells_for_op_segment,
@@ -52,9 +50,40 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="filter_dwells_for_op_segment",
             ),
             Node(
-                func=get_operating_segment,
+                func=get_vehicle_observation_frames,
+                inputs=[
+                    "vehs_with_weight_class_group",
+                    "dwell_obj_filtered_desc_vehs",
+                    "params:observation_frames",
+                ],
+                outputs="vehicles_with_obs",
+                name="get_vehicle_observation_frames",
+            ),
+            Node(
+                func=mark_vehicle_centers,
+                inputs=[
+                    "vehicles_with_obs",
+                    "vehicle_location_pairs_labelled",
+                    "params:mark_vehicle_centers",
+                    "params:load_dwell_set",
+                ],
+                outputs="vehicles_with_centers",
+                name="mark_vehicle_centers",
+            ),
+            Node(  # TODO: Switch this to using a merge function from hex_cluster_corresp
+                func=mark_location_regions,
                 inputs=[
                     "vehicles_with_centers",
+                    "state_boundaries",
+                    "params:mark_location_regions",
+                ],
+                outputs="vehicles_with_regions",
+                name="mark_location_regions",
+            ),
+            Node(
+                func=get_operating_segment,
+                inputs=[
+                    "vehicles_with_regions",
                     "dwell_obj_filtered_desc_vehs",
                     "params:operating_segment",
                 ],
@@ -68,37 +97,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "vehicle_location_pairs_labelled",
                     "params:classify_vehicles",
                 ],
-                outputs="vehicles_with_class",
-                name="classify_vehicles",
-            ),
-            Node(
-                func=get_vehicle_observation_frames,
-                inputs=[
-                    "vehicles_with_class",
-                    "dwell_obj_filtered_desc_vehs",
-                    "params:observation_frames",
-                ],
-                outputs="vehicles_with_obs",
-                name="get_vehicle_observation_frames",
-            ),
-            Node(
-                func=mark_weight_class_group,
-                inputs=[
-                    "vehicles_with_obs",
-                    "params:weight_class_group",
-                ],
-                outputs="vehs_with_weight_class_group",
-                name="mark_weight_class_group",
-            ),
-            Node(
-                func=mark_location_regions,
-                inputs=[
-                    "vehs_with_weight_class_group",
-                    "state_boundaries",
-                    "params:mark_location_regions",
-                ],
                 outputs="vehicles_labelled",
-                name="mark_location_regions",
+                name="classify_vehicles",
             ),
         ],
         tags="describe_vehs",
