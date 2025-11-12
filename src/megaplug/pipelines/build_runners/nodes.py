@@ -10,9 +10,9 @@ from megaplug.scenarios.build import (  # noqa: F401
     TestScenarioBuilder,
 )
 
+from .batt_dual_pow import BatteryDualPowerScenarioBuilder  # noqa: F401
 from .batt_man import BatteryManageScenarioBuilder  # noqa: F401
 from .batt_pow import BatteryPowerScenarioBuilder  # noqa: F401
-from .batt_dual_pow import BatteryDualPowerScenarioBuilder  # noqa: F401
 from .ca_eight import CalifClass8ScenarioBuilder  # noqa: F401
 from .ca_eight_adopt import CalifClass8AdoptionScenarioBuilder  # noqa: F401
 from .ranger import RangeScenarioBuilder  # noqa: F401
