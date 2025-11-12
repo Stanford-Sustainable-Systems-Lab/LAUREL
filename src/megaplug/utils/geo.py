@@ -8,7 +8,7 @@ METERS_PER_MILE = 1609.344
 
 
 def find_time_weighted_centers(
-    gdf: gpd.GeoDataFrame, grp_col: str, weight_col: str
+    gdf: gpd.GeoDataFrame, grp_col: str, weight_col: str, center_col: str = "centers"
 ) -> gpd.GeoDataFrame:
     """Find time-weighted center of a set of dwells.
 
@@ -32,6 +32,7 @@ def find_time_weighted_centers(
     centers["easting"] = centers["easting_wt"] / centers[weight_col]
     centers["northing"] = centers["northing_wt"] / centers[weight_col]
     geoms = gpd.GeoSeries.from_xy(x=centers["easting"], y=centers["northing"], crs=crs)
+    geoms.name = center_col
     centers = gpd.GeoDataFrame(index=centers.index, geometry=geoms.values)
     return centers
 
