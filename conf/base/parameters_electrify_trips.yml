@@ -141,6 +141,7 @@ assign_modes:
         - clust_5
         - clust_13
         - clust_9
+        - truck_park
       invert_selection: False
     truck_stop:
       loc_groups:
