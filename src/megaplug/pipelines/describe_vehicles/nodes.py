@@ -8,6 +8,7 @@ import logging
 import dask.dataframe as dd
 import geopandas as gpd
 import pandas as pd
+from dask.diagnostics.progress import ProgressBar
 
 from megaplug.models.dwell_sets import DwellSet
 from megaplug.utils.geo import (
@@ -39,7 +40,10 @@ def get_vehicle_observation_frames(
     vehs: pd.DataFrame, dw: DwellSet, params: dict
 ) -> pd.DataFrame:
     """Get the total time and mileage over which each vehicle is observed."""
-    dw.sort_by_veh_time()
+    if not dw.is_dask:
+        dw.sort_by_veh_time()
+    else:
+        logger.warning("Assuming that the Dask-based DwellSet is sorted.")
     veh_obs = dw.data.groupby(dw.veh).agg(
         obs_time_first=pd.NamedAgg(dw.start, "first"),
         obs_hex_first=pd.NamedAgg(dw.hex, "first"),
@@ -49,6 +53,9 @@ def get_vehicle_observation_frames(
     )
     veh_obs["obs_time_col"] = veh_obs["obs_time_last"] - veh_obs["obs_time_first"]
     veh_obs = veh_obs.rename(columns=params["column_namer"])
+    if dw.is_dask:
+        with ProgressBar():
+            veh_obs = veh_obs.compute()
     vehs = vehs.merge(veh_obs, how="left", on=dw.veh)
     return vehs
 
