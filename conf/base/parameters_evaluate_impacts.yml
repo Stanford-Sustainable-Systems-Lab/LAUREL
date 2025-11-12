@@ -22,6 +22,7 @@ summarize_vehicles:
   refresh_locations:
   - depot
   summary_cols:
+    death_rate: pct_shifts_w_deaths_addressable
     delay_frac: delay_frac
     shift_dur: shift_dur_hrs
     shift_dur_delayed: shift_dur_delayed_hrs
