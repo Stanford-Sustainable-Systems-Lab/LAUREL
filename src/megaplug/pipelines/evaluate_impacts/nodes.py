@@ -194,7 +194,7 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
 
     # Get boolean columns for which vehicles are included in load profiles
     thrs = params["thresholds"]
-    diecol = scols["death_rate"]
+    diecol = params["death_rate_col"]
     vehs["dies_too_freq"] = vehs[diecol] > thrs["pct_shifts_w_deaths_max"]
     dftcol = build_col_name(scols["delay_frac"], thresh_qtl)
     vehs["delays_too_long_rel"] = vehs[dftcol] > thrs["delay_frac_max"]
