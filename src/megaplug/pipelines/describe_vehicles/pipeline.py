@@ -37,9 +37,9 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="vehs_with_weight_class_group",
                 name="mark_weight_class_group",
             ),
-            Node(  # TODO: Load from dwells_with_locations_dask, then filter out truck stops
+            Node(
                 func=load_dwell_set,
-                inputs=["dwells", "params:load_dwell_set"],
+                inputs=["dwells_with_locations_dask", "params:load_dwell_set"],
                 outputs="dwell_obj_desc_vehs",
                 name="load_dwell_set_desc_vehs",
             ),
