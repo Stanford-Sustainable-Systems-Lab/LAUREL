@@ -469,6 +469,26 @@ vehicle_peak_load_by_substation_partition:
       layer: vehicle_peak_load_by_substation
   filename_suffix: ".gpkg"
 
+vehicle_peak_load_by_substation_points_partition:
+  type: partitions.PartitionedDataset
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/vehicle_peak_load/substation/"
+  dataset:
+    type: megaplug.datasets.geopackage.GeoPackageDataset
+    save_args:
+      index: True
+      layer: vehicle_peak_load_by_substation_points
+  filename_suffix: ".gpkg"
+
+substation_rating_overload_partition:
+  type: partitions.PartitionedDataset
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/substation_rating_overload/"
+  dataset:
+    type: megaplug.datasets.geopackage.GeoPackageDataset
+    save_args:
+      index: True
+      layer: substation_rating_overload
+  filename_suffix: ".gpkg"
+
 capacity_consumed_percent_by_substation:
   type: megaplug.datasets.geopackage.GeoPackageDataset
   filepath: data/08_reporting/capacity_consumed_percent_by_substation.gpkg
