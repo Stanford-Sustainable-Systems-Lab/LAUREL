@@ -121,6 +121,47 @@ class ScenarioReader(ABC):
 
         return coll
 
+    @staticmethod
+    def _collate_partition_df(
+        partition: Callable,
+        name: str,
+        metadata: tuple,
+        metadata_level_names: tuple[str, ...],
+        scenario_name: str,
+        columns: list[object] | None = None,
+    ) -> pd.DataFrame:
+        """Collate a dataframe partition with scenario columns."""
+        # Load the dataframe using the Kedro-provided partition loader
+        df = partition()
+
+        # Add metadata columns, if requested
+        ## Get requested metadata columns
+        if columns is not None:
+            meta_cols = set(columns).intersection(metadata_level_names)
+        else:
+            meta_cols = set(metadata_level_names)
+
+        meta_idx = [
+            idx for idx, value in enumerate(metadata_level_names) if value in meta_cols
+        ]
+        meta_cols_add = [metadata_level_names[i] for i in meta_idx]
+        meta_vals_add = [metadata[i] for i in meta_idx]
+        meta_add = zip(meta_cols_add, meta_vals_add)
+
+        ## Add requested metadata columns
+        for col, val in meta_add:
+            df[col] = val
+
+        # Add scenario column, if requested
+        if columns is None or scenario_name in columns:
+            df[scenario_name] = name
+
+        # Select chosen columns
+        if columns is not None:
+            df = df[columns]
+
+        return df
+
     def _collate_partitions_df(
         self: Self,
         partitions: dict[str, Callable],
