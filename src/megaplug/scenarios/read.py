@@ -215,10 +215,10 @@ class ScenarioReader(ABC):
         self: Self,
         data_partitions: dict[str, object],
         dirs: str | list[str],
-        config_partitions: dict[str, object] = None,
+        config_partitions: dict[str, object] | None = None,
         incomplete: bool = False,
         report_type: str = "scenario",
-    ) -> list[str | int]:
+    ) -> list[str] | list[int]:
         """List the completed partitions by forcing the builder to build its configs,
         then counting within the given directory the number of completed tasks relative
         to the number of configs.
@@ -227,17 +227,15 @@ class ScenarioReader(ABC):
         argument.
         """
         # Use the select partitions based on the builder's display name and get the set of paths
-        data_partitions = {Path(d): o for d, o in data_partitions.items()}
-        complete_parts = self.select_partitions(partitions=data_partitions, dirs=dirs)
+        data_parts = {Path(d): o for d, o in data_partitions.items()}
+        complete_parts = self.select_partitions(partitions=data_parts, dirs=dirs)
         complete_parts = set(complete_parts.keys())
         report_set = complete_parts
 
         if incomplete:
             # Use the builder to generate all of its configs and take the set of paths
-            config_partitions = {Path(d): o for d, o in config_partitions.items()}
-            target_parts = self.select_partitions(
-                partitions=config_partitions, dirs=dirs
-            )
+            config_parts = {Path(d): o for d, o in config_partitions.items()}
+            target_parts = self.select_partitions(partitions=config_parts, dirs=dirs)
             target_parts = [pth.parent for pth in target_parts.keys()]
             target_parts = set(target_parts)
 
