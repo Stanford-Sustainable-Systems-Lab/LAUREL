@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from dask.distributed import Client
+
 from .read import ScenarioReader
 
 
@@ -19,7 +21,7 @@ def write_scenario_partition(obj: object, params: dict) -> dict[str, object]:
     return {params["dir"]: obj}
 
 
-def read_scenario_partition(partitions: dict, params: dict) -> object:
+def read_scenario_partition(partitions: dict, params: dict, client: Client = None) -> object:
     """Read in a single partition for this scenario and dataset.
 
     Insert this into a kedro pipeline to enable loading in of a file from a partition

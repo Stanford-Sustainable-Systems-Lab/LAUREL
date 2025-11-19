@@ -165,7 +165,7 @@ format_estabs:
     - geometry
 
 prepare_stop_locations_public:
-  naics_code: 44719007
+  naics_code: 44719002 # An unused NAICS code in Data Axle
   col_renamer:
     name: NHS Rest S
   columns:
@@ -260,6 +260,7 @@ group_hexes:
   default_naics: 0
   special_naics:
     truck_stop: 44719007
+    truck_park: 44719002
   clusterer_kwargs:
     n_clusters: 18 # Optimized for lowest exceedance of threshold probability
     random_state: 42

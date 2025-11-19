@@ -28,6 +28,7 @@ summarize_vehicles:
     shift_dur_delayed_thresh: shift_dur_delayed_past_FMCSA
     shift_delay: shift_delay_hrs
     max_delay: max_delay_hrs
+  death_rate_col: pct_shifts_w_deaths_addressable
   drop_events_col: drop_events_all_reasons
   electrified_col: electrified
   delay_frac_thresh_quantile: 0.95

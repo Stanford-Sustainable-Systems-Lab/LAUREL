@@ -44,6 +44,19 @@ from .nodes import (
 
 
 def create_pipeline(**kwargs) -> Pipeline:
+
+    report_profiles_scaled_prep_pipe = Pipeline(
+        [
+            Node(
+                func=start_dask_node,
+                inputs="params:dask_eval",
+                outputs=["dask_cluster_eval", "dask_client_eval"],
+                name="start_dask_eval",
+            ),
+        ],
+        tags="scenario_run",
+    )
+
     read_pipe = Pipeline(
         [
             Node(
@@ -51,6 +64,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=[
                     "dwells_with_charging_partition_dask",
                     "params:results_partition",
+                    "dask_client_eval",
                 ],
                 outputs="dwells_with_charging_eval",
                 name="collate_partitions_dwells_with_charging",
@@ -333,18 +347,6 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
         ],
         tags=["scenario_run", "manage_charging"],
-    )
-
-    report_profiles_scaled_prep_pipe = Pipeline(
-        [
-            Node(
-                func=start_dask_node,
-                inputs="params:dask_eval",
-                outputs=["dask_cluster_eval", "dask_client_eval"],
-                name="start_dask_eval",
-            ),
-        ],
-        tags="scenario_run",
     )
 
     report_profiles_scaled_pipe = Pipeline(

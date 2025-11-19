@@ -1,0 +1,40 @@
+# This is a boilerplate parameters config generated for pipeline 'build_runners'
+# using Kedro 0.19.5.
+#
+# Documentation for this file format can be found in "Parameters"
+# Link: https://docs.kedro.org/en/0.19.5/configuration/parameters.html
+
+slurm_command: sbatch # Valid values are "sbatch" and "salloc"
+
+slurm_resources:
+  partition: serc
+  ntasks: 2 # I believe that this is what we need for SequentialRunner, while ParallelRunner needs n_examples + 1
+  ntasks-per-node: 2 # Keeps all of the tasks and CPUs on the same node
+  cpus-per-task: 2
+  mem: 64GB
+  gpus: 0
+  time: 0-01:00
+  array: 0-26
+
+cmd_line_calls:
+  prefix: uv run
+  kedro:
+    tags: scenario_run
+    params: partition_data_dir=$SCRATCH/megaPLuG
+
+scenario_params:
+  builder: BatteryDualPowerScenarioBuilder
+  display_name: batt_dual_pow
+  battery_capacities_kwh: # These are only used for home-base, Class 8 vehicles
+    - 500
+    - 600
+    - 1000
+  charge_speed_kw_depot:
+    - 75
+    - 150
+    - 350
+  charge_speed_kw_truck_stop:
+    - 350
+    - 700
+    - 1000
+  charge_speed_kw_enroute: 50

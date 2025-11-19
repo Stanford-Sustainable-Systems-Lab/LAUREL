@@ -1,0 +1,50 @@
+# This is a boilerplate parameters config generated for pipeline 'build_runners'
+# using Kedro 0.19.5.
+#
+# Documentation for this file format can be found in "Parameters"
+# Link: https://docs.kedro.org/en/0.19.5/configuration/parameters.html
+
+slurm_command: sbatch # Valid values are "sbatch" and "salloc"
+
+slurm_resources:
+  partition: serc
+  ntasks: 2 # I believe that this is what we need for SequentialRunner, while ParallelRunner needs n_examples + 1
+  ntasks-per-node: 2 # Keeps all of the tasks and CPUs on the same node
+  cpus-per-task: 2
+  mem: 64GB
+  gpus: 0
+  time: 0-01:00
+  array: 0-12
+
+cmd_line_calls:
+  prefix: uv run
+  kedro:
+    tags: scenario_run
+    params: partition_data_dir=$SCRATCH/megaPLuG
+
+scenario_params:
+  builder: RangeScenarioBuilder
+  display_name: ranger
+  vehicle_range_mi: # Range of values taken from Borlaug et al., 2022, with mesh set to 50-mile granularity
+    - 150
+    - 200
+    - 250
+    - 300
+    - 350
+    - 400
+    - 450
+    - 500
+    - 550
+    - 600
+    - 650
+    - 700
+    - 750
+  consump_rate_kwh_per_mi: 2.0 # From Borlaug et al., 2022
+  charge_speed_kw:
+    depot: 150 # From high end of Borlaug et al., 2022, intended to not be a binding constraint
+    truck_stop: 1000 # From Borlaug et al., 2022: A level which will enable electrification for most of the higher-range vehicles
+    enroute: 50
+  electrifiability_thresholds: # Note, that these can be re-assessed after the fact, but they set the electrifiable set for the evaluate_impacts pipeline
+    pct_shifts_w_deaths_max: 0.01 # Maximum percentage of shifts with deaths from all causes
+    delay_frac_max: 0.1 # Maximum time fraction of a single shift added by delay, the generous value from Borlaug et al., 2022
+    delay_hrs_max: 8 # Maximum accumulated delay at any point in vehicle's history
