@@ -43,7 +43,7 @@ def calc_operating_radius(points: gpd.GeoSeries) -> float:
     # Get convex hull points
     convex_hull = points.union_all().convex_hull
     if isinstance(convex_hull, Point):
-        return 0
+        return 0.0
     elif isinstance(convex_hull, LineString):
         hull_lonlat = np.array(convex_hull.coords)
         diam = calc_haversine_dist(
@@ -63,7 +63,7 @@ def calc_operating_radius(points: gpd.GeoSeries) -> float:
 def calc_max_dist_calipers(hull_lonlat: NDArray[np.floating], radius: float) -> float:
     """Calculate the maximum distance across a convex hull using rotating calipers."""
     n = hull_lonlat.shape[0]
-    max_distance = 0
+    max_distance = 0.0
     j = 1  # Start with the second point on the hull
     for i in range(n):
         # Check the distance between point i and the farthest point on the hull
@@ -71,10 +71,10 @@ def calc_max_dist_calipers(hull_lonlat: NDArray[np.floating], radius: float) -> 
             next_idx = (j + 1) % n
             cur_dist = calc_haversine_dist(
                 hull_lonlat[i], hull_lonlat[j], radius=radius
-            )
+            ).item()  # Item assumes that an NDArray is returned with one element only
             nex_dist = calc_haversine_dist(
                 hull_lonlat[i], hull_lonlat[next_idx], radius=radius
-            )
+            ).item()
             if nex_dist > cur_dist:
                 j = next_idx  # Move the "caliper"
             else:
