@@ -1,6 +1,7 @@
 import geopandas as gpd
 import numpy as np
 from numba import jit
+from numpy.typing import NDArray
 from shapely.geometry import LineString, Point
 
 EARTH_RADIUS_MILES = 3963.0
@@ -59,7 +60,7 @@ def calc_operating_radius(points: gpd.GeoSeries) -> float:
 
 
 @jit
-def calc_max_dist_calipers(hull_lonlat: np.ndarray[float], radius: float) -> float:
+def calc_max_dist_calipers(hull_lonlat: NDArray[np.floating], radius: float) -> float:
     """Calculate the maximum distance across a convex hull using rotating calipers."""
     n = hull_lonlat.shape[0]
     max_distance = 0
@@ -85,8 +86,8 @@ def calc_max_dist_calipers(hull_lonlat: np.ndarray[float], radius: float) -> flo
 
 @jit
 def calc_haversine_dist(
-    pt1: np.ndarray[float], pt2: np.ndarray[float], radius: float
-) -> float:
+    pt1: NDArray[np.floating], pt2: NDArray[np.floating], radius: float
+) -> NDArray[np.floating]:
     """Calculate the Haversine distance between two points on Earth's surface.
 
     Assumes (longitude, latitude) points. Each row is a point.
