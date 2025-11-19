@@ -32,9 +32,14 @@ def find_time_weighted_centers(
     gdf = gdf.drop(columns=["easting_wt", "northing_wt"])
     centers["easting"] = centers["easting_wt"] / centers[weight_col]
     centers["northing"] = centers["northing_wt"] / centers[weight_col]
-    geoms = gpd.GeoSeries.from_xy(x=centers["easting"], y=centers["northing"], crs=crs)
-    geoms.name = center_col
-    centers = gpd.GeoDataFrame(index=centers.index, geometry=geoms.values)
+    geoms = gpd.GeoSeries.from_xy(
+        x=centers["easting"],
+        y=centers["northing"],
+        crs=crs,
+        name=center_col,
+        index=centers.index,
+    )
+    centers = gpd.GeoDataFrame(geoms, geometry=center_col)
     return centers
 
 
