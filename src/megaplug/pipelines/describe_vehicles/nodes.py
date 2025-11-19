@@ -7,15 +7,17 @@ import logging
 
 import dask.dataframe as dd
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 from dask.diagnostics.progress import ProgressBar
 
 from megaplug.models.dwell_sets import DwellSet
 from megaplug.utils.geo import (
     METERS_PER_MILE,
+    calc_operating_radius,
     find_time_weighted_centers,
 )
-from megaplug.utils.h3 import add_geometries
+from megaplug.utils.h3 import H3_CRS, add_geometries
 from megaplug.utils.params import build_df_from_dict
 from megaplug.utils.time import total_hours
 
@@ -145,59 +147,108 @@ def spatialize_dwells(dw: DwellSet) -> DwellSet:
 
 
 def get_operating_segment(
-    vehs: pd.DataFrame, dw: DwellSet, params: dict
-) -> pd.DataFrame:
+    vehs: gpd.GeoDataFrame, dw: DwellSet, params: dict
+) -> gpd.GeoDataFrame:
     """Calculate the operating segment of each vehicle based primary operating distance.
     If a vehicle does not have a home base, then use the time-weighted center as the
     reference point instead.
     """
-    if not isinstance(dw.data, gpd.GeoDataFrame):
-        logger.info("Converting DwellSet data to GeoDataFrame.")
-        dw.to_geodataframe()
+    proj_crs = params["proj_crs"]
+    dw.data = dw.data.to_crs(proj_crs)
 
-    dw.data = dw.data.to_crs(params["proj_crs"])
-    logger.info(
-        "Get the time-weighted center location for vehicles without identifiable depots."
-    )
-    veh_no_home = vehs[params["home_base_col"]] == params["nan_int"]
-    vehs_wo_homes = vehs.loc[veh_no_home].index
-    dw_wo_homes = dw.copy_without_data()
-    dw_wo_homes.data = dw.data.loc[vehs_wo_homes]
-
-    dw_wo_homes.data["dwell_hrs"] = total_hours(
-        dw_wo_homes.data[dw.end] - dw_wo_homes.data[dw.start]
-    )
-    centers = find_time_weighted_centers(
-        gdf=dw_wo_homes.data,
-        grp_col=dw_wo_homes.veh,
-        weight_col="dwell_hrs",
-    )
-
-    bases = vehs.loc[~veh_no_home, :]
-    bases = add_geometries(data=bases, hex_col=params["home_base_col"])
-    bases = bases.to_crs(params["proj_crs"])
-    all_centers = pd.concat([centers.geometry, bases.geometry], axis=0)
-    all_centers.name = "center"
-
-    logger.info("Calculating distances from center location.")
-    dw.data = dw.data.merge(all_centers, how="left", on=dw.veh)
-    dw.data["rad_miles"] = (
-        dw.data.geometry.distance(dw.data["center"]) / METERS_PER_MILE
-    )
-    max_rad = dw.data["rad_miles"].max()
+    ccol = params["center_col"]
+    centers: gpd.GeoDataFrame = vehs.loc[:, [ccol]]
+    centers = centers.to_crs(proj_crs)
+    dw.data = dw.data.merge(centers, how="left", on=dw.veh)
+    dw.data["rad_miles"] = dw.data.geometry.distance(dw.data[ccol]) / METERS_PER_MILE
+    max_rad = np.inf
     bins = params["radius_bin_low_bounds_miles"]
-    dw.data["rad_miles_bin"] = pd.cut(
-        dw.data["rad_miles"],
-        bins=list(bins.values()) + [max_rad],
-        labels=list(bins.keys()),
-        include_lowest=True,
-    )
+    labs = list(bins.keys())
+    kws = {
+        "bins": list(bins.values()) + [max_rad],
+        "labels": labs,
+        "include_lowest": True,
+    }
+
+    if dw.is_dask:
+
+        def _categorize(part_ser, **kws):
+            cat_ser = pd.cut(part_ser, **kws).astype(str)
+            return cat_ser
+
+        meta = pd.Series([], name="rad_miles_bin", dtype=str)
+        dw.data["rad_miles_bin"] = dw.data["rad_miles"].map_partitions(
+            _categorize, meta=meta, **kws
+        )
+    else:
+        dw.data["rad_miles_bin"] = pd.cut(dw.data["rad_miles"], **kws)
 
     segs = dw.data.groupby([dw.veh, "rad_miles_bin"])[dw.trip_dist].sum()
+    if dw.is_dask:
+        with ProgressBar():
+            segs = segs.compute()
+
     segs = segs.unstack(level="rad_miles_bin", fill_value=0.0)
     segs[params["segment_col"]] = segs.idxmax(axis=1)
 
     vehs = vehs.merge(segs.loc[:, params["segment_col"]], how="left", on=dw.veh)
+    return vehs
+
+
+def get_time_weighted_centers(
+    vehs: pd.DataFrame, dw: DwellSet, params: dict
+) -> gpd.GeoDataFrame:
+    """Compute the time-weighted centers of a vehicle's history."""
+    proj_crs = params["proj_crs"]
+    dw.data = dw.data.to_crs(proj_crs)
+
+    dw.data["dwell_hrs"] = total_hours(dw.data[dw.end] - dw.data[dw.start])
+
+    ccol = "centers"
+    kws = {
+        "grp_col": dw.veh,
+        "weight_col": "dwell_hrs",
+        "center_col": ccol,
+    }
+    if dw.is_dask:
+        meta_idx = pd.Index(np.array([], dtype=np.int64), name=dw.veh)
+        meta = gpd.GeoSeries([], name=ccol, crs=proj_crs, index=meta_idx)
+        meta = gpd.GeoDataFrame(meta, geometry=ccol)
+        centers = dw.data.map_partitions(find_time_weighted_centers, **kws, meta=meta)
+        with ProgressBar():
+            centers = centers.compute()
+    else:
+        centers = find_time_weighted_centers(gdf=dw.data, **kws)
+
+    centers = centers.to_crs(H3_CRS)
+    vehs[params["out_col"]] = vehs.index.map(centers.loc[:, ccol])
+    vehs = gpd.GeoDataFrame(data=vehs, geometry=params["out_col"])
+    return vehs
+
+
+def get_operating_radius(
+    vehs: pd.DataFrame, dw: DwellSet, params: dict
+) -> pd.DataFrame:
+    """Compute the operating radius of each vehicle."""
+    dw.data = dw.data.to_crs(H3_CRS)  # since calc_operating_radius uses haversine dist
+
+    def _get_op_rad(part: pd.DataFrame, grp_cols: list) -> pd.Series:
+        return part.groupby(grp_cols).geometry.agg(calc_operating_radius).astype(float)
+
+    kws = {
+        "grp_cols": [dw.veh],
+    }
+
+    if dw.is_dask:
+        meta_idx = pd.Index(np.array([], dtype=np.int64), name=dw.veh)
+        meta = pd.Series([], name="radii", index=meta_idx)
+        radii = dw.data.map_partitions(_get_op_rad, meta=meta, **kws)
+        with ProgressBar():
+            radii = radii.compute()
+    else:
+        radii = _get_op_rad(dw.data, **kws)
+
+    vehs[params["out_col"]] = vehs.index.map(radii)
     return vehs
 
 
