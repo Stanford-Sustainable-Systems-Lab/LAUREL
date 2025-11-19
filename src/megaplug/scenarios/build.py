@@ -13,7 +13,7 @@ class ScenarioBuilder(ABC):
     """
 
     scen_param_key: str = "results_partition"
-    n_tasks_generated: int = None
+    n_tasks_generated: int | None = None
 
     def __init__(self, scen_params: dict, all_params: dict) -> None:
         self.scen_params = scen_params
@@ -41,7 +41,7 @@ class ScenarioBuilder(ABC):
         pth: Path,
         params: dict,
         task_id: int,
-    ) -> dict[str:dict]:
+    ) -> dict[str, dict]:
         """Build a configuration partition for running a scenario.
 
         Args:
