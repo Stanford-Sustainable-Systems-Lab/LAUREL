@@ -1,10 +1,11 @@
 import re
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from itertools import product
+from itertools import product, repeat
 from pathlib import Path
 from typing import Self
 
+import dask.dataframe as dd
 import pandas as pd
 
 from .build import ScenarioBuilder, TestScenarioBuilder
@@ -96,24 +97,45 @@ class ScenarioReader(ABC):
         self: Self,
         partitions: dict[str, object],
         dirs: str | list[str],
+        lazy: bool = False,
     ) -> object:
         """Read data from the specific directories (dirs) within a PartitionDataset
         given by partitions.
         """
-        parts = {Path(d): o for d, o in partitions.items()}
-        parts = self.select_partitions(partitions=parts, dirs=dirs)
-        names = {pth: self.name_scenario(pth) for pth in parts.keys()}
-        metadata = {pth: self.extract_metadata(pth) for pth in parts.keys()}
+        part_dict = {Path(d): o for d, o in partitions.items()}
+        part_dict = self.select_partitions(partitions=part_dict, dirs=dirs)
+        tups = [
+            (self.name_scenario(pth), self.extract_metadata(pth), part)
+            for pth, part in part_dict.items()
+        ]
+        names, metas, parts = zip(*tups)
 
-        test_data = list(parts.values())[0]()  # Loading from the loader function
+        test_data = parts[0]()  # Loading from the loader function
         if isinstance(test_data, pd.DataFrame):
-            coll = self._collate_partitions_df(
-                partitions=parts,
-                names=names,
-                metadata=metadata,
-            )
+            if lazy:
+                coll = dd.from_map(
+                    self._collate_partition_df,
+                    parts,
+                    names,
+                    metas,
+                    metadata_level_names=self.metadata_level_names,
+                    scenario_name=self.scenario_name,
+                )
+            else:
+                coll_map = map(
+                    self._collate_partition_df,
+                    parts,
+                    names,
+                    metas,
+                    repeat(self.metadata_level_names),
+                    repeat(self.scenario_name),
+                )
+                coll = pd.concat(coll_map, axis=0)
         elif isinstance(test_data, dict):
-            coll = {names[pth]: loader() for pth, loader in parts.items()}
+            if lazy:
+                raise NotImplementedError("Lazy dictionaries not yet implemented.")
+            else:
+                coll = {nm: pt() for nm, mt, pt in tups}
         else:
             raise NotImplementedError(
                 "ScenarioReader collation for this dataset type has not been implemented."
