@@ -24,6 +24,29 @@ from megaplug.utils.time import total_hours
 logger = logging.getLogger(__name__)
 
 
+def filter_dwells_for_op_segment(dw: DwellSet) -> DwellSet:
+    """Filter down the dwells in preparation for computing the operating segment."""
+    # Filter out all optional stops, which have the same start and end time (zero duration)
+    dw.data = dw.data.loc[dw.data[dw.end] != dw.data[dw.start]]
+    return dw
+
+
+def spatialize_dwells(dw: DwellSet) -> DwellSet:
+    """Add geometries to dwells."""
+    if not isinstance(dw.data, gpd.GeoDataFrame):
+        logger.info("Converting DwellSet data to GeoDataFrame.")
+        dw.to_geodataframe()
+
+    return dw
+
+
+def partition_dwellset(dw: DwellSet, params: dict) -> DwellSet:
+    """Re-partition the trips to save to disk, in preparation for routing."""
+    if dw.is_dask:
+        dw.data = dw.data.repartition(npartitions=params["n_partitions"])
+    return dw
+
+
 def strip_vehicle_attrs(
     trips: dd.DataFrame, params: dict
 ) -> tuple[dd.DataFrame, pd.DataFrame]:
@@ -38,11 +61,18 @@ def strip_vehicle_attrs(
     return vehs
 
 
-def partition_dwellset(dw: DwellSet, params: dict) -> DwellSet:
-    """Re-partition the trips to save to disk, in preparation for routing."""
-    if dw.is_dask:
-        dw.data = dw.data.repartition(npartitions=params["n_partitions"])
-    return dw
+def mark_weight_class_group(vehs: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Mark the vehicles with VIUS weight class groups."""
+    wgt_corresp = build_df_from_dict(
+        params["values"],
+        id_cols=params["id_columns"],
+        value_col=params["value_col"],
+    )
+    orig_idx = vehs.index.names
+    vehs = vehs.reset_index()
+    vehs = vehs.merge(wgt_corresp, how="left", on=params["id_columns"])
+    vehs = vehs.set_index(orig_idx)
+    return vehs
 
 
 def get_vehicle_observation_frames(
@@ -69,81 +99,61 @@ def get_vehicle_observation_frames(
     return vehs
 
 
-def classify_vehicles(
-    vehs: pd.DataFrame, veh_locs: pd.DataFrame, params: dict
+def get_operating_radius(
+    vehs: pd.DataFrame, dw: DwellSet, params: dict
 ) -> pd.DataFrame:
-    """Classify vehicles by their route type, home base status, etc."""
-    veh_loc_cts = veh_locs.groupby(params["veh_col"], sort=False)[
-        params["loc_col"]
-    ].value_counts()
-    veh_loc_cts = veh_loc_cts.unstack(params["loc_col"])
-    veh_loc_cts["has_home_base"] = veh_loc_cts[params["base_location_type"]] > 0
-    vehs = vehs.merge(
-        veh_loc_cts.loc[:, ["has_home_base"]], how="left", on=params["veh_col"]
-    )
-    vehs.loc[vehs["has_home_base"].isna(), "has_home_base"] = False
-    vehs["has_home_base"] = vehs["has_home_base"].astype(bool)
+    """Compute the operating radius of each vehicle."""
+    dw.data = dw.data.to_crs(H3_CRS)  # since calc_operating_radius uses haversine dist
+
+    def _get_op_rad(part: pd.DataFrame, grp_cols: list) -> pd.Series:
+        return part.groupby(grp_cols).geometry.agg(calc_operating_radius).astype(float)
+
+    kws = {
+        "grp_cols": [dw.veh],
+    }
+
+    if dw.is_dask:
+        meta_idx = pd.Index(np.array([], dtype=np.int64), name=dw.veh)
+        meta = pd.Series([], name="radii", index=meta_idx)
+        radii = dw.data.map_partitions(_get_op_rad, meta=meta, **kws)
+        with ProgressBar():
+            radii = radii.compute()
+    else:
+        radii = _get_op_rad(dw.data, **kws)
+
+    vehs[params["out_col"]] = vehs.index.map(radii)
     return vehs
 
 
-def mark_weight_class_group(vehs: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Mark the vehicles with VIUS weight class groups."""
-    wgt_corresp = build_df_from_dict(
-        params["values"],
-        id_cols=params["id_columns"],
-        value_col=params["value_col"],
-    )
-    orig_idx = vehs.index.names
-    vehs = vehs.reset_index()
-    vehs = vehs.merge(wgt_corresp, how="left", on=params["id_columns"])
-    vehs = vehs.set_index(orig_idx)
+def get_time_weighted_centers(
+    vehs: pd.DataFrame, dw: DwellSet, params: dict
+) -> gpd.GeoDataFrame:
+    """Compute the time-weighted centers of a vehicle's history."""
+    proj_crs = params["proj_crs"]
+    dw.data = dw.data.to_crs(proj_crs)
+
+    dw.data["dwell_hrs"] = total_hours(dw.data[dw.end] - dw.data[dw.start])
+
+    ccol = "centers"
+    kws = {
+        "grp_col": dw.veh,
+        "weight_col": "dwell_hrs",
+        "center_col": ccol,
+    }
+    if dw.is_dask:
+        meta_idx = pd.Index(np.array([], dtype=np.int64), name=dw.veh)
+        meta = gpd.GeoSeries([], name=ccol, crs=proj_crs, index=meta_idx)
+        meta = gpd.GeoDataFrame(meta, geometry=ccol)
+        centers = dw.data.map_partitions(find_time_weighted_centers, **kws, meta=meta)
+        with ProgressBar():
+            centers = centers.compute()
+    else:
+        centers = find_time_weighted_centers(gdf=dw.data, **kws)
+
+    centers = centers.to_crs(H3_CRS)
+    vehs[params["out_col"]] = vehs.index.map(centers.loc[:, ccol])
+    vehs = gpd.GeoDataFrame(data=vehs, geometry=params["out_col"])
     return vehs
-
-
-def mark_vehicle_centers(
-    vehs: pd.DataFrame, veh_locs: pd.DataFrame, params: dict, dwell_params: dict
-) -> pd.DataFrame:
-    """Mark the characteristic center coordinates for each vehicle.
-
-    If the vehicle has any depot locations, then select one of those based on priority
-    parameters and sorting.
-    """
-    veh_col = dwell_params["veh"]
-    hex_col = dwell_params["hex"]
-    loc_col = params["location_col"]
-
-    vlocs = veh_locs.reset_index()
-    par_sort = params["sort_primary_locations_to_top"]
-    vlocs = vlocs.sort_values(by=par_sort["columns"], ascending=par_sort["ascending"])
-    is_base_loc_type = vlocs[loc_col] == params["base_location_type"]
-    bases = vlocs.loc[is_base_loc_type, [veh_col, hex_col]]
-    bases = bases.drop_duplicates(subset=[veh_col], keep="first")
-    bases[hex_col] = bases[hex_col].astype(str)
-    bases = bases.rename(columns={hex_col: params["home_base_col"]})
-
-    vehs = vehs.merge(bases, how="left", on=veh_col)
-    vehs = vehs.set_index(veh_col)
-    vehs[params["home_base_col"]] = vehs[params["home_base_col"]].fillna(
-        str(params["nan_int"])
-    )  # Using zero as a NaN to preserve ints
-    vehs[params["home_base_col"]] = vehs[params["home_base_col"]].astype(int)
-    return vehs
-
-
-def filter_dwells_for_op_segment(dw: DwellSet) -> DwellSet:
-    """Filter down the dwells in preparation for computing the operating segment."""
-    # Filter out all optional stops, which have the same start and end time (zero duration)
-    dw.data = dw.data.loc[dw.data[dw.end] != dw.data[dw.start]]
-    return dw
-
-
-def spatialize_dwells(dw: DwellSet) -> DwellSet:
-    """Add geometries to dwells."""
-    if not isinstance(dw.data, gpd.GeoDataFrame):
-        logger.info("Converting DwellSet data to GeoDataFrame.")
-        dw.to_geodataframe()
-
-    return dw
 
 
 def get_operating_segment(
@@ -195,60 +205,52 @@ def get_operating_segment(
     return vehs
 
 
-def get_time_weighted_centers(
-    vehs: pd.DataFrame, dw: DwellSet, params: dict
-) -> gpd.GeoDataFrame:
-    """Compute the time-weighted centers of a vehicle's history."""
-    proj_crs = params["proj_crs"]
-    dw.data = dw.data.to_crs(proj_crs)
-
-    dw.data["dwell_hrs"] = total_hours(dw.data[dw.end] - dw.data[dw.start])
-
-    ccol = "centers"
-    kws = {
-        "grp_col": dw.veh,
-        "weight_col": "dwell_hrs",
-        "center_col": ccol,
-    }
-    if dw.is_dask:
-        meta_idx = pd.Index(np.array([], dtype=np.int64), name=dw.veh)
-        meta = gpd.GeoSeries([], name=ccol, crs=proj_crs, index=meta_idx)
-        meta = gpd.GeoDataFrame(meta, geometry=ccol)
-        centers = dw.data.map_partitions(find_time_weighted_centers, **kws, meta=meta)
-        with ProgressBar():
-            centers = centers.compute()
-    else:
-        centers = find_time_weighted_centers(gdf=dw.data, **kws)
-
-    centers = centers.to_crs(H3_CRS)
-    vehs[params["out_col"]] = vehs.index.map(centers.loc[:, ccol])
-    vehs = gpd.GeoDataFrame(data=vehs, geometry=params["out_col"])
+### As of 11/19/2025, the following functions are no longer used, but could be useful
+###     in the future.
+def classify_vehicles(
+    vehs: pd.DataFrame, veh_locs: pd.DataFrame, params: dict
+) -> pd.DataFrame:
+    """Classify vehicles by their route type, home base status, etc."""
+    veh_loc_cts = veh_locs.groupby(params["veh_col"], sort=False)[
+        params["loc_col"]
+    ].value_counts()
+    veh_loc_cts = veh_loc_cts.unstack(params["loc_col"])
+    veh_loc_cts["has_home_base"] = veh_loc_cts[params["base_location_type"]] > 0
+    vehs = vehs.merge(
+        veh_loc_cts.loc[:, ["has_home_base"]], how="left", on=params["veh_col"]
+    )
+    vehs.loc[vehs["has_home_base"].isna(), "has_home_base"] = False
+    vehs["has_home_base"] = vehs["has_home_base"].astype(bool)
     return vehs
 
 
-def get_operating_radius(
-    vehs: pd.DataFrame, dw: DwellSet, params: dict
+def mark_vehicle_centers(
+    vehs: pd.DataFrame, veh_locs: pd.DataFrame, params: dict, dwell_params: dict
 ) -> pd.DataFrame:
-    """Compute the operating radius of each vehicle."""
-    dw.data = dw.data.to_crs(H3_CRS)  # since calc_operating_radius uses haversine dist
+    """Mark the characteristic center coordinates for each vehicle.
 
-    def _get_op_rad(part: pd.DataFrame, grp_cols: list) -> pd.Series:
-        return part.groupby(grp_cols).geometry.agg(calc_operating_radius).astype(float)
+    If the vehicle has any depot locations, then select one of those based on priority
+    parameters and sorting.
+    """
+    veh_col = dwell_params["veh"]
+    hex_col = dwell_params["hex"]
+    loc_col = params["location_col"]
 
-    kws = {
-        "grp_cols": [dw.veh],
-    }
+    vlocs = veh_locs.reset_index()
+    par_sort = params["sort_primary_locations_to_top"]
+    vlocs = vlocs.sort_values(by=par_sort["columns"], ascending=par_sort["ascending"])
+    is_base_loc_type = vlocs[loc_col] == params["base_location_type"]
+    bases = vlocs.loc[is_base_loc_type, [veh_col, hex_col]]
+    bases = bases.drop_duplicates(subset=[veh_col], keep="first")
+    bases[hex_col] = bases[hex_col].astype(str)
+    bases = bases.rename(columns={hex_col: params["home_base_col"]})
 
-    if dw.is_dask:
-        meta_idx = pd.Index(np.array([], dtype=np.int64), name=dw.veh)
-        meta = pd.Series([], name="radii", index=meta_idx)
-        radii = dw.data.map_partitions(_get_op_rad, meta=meta, **kws)
-        with ProgressBar():
-            radii = radii.compute()
-    else:
-        radii = _get_op_rad(dw.data, **kws)
-
-    vehs[params["out_col"]] = vehs.index.map(radii)
+    vehs = vehs.merge(bases, how="left", on=veh_col)
+    vehs = vehs.set_index(veh_col)
+    vehs[params["home_base_col"]] = vehs[params["home_base_col"]].fillna(
+        str(params["nan_int"])
+    )  # Using zero as a NaN to preserve ints
+    vehs[params["home_base_col"]] = vehs[params["home_base_col"]].astype(int)
     return vehs
 
 
