@@ -5,7 +5,7 @@ generated using Kedro 0.19.3
 
 from kedro.pipeline import Node, Pipeline
 
-from megaplug.models.dwell_sets import load_dwell_set
+from megaplug.models.dwell_sets import load_dwell_set, save_dwell_set
 
 from .nodes import (
     classify_vehicles,
@@ -15,11 +15,49 @@ from .nodes import (
     mark_location_regions,
     mark_vehicle_centers,
     mark_weight_class_group,
+    partition_dwellset,
+    spatialize_dwells,
     strip_vehicle_attrs,
 )
 
 
 def create_pipeline(**kwargs) -> Pipeline:
+    geo_prep_pipe = Pipeline(
+        [
+            Node(
+                func=load_dwell_set,
+                inputs=["dwells_with_locations_dask", "params:load_dwell_set"],
+                outputs="dwell_obj_desc_vehs",
+                name="load_dwell_set_desc_vehs",
+            ),
+            Node(
+                func=filter_dwells_for_op_segment,
+                inputs="dwell_obj_desc_vehs",
+                outputs="dwell_obj_filtered_desc_vehs",
+                name="filter_dwells_for_op_segment",
+            ),
+            Node(
+                func=spatialize_dwells,
+                inputs="dwell_obj_filtered_desc_vehs",
+                outputs="dwell_obj_spatial",
+                name="spatialize_dwells",
+            ),
+            Node(
+                func=partition_dwellset,
+                inputs=["dwell_obj_spatial", "params:repartition_spatial_dwells"],
+                outputs="dwell_obj_spatial_repartitioned",
+                name="partition_spatial_dwells",
+            ),
+            Node(
+                func=save_dwell_set,
+                inputs="dwell_obj_spatial_repartitioned",
+                outputs="dwells_with_locations_dask_spatial",
+                name="save_dwell_set_spatial",
+            ),
+        ],
+        tags="prep_spatial_dwells",
+    )
+
     veh_pipe = Pipeline(
         [
             Node(
@@ -104,4 +142,4 @@ def create_pipeline(**kwargs) -> Pipeline:
         tags="describe_vehs",
     )
 
-    return veh_pipe
+    return geo_prep_pipe + veh_pipe

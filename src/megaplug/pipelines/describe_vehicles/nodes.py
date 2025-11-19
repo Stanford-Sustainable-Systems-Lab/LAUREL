@@ -36,6 +36,13 @@ def strip_vehicle_attrs(
     return vehs
 
 
+def partition_dwellset(dw: DwellSet, params: dict) -> DwellSet:
+    """Re-partition the trips to save to disk, in preparation for routing."""
+    if dw.is_dask:
+        dw.data = dw.data.repartition(npartitions=params["n_partitions"])
+    return dw
+
+
 def get_vehicle_observation_frames(
     vehs: pd.DataFrame, dw: DwellSet, params: dict
 ) -> pd.DataFrame:
@@ -125,6 +132,15 @@ def filter_dwells_for_op_segment(dw: DwellSet) -> DwellSet:
     """Filter down the dwells in preparation for computing the operating segment."""
     # Filter out all optional stops, which have the same start and end time (zero duration)
     dw.data = dw.data.loc[dw.data[dw.end] != dw.data[dw.start]]
+    return dw
+
+
+def spatialize_dwells(dw: DwellSet) -> DwellSet:
+    """Add geometries to dwells."""
+    if not isinstance(dw.data, gpd.GeoDataFrame):
+        logger.info("Converting DwellSet data to GeoDataFrame.")
+        dw.to_geodataframe()
+
     return dw
 
 

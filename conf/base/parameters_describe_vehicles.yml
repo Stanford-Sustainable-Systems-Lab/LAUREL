@@ -11,6 +11,9 @@ strip_vehicle_attrs:
     - vin_gvw
   min_trips_per_veh: 2
 
+repartition_spatial_dwells:
+  n_partitions: 20
+
 substantial_dwells:
   thresh_hrs: 4
   drop_cols:
