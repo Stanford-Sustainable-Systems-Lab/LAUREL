@@ -404,8 +404,8 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         powers_flat = modes["avail_kw"] * modes_avail
 
         # If no charging power is available, then quickly exit
-        max_pow = np.max(powers_flat)
-        if max_pow <= 0.0:  # Consider adding np.isclose() check if bad effects continue
+        # Consider adding np.isclose() check if bad effects continue
+        if np.max(powers_flat) <= 0.0:
             chg, dly, mode = (0.0, 0.0, int(np.argmin(powers_flat)))
             return (chg, dly, mode)
 
