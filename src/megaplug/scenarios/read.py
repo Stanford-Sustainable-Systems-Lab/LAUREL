@@ -157,16 +157,23 @@ class ScenarioReader(ABC):
         df = partition()
 
         # Add metadata columns, if requested
+        ## Augment metadata_level_names with empty levels for multi-indexed columns
+        if df.columns.nlevels > 1:
+            add_ls = [""] * (df.columns.nlevels - 1)
+            meta_names_ext = [tuple([meta] + add_ls) for meta in metadata_level_names]
+        else:
+            meta_names_ext = [*metadata_level_names]
+
         ## Get requested metadata columns
         if columns is not None:
-            meta_cols = set(columns).intersection(metadata_level_names)
+            meta_cols = set(columns).intersection(meta_names_ext)
         else:
-            meta_cols = set(metadata_level_names)
+            meta_cols = set(meta_names_ext)
 
         meta_idx = [
-            idx for idx, value in enumerate(metadata_level_names) if value in meta_cols
+            idx for idx, value in enumerate(meta_names_ext) if value in meta_cols
         ]
-        meta_cols_add = [metadata_level_names[i] for i in meta_idx]
+        meta_cols_add = [meta_names_ext[i] for i in meta_idx]
         meta_vals_add = [metadata[i] for i in meta_idx]
         meta_add = zip(meta_cols_add, meta_vals_add)
 
