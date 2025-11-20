@@ -336,31 +336,20 @@ class NonzeroGroupedSummarizer:
             all_results[col] = results
 
         # Build output DataFrame
-        if len(cols_to_process) == 1:
-            # Single column: maintain backward compatibility
-            col = cols_to_process[0]
-            quantile_df = pd.DataFrame(
-                data=all_results[col], index=grp_idxs.keys(), columns=self.quantiles
-            )
-            quantile_df.index.names = self.group_cols
-        else:
-            # Multiple columns: flatten column index names for downstream compatibility
-            combined_results = np.concatenate(
-                [all_results[col] for col in cols_to_process], axis=1
-            )
+        combined_results = np.concatenate(
+            [all_results[col] for col in cols_to_process], axis=1
+        )
 
-            combined_columns = [
-                f"{str(col)}_{str(q)}"
-                for col in cols_to_process
-                for q in self.quantiles
-            ]
+        combined_columns = [
+            f"{str(col)}_{str(q)}" for col in cols_to_process for q in self.quantiles
+        ]
 
-            quantile_df = pd.DataFrame(
-                data=combined_results,
-                index=grp_idxs.keys(),
-                columns=combined_columns,
-            )
-            quantile_df.index.names = self.group_cols
+        quantile_df = pd.DataFrame(
+            data=combined_results,
+            index=list(grp_idxs.keys()),
+            columns=combined_columns,
+        )
+        quantile_df.index.names = self.group_cols
 
         return quantile_df
 
