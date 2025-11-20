@@ -191,33 +191,6 @@ class ScenarioReader(ABC):
 
         return df
 
-    def _collate_partitions_df(
-        self: Self,
-        partitions: dict[str, Callable],
-        names: dict[str, str],
-        metadata: dict[str, tuple],
-    ) -> pd.DataFrame:
-        """Collate partitions with dataframe data into a single long dataframe with
-        keys given by the scenario name and selected metadata.
-        """
-        df_ls, key_ls = [], []
-        for pth, load_func in partitions.items():
-            df_ls.append(load_func())
-            cur_key = (names[pth], *metadata[pth])
-            key_ls.append(cur_key)
-
-        names_ls = [self.scenario_name] + [*self.metadata_level_names]
-        coll = pd.concat(df_ls, keys=key_ls, names=names_ls)
-        colnames = coll.columns.tolist()
-        coll = coll.reset_index(self.metadata_level_names)
-        if coll.columns.nlevels > 1:
-            add_ls = [""] * (coll.columns.nlevels - 1)
-            meta_cols = [tuple([meta] + add_ls) for meta in self.metadata_level_names]
-        else:
-            meta_cols = [*self.metadata_level_names]
-        coll = coll.loc[:, colnames + meta_cols]
-        return coll
-
     def list_completed_partitions(
         self: Self,
         data_partitions: dict[str, object],
