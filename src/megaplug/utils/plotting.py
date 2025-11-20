@@ -86,10 +86,11 @@ class ProfileDensifier:
             components.append(vals.unique())
 
         components.append(all_classes[self.time_col])
-        sub_frame = pd.MultiIndex.from_product(components).to_frame(index=False)
+        idx_cols = grp_cols + [self.time_col]
+        sub_idx = pd.MultiIndex.from_product(components, names=idx_cols)
+        sub_frame = sub_idx.to_frame(index=False)
 
         # Merge and fill missing values
-        idx_cols = grp_cols + [self.time_col]
         mrg = sparse.reset_index().loc[:, idx_cols + value_cols]
         profs_frame = sub_frame.merge(mrg, how="left", on=idx_cols)
         profs_frame = profs_frame.set_index(idx_cols)
