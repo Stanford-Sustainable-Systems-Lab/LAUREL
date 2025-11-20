@@ -344,18 +344,21 @@ class NonzeroGroupedSummarizer:
             )
             quantile_df.index.names = self.group_cols
         else:
-            # Multiple columns: use MultiIndex columns
-            multi_columns = pd.MultiIndex.from_product(
-                [cols_to_process, self.quantiles], names=["value_col", "quantile"]
-            )
-
-            # Concatenate results horizontally
+            # Multiple columns: flatten column index names for downstream compatibility
             combined_results = np.concatenate(
                 [all_results[col] for col in cols_to_process], axis=1
             )
 
+            combined_columns = [
+                f"{str(col)}_{str(q)}"
+                for col in cols_to_process
+                for q in self.quantiles
+            ]
+
             quantile_df = pd.DataFrame(
-                data=combined_results, index=grp_idxs.keys(), columns=multi_columns
+                data=combined_results,
+                index=grp_idxs.keys(),
+                columns=combined_columns,
             )
             quantile_df.index.names = self.group_cols
 
