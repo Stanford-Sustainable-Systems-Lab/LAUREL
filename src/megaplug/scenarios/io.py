@@ -21,7 +21,9 @@ def write_scenario_partition(obj: object, params: dict) -> dict[str, object]:
     return {params["dir"]: obj}
 
 
-def read_scenario_partition(partitions: dict, params: dict, client: Client = None) -> object:
+def read_scenario_partition(
+    partitions: dict, params: dict, client: Client = None
+) -> object:
     """Read in a single partition for this scenario and dataset.
 
     Insert this into a kedro pipeline to enable loading in of a file from a partition
@@ -30,7 +32,7 @@ def read_scenario_partition(partitions: dict, params: dict, client: Client = Non
     If you want to load in from multiple partitions at once and collate the results,
     then use `ScenarioReader.read_partitions()` instead.
     """
-    dir = params["dir"]
+    dir = [Path(params["dir"])]
     parts = {Path(d): o for d, o in partitions.items()}
     selected = ScenarioReader.select_partitions(partitions=parts, dirs=dir)
     if len(selected) > 1:
