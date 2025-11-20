@@ -398,13 +398,23 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         modes: np.recarray,
     ) -> tuple[float, float, int]:
         """Choose the charging energy, delay, and mode for a dwell."""
+
+        n_modes = modes["avail_kw"].shape[0]
+        modes_avail = bits_to_bool_vec(dwl["modes_avail"], n_modes=n_modes)
+        powers_flat = modes["avail_kw"] * modes_avail
+
+        # If no charging power is available, then quickly exit
+        # Consider adding np.isclose() check if bad effects continue
+        if np.max(powers_flat) <= 0.0:
+            chg, dly, mode = (0.0, 0.0, int(np.argmin(powers_flat)))
+            return (chg, dly, mode)
+
         # Set some weighting constants
         EXTREME_DELAY_HRS = 10000.0  # More than a year of delay
         BETA_SOC = 0.5
 
         # Set the shapes of the evaluation arrays
         N_CHG_OPTS = 6
-        n_modes = modes["avail_kw"].shape[0]
         caster = np.ones((N_CHG_OPTS, 1), dtype=float)
 
         ## Build the set of charging energy options. Structure this array so that
@@ -419,8 +429,6 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         # Option 2: Charge for available time on available power levels, with a minimum
         #   level charged to avoid tiny charging sessions.
         avail_hrs = dwl["dwell_hrs"]
-        modes_avail = bits_to_bool_vec(dwl["modes_avail"], n_modes=n_modes)
-        powers_flat = modes["avail_kw"] * modes_avail
         min_e_chg = veh["min_soc_charge"] * veh["batt_cap"]
         e[1, :] = np.maximum(powers_flat * avail_hrs, min_e_chg)
 
