@@ -346,11 +346,9 @@ class NonzeroGroupedSummarizer:
 
         quantile_df = pd.DataFrame(
             data=combined_results,
-            index=list(grp_idxs.keys()),
+            index=pd.MultiIndex.from_tuples(grp_idxs.keys(), names=self.group_cols),
             columns=combined_columns,
         )
-        quantile_df.index.names = self.group_cols
-
         return quantile_df
 
     @staticmethod
