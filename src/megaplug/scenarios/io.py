@@ -5,7 +5,7 @@ from dask.distributed import Client
 from .read import ScenarioReader
 
 
-def write_scenario_partition(obj: object, params: dict) -> dict[str:object]:
+def write_scenario_partition(obj: object, params: dict) -> dict[str, object]:
     """Write out the partition for this scenario and dataset.
 
     Insert this into a kedro pipeline to enable saving out of data files to different

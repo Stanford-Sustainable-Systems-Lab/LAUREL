@@ -1,10 +1,11 @@
 import re
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from itertools import product
+from itertools import product, repeat
 from pathlib import Path
 from typing import Self
 
+import dask.dataframe as dd
 import pandas as pd
 
 from .build import ScenarioBuilder, TestScenarioBuilder
@@ -96,24 +97,45 @@ class ScenarioReader(ABC):
         self: Self,
         partitions: dict[str, object],
         dirs: str | list[str],
+        lazy: bool = False,
     ) -> object:
         """Read data from the specific directories (dirs) within a PartitionDataset
         given by partitions.
         """
-        parts = {Path(d): o for d, o in partitions.items()}
-        parts = self.select_partitions(partitions=parts, dirs=dirs)
-        names = {pth: self.name_scenario(pth) for pth in parts.keys()}
-        metadata = {pth: self.extract_metadata(pth) for pth in parts.keys()}
+        part_dict = {Path(d): o for d, o in partitions.items()}
+        part_dict = self.select_partitions(partitions=part_dict, dirs=dirs)
+        tups = [
+            (self.name_scenario(pth), self.extract_metadata(pth), part)
+            for pth, part in part_dict.items()
+        ]
+        names, metas, parts = zip(*tups)
 
-        test_data = list(parts.values())[0]()  # Loading from the loader function
+        test_data = parts[0]()  # Loading from the loader function
         if isinstance(test_data, pd.DataFrame):
-            coll = self._collate_partitions_df(
-                partitions=parts,
-                names=names,
-                metadata=metadata,
-            )
+            if lazy:
+                coll = dd.from_map(
+                    self._collate_partition_df,
+                    parts,
+                    names,
+                    metas,
+                    metadata_level_names=self.metadata_level_names,
+                    scenario_name=self.scenario_name,
+                )
+            else:
+                coll_map = map(
+                    self._collate_partition_df,
+                    parts,
+                    names,
+                    metas,
+                    repeat(self.metadata_level_names),
+                    repeat(self.scenario_name),
+                )
+                coll = pd.concat(coll_map, axis=0)
         elif isinstance(test_data, dict):
-            coll = {names[pth]: loader() for pth, loader in parts.items()}
+            if lazy:
+                raise NotImplementedError("Lazy dictionaries not yet implemented.")
+            else:
+                coll = {nm: pt() for nm, mt, pt in tups}
         else:
             raise NotImplementedError(
                 "ScenarioReader collation for this dataset type has not been implemented."
@@ -121,41 +143,62 @@ class ScenarioReader(ABC):
 
         return coll
 
-    def _collate_partitions_df(
-        self: Self,
-        partitions: dict[str, Callable],
-        names: dict[str, str],
-        metadata: dict[str, tuple],
+    @staticmethod
+    def _collate_partition_df(
+        partition: Callable,
+        name: str,
+        metadata: tuple,
+        metadata_level_names: tuple[str, ...],
+        scenario_name: str,
+        columns: list[object] | None = None,
     ) -> pd.DataFrame:
-        """Collate partitions with dataframe data into a single long dataframe with
-        keys given by the scenario name and selected metadata.
-        """
-        df_ls, key_ls = [], []
-        for pth, load_func in partitions.items():
-            df_ls.append(load_func())
-            cur_key = (names[pth], *metadata[pth])
-            key_ls.append(cur_key)
+        """Collate a dataframe partition with scenario columns."""
+        # Load the dataframe using the Kedro-provided partition loader
+        df = partition()
 
-        names_ls = [self.scenario_name] + [*self.metadata_level_names]
-        coll = pd.concat(df_ls, keys=key_ls, names=names_ls)
-        colnames = coll.columns.tolist()
-        coll = coll.reset_index(self.metadata_level_names)
-        if coll.columns.nlevels > 1:
-            add_ls = [""] * (coll.columns.nlevels - 1)
-            meta_cols = [tuple([meta] + add_ls) for meta in self.metadata_level_names]
+        # Add metadata columns, if requested
+        ## Augment metadata_level_names with empty levels for multi-indexed columns
+        if df.columns.nlevels > 1:
+            add_ls = [""] * (df.columns.nlevels - 1)
+            meta_names_ext = [tuple([meta] + add_ls) for meta in metadata_level_names]
         else:
-            meta_cols = [*self.metadata_level_names]
-        coll = coll.loc[:, colnames + meta_cols]
-        return coll
+            meta_names_ext = [*metadata_level_names]
+
+        ## Get requested metadata columns
+        if columns is not None:
+            meta_cols = set(columns).intersection(meta_names_ext)
+        else:
+            meta_cols = set(meta_names_ext)
+
+        meta_idx = [
+            idx for idx, value in enumerate(meta_names_ext) if value in meta_cols
+        ]
+        meta_cols_add = [meta_names_ext[i] for i in meta_idx]
+        meta_vals_add = [metadata[i] for i in meta_idx]
+        meta_add = zip(meta_cols_add, meta_vals_add)
+
+        ## Add requested metadata columns
+        for col, val in meta_add:
+            df[col] = val
+
+        # Add scenario column, if requested
+        if columns is None or scenario_name in columns:
+            df[scenario_name] = name
+
+        # Select chosen columns
+        if columns is not None:
+            df = df[columns]
+
+        return df
 
     def list_completed_partitions(
         self: Self,
         data_partitions: dict[str, object],
         dirs: str | list[str],
-        config_partitions: dict[str, object] = None,
+        config_partitions: dict[str, object] | None = None,
         incomplete: bool = False,
         report_type: str = "scenario",
-    ) -> list[str | int]:
+    ) -> list[str] | list[int]:
         """List the completed partitions by forcing the builder to build its configs,
         then counting within the given directory the number of completed tasks relative
         to the number of configs.
@@ -164,17 +207,15 @@ class ScenarioReader(ABC):
         argument.
         """
         # Use the select partitions based on the builder's display name and get the set of paths
-        data_partitions = {Path(d): o for d, o in data_partitions.items()}
-        complete_parts = self.select_partitions(partitions=data_partitions, dirs=dirs)
+        data_parts = {Path(d): o for d, o in data_partitions.items()}
+        complete_parts = self.select_partitions(partitions=data_parts, dirs=dirs)
         complete_parts = set(complete_parts.keys())
         report_set = complete_parts
 
         if incomplete:
             # Use the builder to generate all of its configs and take the set of paths
-            config_partitions = {Path(d): o for d, o in config_partitions.items()}
-            target_parts = self.select_partitions(
-                partitions=config_partitions, dirs=dirs
-            )
+            config_parts = {Path(d): o for d, o in config_partitions.items()}
+            target_parts = self.select_partitions(partitions=config_parts, dirs=dirs)
             target_parts = [pth.parent for pth in target_parts.keys()]
             target_parts = set(target_parts)
 
