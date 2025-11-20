@@ -20,7 +20,7 @@ class ScenarioReader(ABC):
     metadata_level_names: tuple[str]
     scenario_name: str = "scenario"
 
-    def __init__(self: Self) -> None:
+    def __init__(self: Self, dirs: list[Path] | list[str] | None = None) -> None:
         meta_names = set(self.metadata_level_names)
         build_names = set(self.builder.partition_level_names)
         unmatched_names = meta_names - build_names
@@ -28,6 +28,15 @@ class ScenarioReader(ABC):
             raise RuntimeError(
                 f"Some of the metadata names don't correspond with partition_level_names of the builder: {unmatched_names}"
             )
+
+        if dirs is None:
+            self.dirs = None
+        else:
+            if isinstance(dirs, str | Path):
+                dirs_temp = [dirs]
+            else:
+                dirs_temp = dirs
+            self.dirs: list[Path] | None = [Path(d) for d in dirs_temp]
 
     @property
     @abstractmethod
@@ -77,16 +86,18 @@ class ScenarioReader(ABC):
 
     @staticmethod
     def select_partitions(
-        partitions: dict[Path, object], dirs: str | list[str]
+        partitions: dict[Path, object],
+        dirs: list[Path] | None = None,
     ) -> dict[Path, object]:
         """Select all partitions which are within any of the given directories."""
-        if isinstance(dirs, str):
-            dirs = [dirs]
-        dirs = [Path(d) for d in dirs]
-        candids = product(dirs, partitions)
-        selected = {
-            pth: partitions[pth] for dir, pth in candids if pth.is_relative_to(dir)
-        }
+        if dirs is None:
+            selected = partitions
+        else:
+            candids = product(dirs, partitions)
+            selected = {
+                pth: partitions[pth] for dir, pth in candids if pth.is_relative_to(dir)
+            }
+
         if len(selected) < 1:
             raise RuntimeError(
                 "No partitions were identified in the given directories."
@@ -96,14 +107,13 @@ class ScenarioReader(ABC):
     def read_partitions(
         self: Self,
         partitions: dict[str, object],
-        dirs: str | list[str],
         lazy: bool = False,
     ) -> object:
         """Read data from the specific directories (dirs) within a PartitionDataset
         given by partitions.
         """
         part_dict = {Path(d): o for d, o in partitions.items()}
-        part_dict = self.select_partitions(partitions=part_dict, dirs=dirs)
+        part_dict = self.select_partitions(partitions=part_dict, dirs=self.dirs)
         tups = [
             (self.name_scenario(pth), self.extract_metadata(pth), part)
             for pth, part in part_dict.items()
@@ -194,7 +204,6 @@ class ScenarioReader(ABC):
     def list_completed_partitions(
         self: Self,
         data_partitions: dict[str, object],
-        dirs: str | list[str],
         config_partitions: dict[str, object] | None = None,
         incomplete: bool = False,
         report_type: str = "scenario",
@@ -208,14 +217,16 @@ class ScenarioReader(ABC):
         """
         # Use the select partitions based on the builder's display name and get the set of paths
         data_parts = {Path(d): o for d, o in data_partitions.items()}
-        complete_parts = self.select_partitions(partitions=data_parts, dirs=dirs)
+        complete_parts = self.select_partitions(partitions=data_parts, dirs=self.dirs)
         complete_parts = set(complete_parts.keys())
         report_set = complete_parts
 
         if incomplete:
             # Use the builder to generate all of its configs and take the set of paths
             config_parts = {Path(d): o for d, o in config_partitions.items()}
-            target_parts = self.select_partitions(partitions=config_parts, dirs=dirs)
+            target_parts = self.select_partitions(
+                partitions=config_parts, dirs=self.dirs
+            )
             target_parts = [pth.parent for pth in target_parts.keys()]
             target_parts = set(target_parts)
 
