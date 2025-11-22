@@ -118,7 +118,7 @@ vehicles:
   initial_soc:
     alpha: 5
     beta: 5
-  soc_buffer_low: 0.1
+  soc_buffer_low: 0.2
   soc_buffer_high: 0.8
   min_soc_charge: 0.01 # No charging session is allowed which fills less than this fraction of the battery, even if this results in death
   max_delay_recoverable_hrs: ${summarize_vehicles.thresholds.delay_hrs_max}
