@@ -174,26 +174,6 @@ assign_modes:
   max_power_col: max_power_kw_avail
   max_power_source_col: max_power_kw
 
-mode_location_corresp:
-  charge_modes_avail:
-    id_columns:
-      - location
-    values:
-      depot:
-        - none
-        - depot
-      truck_stop:
-        - none
-        - truck_stop
-      other:
-        - none
-        - enroute
-    value_col: avail_modes
-  value_col_bool: avail_modes_bool
-  loc_col: location
-  max_power_col: max_power_kw_avail
-  max_power_source_col: max_power_kw
-
 calc_energy_use:
   consump_col: consump_rate_kwh_per_mi
   energy_col: energy_use_kwh
