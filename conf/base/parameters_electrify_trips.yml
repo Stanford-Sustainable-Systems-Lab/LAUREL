@@ -155,6 +155,7 @@ assign_modes:
         - clust_13
         - clust_9
         - truck_park
+        - truck_stop # Ensuring that lower-power options are also available
       invert_selection: False
     truck_stop:
       loc_groups:
