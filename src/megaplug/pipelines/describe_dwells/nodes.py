@@ -154,6 +154,32 @@ def coalesce_interrupted_dwells(dw: DwellSet, params: dict) -> DwellSet:
     return dw
 
 
+def mark_vehicle_shifts(dw: DwellSet, params: dict) -> DwellSet:
+    """Mark shifts by setting a 'refresh' column and giving a shift id.
+
+    This is done using a time threshold, currently based on the Federal Motor Carrier
+    Safety Administration (FMCSA) hours of service regulations for commercial vehicle
+    drivers.
+    """
+    # Mark the shift "refresh" dwells
+    pcols = params["columns"]
+    dw.data[pcols["dur"]] = total_hours(dw.data[dw.end] - dw.data[dw.start])
+    dw.data[pcols["refresh"]] = dw.data[pcols["dur"]] >= params["min_refresh_hrs"]
+    dw.data = dw.data.drop(columns=[pcols["dur"]])
+
+    # Give each shift an id number, which is unique within the vehicle, but not between
+    scol = pcols["shift_id"]
+
+    dw.data[scol] = dw.data.groupby(dw.veh)[pcols["refresh"]].cumsum()
+
+    kws = {"fill_value": 0}
+    if dw.is_dask:
+        kws.update({"meta": ("x", "i8")})
+
+    dw.data[scol] = dw.data.groupby(dw.veh)[scol].shift(1, **kws)
+    return dw
+
+
 def calc_rolling_dwell_ratios(dw: DwellSet, params: dict) -> DwellSet:
     """Calculate the maximum rolling dwell ratios for each vehicle-location pair."""
     dw.data["dur_hrs_col"] = total_hours(dw.data[dw.end] - dw.data[dw.start])

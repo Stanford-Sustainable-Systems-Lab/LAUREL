@@ -9,6 +9,7 @@ from .nodes import (
     format_trips_columns,
     calc_rolling_dwell_ratios,
     map_location_groups,
+    mark_vehicle_shifts,
 )
 
 from megaplug.utils.distributed import start_dask_node
@@ -62,9 +63,18 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="coalesce_interrupted_dwells",
             ),
             Node(
-                func=calc_rolling_dwell_ratios,
+                func=mark_vehicle_shifts,
                 inputs=[
                     "dwell_obj_coalesced",
+                    "params:mark_vehicle_shifts",
+                ],
+                outputs="dwell_obj_shifts",
+                name="mark_vehicle_shifts",
+            ),
+            Node(
+                func=calc_rolling_dwell_ratios,
+                inputs=[
+                    "dwell_obj_shifts",
                     "params:rolling_dwell_ratios",
                 ],
                 outputs="dwell_obj_roll",

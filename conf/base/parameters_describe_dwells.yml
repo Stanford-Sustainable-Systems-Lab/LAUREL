@@ -71,6 +71,13 @@ map_location_groups:
     fill_missing: False
     fill_value: ${group_hexes.clusterer_kwargs.n_clusters}
 
+mark_vehicle_shifts:
+  columns:
+    refresh: is_refresh
+    dur: dwell_time_hrs
+    shift_id: shift_id
+  min_refresh_hrs: 6.9 # The minimum sleep time from FMCSA (7hrs) minus a fudge factor
+
 cluster_veh_loc_pairs:
   min_cluster_size_denom: 200 # [n_obs]/[this number] gives the minimum cluster size 
   sample:

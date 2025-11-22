@@ -184,12 +184,6 @@ calc_energy_use:
   consump_col: consump_rate_kwh_per_mi
   energy_col: energy_use_kwh
 
-mark_shift_refreshes:
-  columns:
-    refresh: is_refresh
-    dur: dwell_time_hrs
-  min_refresh_hrs: 6.9 # The minimum sleep time from FMCSA (7hrs) minus a fudge factor
-
 mark_critical_days:
   loc_col: location
   dur_col: dwell_time_hrs

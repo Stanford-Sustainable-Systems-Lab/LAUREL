@@ -217,18 +217,6 @@ def calc_energy_use(dw: DwellSet, params: dict) -> DwellSet:
     return dw
 
 
-def mark_shift_refreshes(dw: DwellSet, params: dict) -> DwellSet:
-    """Mark shifts by setting a 'refresh' column.
-
-    This is done using a time threshold, currently based on the Federal Motor Carrier
-    Safety Administration (FMCSA) hours of service regulations for commercial vehicle
-    drivers.
-    """
-    pcols = params["columns"]
-    dw.data[pcols["refresh"]] = dw.data[pcols["dur"]] >= params["min_refresh_hrs"]
-    return dw
-
-
 def mark_critical_days(dw: DwellSet, params: dict) -> DwellSet:
     """Mark critical days, vehicle-days which cannot be achieved on a single charge."""
     refr_col = params["refresh_col"]
