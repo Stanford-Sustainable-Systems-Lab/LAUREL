@@ -36,38 +36,6 @@ filter_vehicles:
     #     - 613222834799378431
   keep_only_filter_cols: False
 
-calc_vehicle_ranges:
-  columns:
-    shift: shift_id
-    range: range_mi
-  no_death_shift_frac: 0.99 # So 99% of shifts are aiming to have no deaths
-  no_charge_shift_frac: 0.5 # So 50% of shifts should be completed with no mid-shift charge
-  soc_buffer_low: ${vehicles.soc_buffer_low}
-  soc_buffer_high: ${vehicles.soc_buffer_high}
-  range_options_miles: # From Ledna et al. (2022)
-    - 150
-    - 300
-    - 500
-
-merge_vehicle_params:
-  keep_right_columns:
-    - veh_id
-    - consump_rate_kwh_per_mi
-    - minimum_times_plug_in_mins
-    - minimum_times_plug_out_mins
-    - battery_capacity_kwh
-  merge_kwargs:
-    how: left
-    'on':
-      - veh_id
-
-calc_dwell_durations:
-  dwell_time_col: dwell_time_hrs
-  in_out_time_cols:
-    plug_in: minimum_times_plug_in_mins
-    plug_out: minimum_times_plug_out_mins
-  in_out_time_unit: minute
-
 vehicles:
   battery_capacity_kwh:
     id_columns:
@@ -125,6 +93,38 @@ vehicles:
   random_seed:
     master_seed: 42 # Each vehicle gets their own seed based on this one and their ID
     seed_id_col: veh_id
+
+calc_vehicle_ranges:
+  columns:
+    shift: shift_id
+    range: range_mi
+  no_death_shift_frac: 0.99 # So 99% of shifts are aiming to have no deaths
+  no_charge_shift_frac: 0.5 # So 50% of shifts should be completed with no mid-shift charge
+  soc_buffer_low: ${vehicles.soc_buffer_low}
+  soc_buffer_high: ${vehicles.soc_buffer_high}
+  range_options_miles: # From Ledna et al. (2022)
+    - 150
+    - 300
+    - 500
+
+merge_vehicle_params:
+  keep_right_columns:
+    - veh_id
+    - consump_rate_kwh_per_mi
+    - minimum_times_plug_in_mins
+    - minimum_times_plug_out_mins
+    - battery_capacity_kwh
+  merge_kwargs:
+    how: left
+    'on':
+      - veh_id
+
+calc_dwell_durations:
+  dwell_time_col: dwell_time_hrs
+  in_out_time_cols:
+    plug_in: minimum_times_plug_in_mins
+    plug_out: minimum_times_plug_out_mins
+  in_out_time_unit: minute
 
 charging_modes:
   none:
