@@ -1,4 +1,3 @@
-import logging
 from collections.abc import Callable
 
 import h3.api.basic_str as h3_str
@@ -8,8 +7,6 @@ import pandas as pd
 from numba import jit
 from tqdm import tqdm
 from tzfpy import get_tz
-
-logger = logging.getLogger(__name__)
 
 SECS_PER_HOUR = 3600
 HOURS_PER_WEEK = 168
@@ -24,15 +21,15 @@ def calc_time_zones_from_hexes(
     orig_idx = df.index.names
     if orig_idx != [None]:
         df = df.reset_index()
-    logger.info("Getting unique hexes")
+    # Getting unique hexes
     str_col = f"{hex_col}_str"
     df[str_col] = df[hex_col].transform(h3.int_to_str)
     hex_arr = df[str_col].unique()
-    logger.info("Identifying time zones for unique hexes")
+    # Identifying time zones for unique hexes
     hexes = pd.DataFrame(data=hex_arr, columns=[str_col])
     hexes[tz_col] = hexes[str_col].transform(get_timezone_from_hex)
     hexes[tz_col] = pd.Categorical(hexes[tz_col])
-    logger.info("Merging time zones back onto original dataframe")
+    # Merging time zones back onto original dataframe
     hexes = hexes.set_index(str_col)
     df = df.merge(hexes, how="left", left_on=str_col, right_index=True)
     df = df.drop(columns=[str_col])
@@ -87,7 +84,7 @@ def calc_local_time(
     for col in local_cols:
         # May need to be adjusted for different attribute dtypes
         df[col] = pd.Timestamp(0)
-    logger.info("Building local time columns")
+    # Building local time columns
     tqdm.pandas()
     df = df.groupby(
         grouper, group_keys=False, sort=False, observed=True
@@ -101,7 +98,7 @@ def calc_local_time(
     )
 
     if sort_col is not None:
-        logger.info("Sorting within each group.")
+        # Sorting within each group
         df = df.groupby(
             grp_cols, group_keys=False, sort=False, observed=True
         ).progress_apply(lambda grp: grp.sort_values(sort_col))
