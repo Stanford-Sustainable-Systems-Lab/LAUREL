@@ -52,6 +52,46 @@ def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
     return dw
 
 
+def calc_vehicle_ranges(vehs: pd.DataFrame, dw: DwellSet, params: dict) -> pd.DataFrame:
+    """Calculate the ranges of each vehicle."""
+    pcols = params["columns"]
+
+    # Describe shifts
+    shift_miles = dw.data.groupby([dw.veh, pcols["shift"]])[dw.trip_dist].agg(
+        ["sum", "max"]
+    )
+    renamer = {"sum": "shift_total_miles", "max": "shift_longest_trip"}
+    shift_miles = shift_miles.rename(columns=renamer)
+    if dw.is_dask:
+        shift_miles = shift_miles.compute()
+    shift_miles = shift_miles.reset_index()
+
+    # Compute desired ranges for each criterion
+    veh_grp = shift_miles.groupby(dw.veh)
+    kws = {"interpolation": "linear"}
+
+    q_dth = params["no_death_shift_frac"]
+    death_range = veh_grp["shift_longest_trip"].quantile(q=q_dth, **kws)
+
+    q_chg = params["no_charge_shift_frac"]
+    charge_range = veh_grp["shift_total_miles"].quantile(q=q_chg, **kws)
+    desired_soc_band = params["soc_buffer_high"] - params["soc_buffer_low"]
+    charge_range = charge_range / desired_soc_band
+
+    # Compute design range from desired ranges for each criterion
+    ranges = pd.concat([death_range, charge_range], axis=1)
+    ranges["range_desired"] = ranges.max(axis=1)
+
+    # Omitting top bin to automatically do the two-way rounding
+    ropts = params["range_options_miles"]
+    range_bins = [0] + ropts[:-1] + [np.inf]
+    veh_bins = pd.cut(ranges["range_desired"], bins=range_bins, labels=ropts)
+
+    # Assign ranges to vehicles
+    vehs[pcols["range"]] = vehs.index.map(veh_bins)
+    return vehs
+
+
 def calc_dwell_durations(dw: DwellSet, params: dict) -> DwellSet:
     """Mark dwells which could provide substantial SoC to each vehicle."""
     iocols = params["in_out_time_cols"]

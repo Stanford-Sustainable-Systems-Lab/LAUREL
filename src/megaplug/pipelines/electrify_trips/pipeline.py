@@ -15,6 +15,7 @@ from .nodes import (
     assign_modes,
     calc_dwell_durations,
     calc_energy_use,
+    calc_vehicle_ranges,
     filter_dwells,
     filter_dwells_post,
     filter_vehicles,
@@ -70,10 +71,20 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="categorize_columns_electrify_trips",
             ),
             Node(
+                func=calc_vehicle_ranges,
+                inputs=[
+                    "vehicles_with_params",
+                    "dwell_obj",  # Using original dwell_obj to avoid double-computing
+                    "params:calc_vehicle_ranges",
+                ],
+                outputs="vehicles_with_ranges",
+                name="calc_vehicle_ranges",
+            ),
+            Node(
                 func=merge_dwellset_node,
                 inputs=[
                     "dwell_obj_filtered_vehs_categorized",
-                    "vehicles_with_params",
+                    "vehicles_with_ranges",
                     "params:merge_vehicle_params",
                 ],
                 outputs="dwell_obj_w_veh_params",
