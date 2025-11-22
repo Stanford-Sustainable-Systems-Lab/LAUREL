@@ -84,11 +84,17 @@ def calc_vehicle_ranges(vehs: pd.DataFrame, dw: DwellSet, params: dict) -> pd.Da
 
     # Omitting top bin to automatically do the two-way rounding
     ropts = params["range_options_miles"]
-    range_bins = [0] + ropts[:-1] + [np.inf]
+    range_bins = [0.0] + ropts[:-1] + [np.inf]
     veh_bins = pd.cut(ranges["range_desired"], bins=range_bins, labels=ropts)
 
     # Assign ranges to vehicles
-    vehs[pcols["range"]] = vehs.index.map(veh_bins)
+    vehs[pcols["range_mi"]] = vehs.index.map(veh_bins).astype(float)
+
+    # Assign battery capacities to vehicles matching ranges
+    vehs[pcols["batt_kwh"]] = (
+        vehs[pcols["range_mi"]] * vehs[pcols["consump_kwh_per_mi"]]
+    )
+
     return vehs
 
 

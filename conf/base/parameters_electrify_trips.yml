@@ -37,27 +37,6 @@ filter_vehicles:
   keep_only_filter_cols: False
 
 vehicles:
-  battery_capacity_kwh:
-    id_columns:
-      - primary_op_dist
-      - vin_gvw
-    values:
-      0-99 Miles:
-        6: 400
-        7: 400
-        8: 1000
-      100-249 Miles:
-        6: 400
-        7: 400
-        8: 1000
-      250-499 Miles:
-        6: 400
-        7: 400
-        8: 1000
-      500+ Miles:
-        6: 400
-        7: 400
-        8: 1000
   consump_rate_kwh_per_mi:
     id_columns:
       - primary_op_dist
@@ -97,7 +76,9 @@ vehicles:
 calc_vehicle_ranges:
   columns:
     shift: shift_id
-    range: range_mi
+    range_mi: range_mi
+    consump_kwh_per_mi: consump_rate_kwh_per_mi
+    batt_kwh: battery_capacity_kwh
   no_death_shift_frac: 0.99 # So 99% of shifts are aiming to have no deaths
   no_charge_shift_frac: 0.5 # So 50% of shifts should be completed with no mid-shift charge
   soc_buffer_low: ${vehicles.soc_buffer_low}
