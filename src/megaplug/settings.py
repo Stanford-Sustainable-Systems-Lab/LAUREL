@@ -6,7 +6,7 @@ https://docs.kedro.org/en/stable/kedro_project_setup/settings.html."""
 # from megaplug.hooks import SparkHooks  # noqa: E402
 
 # Hooks are executed in a Last-In-First-Out (LIFO) order.
-HOOKS = ()  # (SparkHooks(),)
+HOOKS = ()
 
 # Installed plugins for which to disable hook auto-registration.
 DISABLE_HOOKS_FOR_PLUGINS = ("kedro-viz",)
@@ -24,9 +24,6 @@ CONFIG_LOADER_CLASS = OmegaConfigLoader
 CONFIG_LOADER_ARGS = {
     "base_env": "base",
     "default_run_env": "local",
-    "config_patterns": {
-        "spark": ["spark*", "spark*/**"],
-    },
 }
 
 # Class that manages Kedro's library components.
