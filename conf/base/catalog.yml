@@ -13,6 +13,12 @@ ledna_adoption:
   load_args:
     sheet_name: D-VehicleStock
 
+ledna_vehicle_params:
+  type: pandas.ExcelDataset
+  filepath: data/01_raw/Ledna_2024_Forecasts/Data_Supplement_Final_010424.xlsx
+  load_args:
+    sheet_name: G-Inputs-Vehicles
+
 advanced_clean_fleets_milestones:
  type: pandas.CSVDataset
  filepath: data/01_raw/ACF/zev_milestones.csv
