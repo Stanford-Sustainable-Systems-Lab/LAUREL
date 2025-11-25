@@ -14,7 +14,7 @@ DISABLE_HOOKS_FOR_PLUGINS = ("kedro-viz",)
 from pathlib import Path  # noqa: E402
 
 # Directory that holds configuration.
-# CONF_SOURCE = "conf"
+CONF_SOURCE = "conf"
 
 # Class that manages how configuration is loaded.
 from kedro.config import OmegaConfigLoader  # noqa: E402
