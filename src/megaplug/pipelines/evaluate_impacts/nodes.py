@@ -28,6 +28,7 @@ from megaplug.models.sampling import (
 from megaplug.models.summarize import IntervalBeginSpreader, NonzeroGroupedSummarizer
 from megaplug.utils.data import filter_by_vals_in_cols
 from megaplug.utils.h3 import cells_to_region_polygons
+from megaplug.utils.params import set_entity_params
 from megaplug.utils.time import (
     calc_local_time,
     calc_time_zones_from_hexes,
@@ -366,12 +367,24 @@ def compute_adoption_totals(
     adopt_grper = pcols["veh_class_cols"] + [elect_col]
     adopt_elect = adopts_sel.groupby(adopt_grper)[tot_col].sum()
     adopt_elect = adopt_elect.unstack(elect_col)
-    renamer = {True: f"n_vehs_{elect_col}", False: f"n_vehs_not_{elect_col}"}
+    elect_tot_col = f"n_vehs_{elect_col}"
+    renamer = {True: elect_tot_col, False: f"n_vehs_not_{elect_col}"}
     adopt_elect.columns = [renamer[old] for old in adopt_elect.columns]
 
     adopt_elect[tot_col] = adopt_elect.sum(axis=1)
     adopt_elect = adopt_elect.drop(columns=[renamer[False]])
-    return adopt_elect
+
+    # If desired, override the adoption fractions (but not the total vehicles of all fuel types)
+    if not params["override_with_params"]:
+        return adopt_elect
+    else:
+        acol = "adoption_fracs"
+        pdict = {acol: params[acol]}
+        adopts_over = set_entity_params(adopt_elect, pdict)
+        adopts_over[elect_tot_col] = adopts_over[tot_col] * adopts_over[acol]
+        adopts_over[elect_tot_col] = adopts_over[elect_tot_col].round().astype(int)
+        adopts_over = adopts_over.drop(columns=[acol])
+        return adopts_over
 
 
 def compute_dwell_rate_vclass(

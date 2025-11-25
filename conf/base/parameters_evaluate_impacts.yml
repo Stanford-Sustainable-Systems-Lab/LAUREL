@@ -99,6 +99,15 @@ compute_adoption_totals:
         value_isin:
           - 2030
     keep_only_filter_cols: False
+  override_with_params: True
+  adoption_fracs:
+    id_columns:
+      - primary_op_dist
+    values:
+      0-99 Miles: 0.2
+      100-249 Miles: 0.2
+      250-499 Miles: 0.2
+      500+ Miles: 0.2
 
 compute_dwell_rate_vclass:
   time_unit: ${slice_events.slice_freq}
