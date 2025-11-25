@@ -9,17 +9,18 @@ slurm_command: sbatch # Valid values are "sbatch" and "salloc"
 slurm_resources:
   partition: serc
   ntasks: 2 # I believe that this is what we need for SequentialRunner, while ParallelRunner needs n_examples + 1
-  cpus-per-task: 1 # Using multiple CPUs takes a lot of effort (e.g. Dask cluster)
-  mem-per-cpu: 32GB # Increasing memory, since I've had some memory errors
+  ntasks-per-node: 2 # Keeps all of the tasks and CPUs on the same node
+  cpus-per-task: 2 # Using multiple CPUs takes a lot of effort (e.g. Dask cluster)
+  mem-per-cpu: 64GB
   gpus: 0
-  time: 0-00:30 # Reducing time requirement, since with more processors we're going faster.
-  array: 0-511 # 2 at a time is enforced by Gurobi license
+  time: 0-01:00
+  array: 0-511
 
 cmd_line_calls:
   prefix: uv run
   kedro:
     tags: scenario_run
-    params: partition_data_dir=$GROUP_SCRATCH/passow/megaplug
+    params: partition_data_dir=$SCRATCH/megaplug
 
 scenario_params:
   builder: SenseScenarioBuilder
