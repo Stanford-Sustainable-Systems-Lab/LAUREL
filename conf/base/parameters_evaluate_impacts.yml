@@ -94,7 +94,7 @@ compute_adoption_totals:
           - Central
       is_mandate_active:
         value_isin:
-          - True
+          - False
       year:
         value_isin:
           - 2030
