@@ -150,7 +150,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=simulate_charging_choice,
                 inputs=[
                     "dwell_obj_shift_powers",
-                    "vehicles_with_params",
+                    "vehicles_with_ranges",
                     "charging_modes",
                     "params:simulate_charging_choice",
                 ],
@@ -189,7 +189,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             Node(
                 func=write_scenario_partition,
-                inputs=["vehicles_with_params", "params:results_partition"],
+                inputs=["vehicles_with_ranges", "params:results_partition"],
                 outputs="vehicles_with_params_partition",
                 name="write_scenario_partition_vehs",
             ),
