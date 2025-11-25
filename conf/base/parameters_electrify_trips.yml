@@ -124,20 +124,11 @@ assign_modes:
   loc_group_col: loc_group_id
   loc_based_mode_avail:
     enroute:
-      loc_groups: # Location groups under 18 clusters (random state 42) which have more than 5 visits/day average
-        - clust_7
-        - clust_16
-        - clust_12
-        - clust_10
-        - clust_8
-        - clust_11
-        - clust_15
-        - clust_5
-        - clust_13
-        - clust_9
-        - truck_park
-        - truck_stop # Ensuring that lower-power options are also available
-      invert_selection: False
+      loc_groups:
+        - undeveloped
+        - no_estabs
+        - some_estabs
+      invert_selection: True
     truck_stop:
       loc_groups:
         - truck_stop
