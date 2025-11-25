@@ -76,3 +76,38 @@ class SensitivityAnalysis:
         for ax in g.axes.flat:
             ax.set_xlim(0, 1.0)
         return g
+
+
+def correl_dict_to_matrix(correl_dict):
+    """Convert a lower-triangular correlation dictionary into an OpenTURNS correlation matrix."""
+    var_names = list(correl_dict.keys())
+    dim = len(var_names)
+    corr_mat = ot.CorrelationMatrix(dim)
+    for i in range(dim):
+        corr_mat[i, i] = 1.0
+    for i, row_name in enumerate(var_names):
+        row_entries = correl_dict.get(row_name, {})
+        for j, col_name in enumerate(var_names[:i]):
+            value = row_entries.get(col_name)
+            if value is None:
+                value = correl_dict.get(col_name, {}).get(row_name)
+            if value is None:
+                raise KeyError(
+                    f"Missing correlation coefficient for pair ({row_name}, {col_name})."
+                )
+            corr_mat[i, j] = float(value)
+            corr_mat[j, i] = float(value)
+    return corr_mat, var_names
+
+
+def correl_matrix_to_dict(corr_mat, var_names=None):
+    """Convert an OpenTURNS correlation matrix into a lower-triangular correlation dictionary."""
+    if var_names is None:
+        var_names = [f"var_{i}" for i in range(corr_mat.getDimension())]
+    corr_dict = {}
+    for i, row_name in enumerate(var_names):
+        row_entries = {}
+        for j in range(i):
+            row_entries[var_names[j]] = float(corr_mat[i, j])
+        corr_dict[row_name] = row_entries
+    return corr_dict
