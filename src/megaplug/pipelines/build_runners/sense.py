@@ -7,6 +7,7 @@ import openturns as ot
 
 from megaplug.scenarios.build import ScenarioBuilder
 from megaplug.scenarios.read import ScenarioReader
+from megaplug.utils.sensitivity import correl_dict_to_matrix
 
 
 class SenseScenarioBuilder(ScenarioBuilder):
@@ -20,7 +21,10 @@ class SenseScenarioBuilder(ScenarioBuilder):
     def _build_param_dicts(self) -> tuple[list[Path], list[dict]]:
         paths, scens = [], []
 
-        joint_dist = self.build_input_dist(self.scen_params["variables"])
+        joint_dist = self.build_input_dist(
+            vars=self.scen_params["variables"],
+            copulas=self.scen_params.get("copulas", None),
+        )
         sequence = ot.SobolSequence(joint_dist.getDimension())
         sample_size = self.scen_params[
             "sample_size"
@@ -72,17 +76,52 @@ class SenseScenarioBuilder(ScenarioBuilder):
         return (paths, scens)
 
     @staticmethod
-    def build_input_dist(vars: dict) -> ot.JointDistribution:
+    def build_input_dist(
+        vars: dict, copulas: list[dict] | None
+    ) -> ot.JointDistribution:
         """Build the input distribution from the vars parameter dictionary."""
         marg_dists = []
         for var_name, dist_info in vars.items():
             dist_type = dist_info["dist"]
-            dist_params = dist_info["params"]
+            dist_params = list(dist_info["params"].values())
             cur_dist = getattr(ot, dist_type)(*dist_params)
             cur_dist.setDescription([var_name])
             marg_dists.append(cur_dist)
 
-        joint_dist = ot.JointDistribution(marg_dists)
+        if copulas:
+            var_set = set(vars.keys())
+            cop_ls = []
+            for cop_info in copulas:
+                if not isinstance(cop_info, dict):
+                    raise ValueError(
+                        f"Copula list elements must be dictionaries. but got {type(cop_info)}"
+                    )
+                cop_type = list(cop_info.keys())[0]
+                cop_args = cop_info[cop_type]
+                if cop_type not in ["NormalCopula", "StudentCopula"]:
+                    raise NotImplementedError(
+                        f"Only correlation-based copulas are implemented, but {cop_type} was requested."
+                    )
+                cop_corr, var_names = correl_dict_to_matrix(cop_args["correlation"])
+                if var_set.intersection(var_names) != set(var_names):
+                    raise ValueError(
+                        f"Variables included in copulas whose marginals are not defined: {var_names}"
+                    )
+                cur_cop = getattr(ot, cop_type)(cop_corr)
+                cur_cop.setDescription(var_names)
+                cop_ls.append(cur_cop)
+                var_set = var_set.difference(var_names)
+
+            if var_set:
+                rem_cop = ot.IndependentCopula(len(var_set))
+                rem_cop.setDescription(list(var_set))
+                cop_ls.append(rem_cop)
+
+            joint_cop = ot.BlockIndependentCopula(cop_ls)
+        else:
+            joint_cop = None
+
+        joint_dist = ot.JointDistribution(marg_dists, joint_cop)
         return joint_dist
 
 
