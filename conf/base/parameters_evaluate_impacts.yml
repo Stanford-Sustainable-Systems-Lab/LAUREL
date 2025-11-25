@@ -79,7 +79,7 @@ dwell_scaling:
   dwell_rate_col: dwells_per_time_unit
   
 
-compute_known_adoption_totals:
+compute_adoption_totals:
   totals_column: n_vehs_target
   fuel_type_col: fuel_type
   electrified_fuel_types:
@@ -107,7 +107,7 @@ compute_dwell_rate_vclass:
   obs_dur_cols:
     start: obs_time_first
     end: obs_time_last
-  target_vehs_col: ${compute_known_adoption_totals.totals_column}
+  target_vehs_col: ${compute_adoption_totals.totals_column}
   dwell_rate_col: ${compute_class_probs.columns.dwell_rate}
 
 merge_classes:
@@ -129,7 +129,7 @@ compute_class_probs:
   columns:
     n_dwells_obs: n_dwells_obs
     n_dwells_obs_elect: n_dwells_electrified
-    n_vehs_in_class: ${compute_known_adoption_totals.totals_column}
+    n_vehs_in_class: ${compute_adoption_totals.totals_column}
     n_vehs_electrified_in_class: n_vehs_electrified
     dwell_rate: dwell_rate
   out_columns:

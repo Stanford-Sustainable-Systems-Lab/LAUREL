@@ -26,10 +26,10 @@ from .nodes import (
     build_class_frame,
     build_eval_columns,
     build_time_ordered_slice,
+    compute_adoption_totals,
     compute_class_dwell_counts,
     compute_class_probs,
     compute_dwell_rate_vclass,
-    compute_known_adoption_totals,
     filter_dwells_post_prob,
     filter_dwells_pre_prob,
     filter_locs_pre_prob,
@@ -44,7 +44,6 @@ from .nodes import (
 
 
 def create_pipeline(**kwargs) -> Pipeline:
-
     report_profiles_scaled_prep_pipe = Pipeline(
         [
             Node(
@@ -220,14 +219,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="compute_class_dwell_counts",
             ),
             Node(
-                func=compute_known_adoption_totals,
+                func=compute_adoption_totals,
                 inputs=[
                     "adoption_scenarios",
-                    "params:compute_known_adoption_totals",
+                    "params:compute_adoption_totals",
                     "params:dwell_scaling",
                 ],
                 outputs="veh_classes_adopt",
-                name="compute_known_adoption_totals",
+                name="compute_adoption_totals",
             ),
             Node(
                 func=compute_dwell_rate_vclass,

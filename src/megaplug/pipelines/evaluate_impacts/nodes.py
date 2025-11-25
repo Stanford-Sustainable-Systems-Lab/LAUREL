@@ -349,7 +349,7 @@ def compute_class_dwell_counts(
     return classes
 
 
-def compute_known_adoption_totals(
+def compute_adoption_totals(
     adopts: pd.DataFrame,
     params: dict,
     pcols: dict,
