@@ -97,7 +97,7 @@ compute_adoption_totals:
           - False
       year:
         value_isin:
-          - 2030
+          - 2035
     keep_only_filter_cols: False
   override_with_params: True
   adoption_fracs:
