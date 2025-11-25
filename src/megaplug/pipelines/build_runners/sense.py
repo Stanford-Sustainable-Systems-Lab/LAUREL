@@ -35,40 +35,34 @@ class SenseScenarioBuilder(ScenarioBuilder):
 
         for _, row in samples.iterrows():
             pars = row.to_dict()
+
+            cur_adopts = deepcopy(self.params["compute_adoption_totals"])
+            cur_adopts["adoption_fracs"]["values"]["0-99 Miles"] = pars[
+                "adopt_0_99_miles"
+            ]
+            cur_adopts["adoption_fracs"]["values"]["100-249 Miles"] = pars[
+                "adopt_100_249_miles"
+            ]
+            cur_adopts["adoption_fracs"]["values"]["250-499 Miles"] = pars[
+                "adopt_250_499_miles"
+            ]
+            cur_adopts["adoption_fracs"]["values"]["500+ Miles"] = pars[
+                "adopt_500plus_miles"
+            ]
+
             cur_vehs = deepcopy(self.params["vehicles"])
-            cur_vehs["consump_rate_kwh_per_mi"]["values"][True][8] = pars[
-                "consump_kwh_per_mile"
-            ]
-            cur_vehs["consump_rate_kwh_per_mi"]["values"][False][8] = pars[
-                "consump_kwh_per_mile"
-            ]
-            cur_vehs["battery_capacity_kwh"] = pars["batt_cap_kwh"]
-            cur_vehs["minimum_times"]["plug_in_mins"] = pars["time_to_initiate_mins"]
-            cur_vehs["minimum_times"]["plug_out_mins"] = pars["time_to_initiate_mins"]
+            cur_vehs["consump_rate_kwh_per_mi"] = pars["consump_rate_kwh_per_mi"]
             cur_vehs["soc_buffer_low"] = pars["soc_buffer_low"]
-            cur_vehs["soc_buffer_high"] = pars["soc_buffer_high"]
 
             cur_modes = deepcopy(self.params["charging_modes"])
-            cur_modes["depot"]["max_power_kw"] = pars["charge_speed_kw_depot"]
             cur_modes["enroute"]["max_power_kw"] = pars["charge_speed_kw_enroute"]
-
-            cur_mngr = deepcopy(self.params["manage_charging"])
-            num_mngr = pars["charge_management"]
-            str_mngr = (
-                "MinPowerChargingManager"
-                if num_mngr == 1
-                else "ImmediateChargingManager"
-            )
-            cur_mngr["charging_manager"] = str_mngr
-
-            cur_summ = deepcopy(self.params["summarize_vehicles"])
-            cur_summ["thresholds"]["delay_frac_max"] = pars["delay_frac_max"]
+            cur_modes["depot"]["max_power_kw"] = pars["charge_speed_kw_depot"]
+            cur_modes["truck_stop"]["max_power_kw"] = pars["charge_speed_kw_truck_stop"]
 
             scn = {
+                "compute_adoption_totals": cur_adopts,
                 "vehicles": cur_vehs,
                 "charging_modes": cur_modes,
-                "manage_charging": cur_mngr,
-                "summarize_vehicles": cur_summ,
             }
 
             paths.append(Path(self.display_name))
