@@ -1,4 +1,5 @@
 import importlib
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -89,6 +90,27 @@ def flatten_dict(d: dict, parent_key: str = None, sep: str = "_"):
         else:
             items.append((new_key, v))
     return dict(items)
+
+
+def tabularize_params(
+    cfgs: dict[Any, dict], read_keys: dict[str, list[str]], idx_name: str
+) -> pd.DataFrame:
+    """Read configurations from their partitions into a DataFrame.
+
+    Args:
+        cfgs: The dictionary of parameters for each scenario in a set, with the key
+            representing the scenario identifier.
+        read_keys: The sequences of parameters to read from each of the the multi-level
+            dictionaries within cfgs.
+        idx_name: The name to give the resulting DataFrame index.
+
+    Returns: DataFrame of select parameters from each scenario, indexed by scenario identifier.
+    """
+    ext = {k: extract_params(v, read_keys) for k, v in cfgs.items()}
+    cfg_df = pd.DataFrame.from_dict(ext).T
+    cfg_df.index.name = idx_name
+    cfg_df = cfg_df.sort_index()
+    return cfg_df
 
 
 def extract_params(params: dict, key_map: dict) -> dict:
