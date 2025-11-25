@@ -104,8 +104,13 @@ def extract_params(params: dict, key_map: dict) -> dict:
     """
 
     def get_value_from_dict(d, keys):
+        cum_keys = []
         for key in keys:
-            d = d[key]
+            cum_keys.append(key)
+            if key in d:
+                d = d[key]
+            else:
+                raise ValueError(f"Key {cum_keys} not found in parameters.")
         return d
 
     res = {k: get_value_from_dict(params, v) for k, v in key_map.items()}
