@@ -585,6 +585,18 @@ primary_operating_distance_distribution:
   save_args:
     bbox_inches: tight
 
+adoption_observed_figure:
+  type: matplotlib.MatplotlibDataset
+  filepath: data/08_reporting/adoption_observed.png
+  save_args:
+    bbox_inches: tight
+
+adoption_copula_figure:
+  type: matplotlib.MatplotlibDataset
+  filepath: data/08_reporting/adoption_copula.png
+  save_args:
+    bbox_inches: tight
+
 ### Scenario configurations
 scenario_configs:
   type: partitions.PartitionedDataset
