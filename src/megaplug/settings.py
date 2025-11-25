@@ -9,7 +9,7 @@ https://docs.kedro.org/en/stable/kedro_project_setup/settings.html."""
 HOOKS = ()  # (SparkHooks(),)
 
 # Installed plugins for which to disable hook auto-registration.
-# DISABLE_HOOKS_FOR_PLUGINS = ("kedro-viz",)
+DISABLE_HOOKS_FOR_PLUGINS = ("kedro-viz",)
 
 from pathlib import Path  # noqa: E402
 
