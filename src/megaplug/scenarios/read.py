@@ -123,8 +123,7 @@ class ScenarioReader(ABC):
         """Read data from the specific directories (dirs) within a PartitionDataset
         given by partitions.
         """
-        part_dict = {Path(d): o for d, o in partitions.items()}
-        part_dict = self.select_partitions(partitions=part_dict, dirs=self.dirs)
+        part_dict = self.select_partitions(partitions=partitions)
         tups = [
             (self.name_scenario(pth), self.extract_metadata(pth), part)
             for pth, part in part_dict.items()
@@ -227,17 +226,13 @@ class ScenarioReader(ABC):
         argument.
         """
         # Use the select partitions based on the builder's display name and get the set of paths
-        data_parts = {Path(d): o for d, o in data_partitions.items()}
-        complete_parts = self.select_partitions(partitions=data_parts, dirs=self.dirs)
+        complete_parts = self.select_partitions(partitions=data_partitions)
         complete_parts = set(complete_parts.keys())
         report_set = complete_parts
 
         if incomplete:
             # Use the builder to generate all of its configs and take the set of paths
-            config_parts = {Path(d): o for d, o in config_partitions.items()}
-            target_parts = self.select_partitions(
-                partitions=config_parts, dirs=self.dirs
-            )
+            target_parts = self.select_partitions(partitions=config_partitions)
             target_parts = [pth.parent for pth in target_parts.keys()]
             target_parts = set(target_parts)
 

@@ -33,8 +33,7 @@ def read_scenario_partition(
     then use `ScenarioReader.read_partitions()` instead.
     """
     dir = [Path(params["dir"])]
-    parts = {Path(d): o for d, o in partitions.items()}
-    selected = ScenarioReader.select_partitions(partitions=parts, dirs=dir)
+    selected = ScenarioReader.select_partitions_static(partitions=partitions, dirs=dir)
     if len(selected) > 1:
         raise RuntimeError("More than one partition identified in the given directory.")
     part_load_func = list(selected.values())[0]
