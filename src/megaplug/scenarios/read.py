@@ -84,18 +84,29 @@ class ScenarioReader(ABC):
         levels = {lev: path.parts[i] for lev, i in idxs.items()}
         return levels
 
-    @staticmethod
     def select_partitions(
+        self: Self,
         partitions: dict[Path, object],
+    ) -> dict[Path, object]:
+        """Select all partitions which are within any of the given directories."""
+        return ScenarioReader.select_partitions_static(
+            partitions=partitions,
+            dirs=self.dirs,
+        )
+
+    @staticmethod
+    def select_partitions_static(
+        partitions: dict[Path | str, object],
         dirs: list[Path] | None = None,
     ) -> dict[Path, object]:
         """Select all partitions which are within any of the given directories."""
+        part_dict = {Path(d): o for d, o in partitions.items()}
         if dirs is None:
-            selected = partitions
+            selected = part_dict
         else:
-            candids = product(dirs, partitions)
+            candids = product(dirs, part_dict)
             selected = {
-                pth: partitions[pth] for dir, pth in candids if pth.is_relative_to(dir)
+                pth: part_dict[pth] for dir, pth in candids if pth.is_relative_to(dir)
             }
 
         if len(selected) < 1:
