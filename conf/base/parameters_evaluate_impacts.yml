@@ -248,7 +248,7 @@ dask_eval:
     memory_limit: 16GiB # TODO: explore if this could be decreased by moving Dask farther along in pipeline (after filtering steps)
 
 sample_profiles:
-  discrete_freq: 15min
+  discrete_freq: 30min
   slice_freq: ${slice_events.slice_freq}
   n_bootstraps: 100 # As of 10/6/2025, 100 is about the maximum possible on Fletcher's laptop (because of summarization memory load)
   master_seed: 42
