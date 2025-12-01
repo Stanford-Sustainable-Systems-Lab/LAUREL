@@ -474,6 +474,13 @@ vehicle_peak_load_by_substation:
     index: True
     layer: vehicle_peak_load_by_substation
 
+vehicle_peak_load_by_substation_and_scenario_partition:
+  type: partitions.PartitionedDataset
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/substation_scenario_peaks/"
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
+
 vehicle_peak_load_by_substation_partition:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/vehicle_peak_load/substation/"
