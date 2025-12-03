@@ -610,6 +610,12 @@ peak_load_substation_distributions_across_scenarios:
   save_args:
     bbox_inches: tight
 
+example_substation_stacked_profiles:
+  type: matplotlib.MatplotlibDataset
+  filepath: data/08_reporting/example_substation_stacked_profiles.png
+  save_args:
+    bbox_inches: tight
+
 ### Scenario configurations
 scenario_configs:
   type: partitions.PartitionedDataset
