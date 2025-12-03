@@ -789,6 +789,7 @@ def sample_profiles_node(
         "slice_freq": params["slice_freq"],
         "discrete_freq": params["discrete_freq"],
         "dur_col": pcols["duration_col"],
+        "summary_suffixes": params["summary_suffixes"],
         "region_name": reg_col_compact,
         "time_col": tcol,
         "sample_self": params["sample_self"],
@@ -805,10 +806,10 @@ def sample_profiles_node(
     logger.info("Perform bootstrap sampling")
     master_seed = params.get("master_seed", None)
     boot_profs = {}
-    boot_cums = {}
+    boot_summs = {}
 
     if n_boots == 1:
-        boot_profs[0], boot_cums[0] = sample_profiles(**kws, seed=master_seed)
+        boot_profs[0], boot_summs[0] = sample_profiles(**kws, seed=master_seed)
     elif n_boots > 1:
 
         def _sample_profiles_distrib(kws: dict, boot_id: int):
@@ -826,7 +827,7 @@ def sample_profiles_node(
         for boot_id, (future, result) in tqdm(
             enumerate(as_completed(futures, with_results=True)), total=len(futures)
         ):
-            boot_profs[boot_id], boot_cums[boot_id] = result
+            boot_profs[boot_id], boot_summs[boot_id] = result
     else:
         raise ValueError("Number of bootstraps must be >= 1.")
 
@@ -839,8 +840,8 @@ def sample_profiles_node(
     boot_profs = boot_profs.droplevel("index")
     boot_profs = boot_profs.reset_index()
 
-    boot_cums = pd.concat(boot_cums, names=[params["bootstrap_id_col"]], copy=False)
-    boot_cums = boot_cums.reset_index()
+    boot_summs = pd.concat(boot_summs, names=[params["bootstrap_id_col"]], copy=False)
+    boot_summs = boot_summs.reset_index()
 
     # Reset names to originals
     loc_counts_names = locs_counts.loc[:, [reg_col_compact, reg_col]].drop_duplicates()
@@ -851,16 +852,20 @@ def sample_profiles_node(
     boot_profs[reg_col] = boot_profs[reg_col_compact].map(reg_name_restorer)
     boot_profs = boot_profs.drop(columns=[reg_col_compact])
 
-    renamer = {d: pcols["cum_cols"][k] for k, d in pcols["diff_cols"].items()}
-    boot_cums = boot_cums.rename(columns=renamer)
-    boot_cums[reg_col] = boot_cums[reg_col_compact].map(reg_name_restorer)
-    boot_cums = boot_cums.drop(columns=[reg_col_compact])
+    renamer = {}
+    suffs = params["summary_suffixes"]
+    ditems = pcols["diff_cols"].items()
+    renamer.update({f"{d}{suffs["cumul"]}": pcols["cum_cols"][k] for k, d in ditems})
+    renamer.update({f"{d}{suffs["peak"]}": pcols["peak_cols"][k] for k, d in ditems})
+    boot_summs = boot_summs.rename(columns=renamer)
+    boot_summs[reg_col] = boot_summs[reg_col_compact].map(reg_name_restorer)
+    boot_summs = boot_summs.drop(columns=[reg_col_compact])
 
     # Report on confidence of sampling
     conf_cols = [pcols["hex_col"], "m_hex_observed", "m_hex_expected"]
     hex_confidence = locs_counts.loc[:, conf_cols]
 
-    return boot_profs, boot_cums, hex_confidence
+    return boot_profs, boot_summs, hex_confidence
 
 
 def build_eval_columns(pcols: dict, group_cols: list) -> dict:

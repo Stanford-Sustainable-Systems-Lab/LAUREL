@@ -404,6 +404,7 @@ def sample_profiles(
     slice_freq: str,
     discrete_freq: str,
     dur_col: str,
+    summary_suffixes: dict[str, str],
     region_name: str,
     time_col: str,
     sample_self: bool = True,
@@ -480,6 +481,19 @@ def sample_profiles(
         prof_cols=prof_cols,
     )
 
+    peaks = calculate_peak_units(
+        profs=profs_df,
+        group_cols=[region_name],
+        prof_cols=prof_cols,
+    )
+
+    summs = cums.join(
+        peaks,
+        how="outer",
+        lsuffix=summary_suffixes["cumul"],
+        rsuffix=summary_suffixes["peak"],
+    )
+
     discs = discretize_sparse_profiles(
         profs=profs_df,
         time_col=time_col,
@@ -488,7 +502,7 @@ def sample_profiles(
         group_cols=[region_name],
         freq=discrete_freq,
     )
-    return discs, cums
+    return discs, summs
 
 
 def calculate_value_time_units(
@@ -509,6 +523,16 @@ def calculate_value_time_units(
 
     totals_df = val_hrs.groupby(group_cols)[prof_cols].sum()
     return totals_df
+
+
+def calculate_peak_units(
+    profs: pd.DataFrame,
+    group_cols: list[str],
+    prof_cols: list[str],
+) -> pd.DataFrame:
+    """Calculate the peak values (e.g. peak kW) for each region-profile pair."""
+    peaks_df = profs.groupby(group_cols)[prof_cols].max()
+    return peaks_df
 
 
 def discretize_sparse_profiles(
