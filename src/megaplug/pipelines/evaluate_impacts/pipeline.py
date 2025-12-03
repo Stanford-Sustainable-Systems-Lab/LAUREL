@@ -369,7 +369,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs=[
                     "bootstrap_profiles",
-                    "bootstrap_cumulatives",
+                    "bootstrap_summaries",
                     "sampling_source",
                 ],
                 name="sample_profiles_node",
@@ -392,9 +392,9 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             Node(
                 func=write_scenario_partition,
-                inputs=["bootstrap_cumulatives", "params:results_partition"],
-                outputs="report_by_region_cumulatives_partition",
-                name="write_scenario_partition_hexes_cumuls",
+                inputs=["bootstrap_summaries", "params:results_partition"],
+                outputs="report_by_region_summaries_partition",
+                name="write_scenario_partition_hexes_summaries",
             ),
             Node(
                 func=write_scenario_partition,
