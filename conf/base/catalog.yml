@@ -604,6 +604,18 @@ adoption_copula_figure:
   save_args:
     bbox_inches: tight
 
+peak_load_substation_distributions_across_scenarios:
+  type: matplotlib.MatplotlibDataset
+  filepath: data/08_reporting/peak_load_substation_distributions_across_scenarios.png
+  save_args:
+    bbox_inches: tight
+
+example_substation_stacked_profiles:
+  type: matplotlib.MatplotlibDataset
+  filepath: data/08_reporting/example_substation_stacked_profiles.png
+  save_args:
+    bbox_inches: tight
+
 ### Scenario configurations
 scenario_configs:
   type: partitions.PartitionedDataset
