@@ -920,10 +920,10 @@ def localize_time_from_hexes(
     return df
 
 
-def summarize_vehicle_window_quantiles(
+def compress_bootstrap_profiles(
     profs: pd.DataFrame, params: dict, pcols: dict
 ) -> pd.DataFrame:
-    """Summarize vehicle windows by grouping into times and then quantiling."""
+    """Compress bootstrap profiles by discretizing time and then quantiling."""
     tcol = params["time_col"]
     grouper = AdaptiveTimeGrouper(
         time_col=tcol,

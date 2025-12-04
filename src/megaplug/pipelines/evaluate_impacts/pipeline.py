@@ -26,6 +26,7 @@ from .nodes import (
     build_class_frame,
     build_eval_columns,
     build_time_ordered_slice,
+    compress_bootstrap_profiles,
     compute_adoption_totals,
     compute_class_dwell_counts,
     compute_class_probs,
@@ -38,7 +39,6 @@ from .nodes import (
     manage_charging,
     sample_profiles_node,
     slice_events,
-    summarize_vehicle_window_quantiles,
     summarize_vehicles,
 )
 
@@ -375,14 +375,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="sample_profiles_node",
             ),
             Node(
-                func=summarize_vehicle_window_quantiles,
+                func=compress_bootstrap_profiles,
                 inputs=[
                     "bootstrap_profiles",
                     "params:sample_profiles",
                     "eval_columns",
                 ],
                 outputs="report_by_region_quantiles",
-                name="summarize_vehicle_window_quantiles",
+                name="compress_bootstrap_profiles",
             ),
             Node(
                 func=write_scenario_partition,
