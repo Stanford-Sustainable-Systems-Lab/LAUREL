@@ -34,6 +34,7 @@ from megaplug.utils.time import (
     calc_time_zones_from_hexes,
     get_total_time_units_filtered,
     total_hours,
+    total_time_units,
 )
 
 logger = logging.getLogger(__name__)
@@ -922,6 +923,20 @@ def localize_time_from_hexes(
     return df
 
 
+def calc_utilization(summs: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFrame:
+    """Calculate utilization on bootstrap sample summaries."""
+    tot_dur = pd.Series([pd.Timedelta(params["slice_freq"])])
+    tot_dur = total_time_units(tot_dur, unit=params["dur_unit"])
+    tot_dur = tot_dur.values[0]
+
+    for vtype in pcols["profile_cols"].keys():
+        util_col = pcols["util_cols"][vtype]
+        cum_col = pcols["cum_cols"][vtype]
+        pk_col = pcols["peak_cols"][vtype]
+        summs[util_col] = summs[cum_col] / (summs[pk_col] * tot_dur)
+    return summs
+
+
 def compress_bootstrap_profiles(
     profs: pd.DataFrame, params: dict, pcols: dict
 ) -> pd.DataFrame:
@@ -972,7 +987,11 @@ def compress_bootstrap_summaries(
         quantiles=np.array(params["quantiles"]),
     )
 
-    val_cols = list(pcols["cum_cols"].values()) + list(pcols["peak_cols"].values())
+    val_cols = (
+        list(pcols["cum_cols"].values())
+        + list(pcols["peak_cols"].values())
+        + list(pcols["util_cols"].values())
+    )
     quantiles = summer.summarize(
         events=summs,
         value_cols=val_cols,

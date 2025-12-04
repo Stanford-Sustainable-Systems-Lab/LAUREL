@@ -193,6 +193,9 @@ eval_columns:
   peak_cols:
     power: peak_kw
     plugged: plugged_peak
+  util_cols:
+    power: util_energy
+    plugged: util_plugs
   duration_col: duration
 
 substation.group_columns:
@@ -274,3 +277,7 @@ sample_profiles:
     - 0.60
     - 0.95
     - 1.00
+
+calc_utilization:
+  slice_freq: ${slice_events.slice_freq}
+  dur_unit: 1h

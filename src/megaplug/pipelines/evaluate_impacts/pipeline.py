@@ -26,6 +26,7 @@ from .nodes import (
     build_class_frame,
     build_eval_columns,
     build_time_ordered_slice,
+    calc_utilization,
     compress_bootstrap_profiles,
     compress_bootstrap_summaries,
     compute_adoption_totals,
@@ -376,6 +377,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="sample_profiles_node",
             ),
             Node(
+                func=calc_utilization,
+                inputs=[
+                    "bootstrap_summaries",
+                    "params:calc_utilization",
+                    "eval_columns",
+                ],
+                outputs="bootstrap_summaries_w_utils",
+                name="calc_utilization",
+            ),
+            Node(
                 func=compress_bootstrap_profiles,
                 inputs=[
                     "bootstrap_profiles",
@@ -388,7 +399,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=compress_bootstrap_summaries,
                 inputs=[
-                    "bootstrap_summaries",
+                    "bootstrap_summaries_w_utils",
                     "params:sample_profiles",
                     "eval_columns",
                 ],
@@ -427,6 +438,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         "params:results_partition",
         "params:eval_columns",
         "params:sample_profiles",
+        "params:calc_utilization",
     }
     profile_group_fixed_inputs = {
         "dwell_obj_ided",
