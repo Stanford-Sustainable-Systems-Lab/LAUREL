@@ -344,9 +344,16 @@ class NonzeroGroupedSummarizer:
             f"{str(col)}_{str(q)}" for col in cols_to_process for q in self.quantiles
         ]
 
+        grp_keys = grp_idxs.keys()
+        if len(self.group_cols) == 1:
+            quant_idx = pd.Index(grp_keys, name=self.group_cols[0])
+        elif len(self.group_cols) > 1:
+            quant_idx = pd.MultiIndex.from_tuples(grp_keys, names=self.group_cols)
+        else:
+            raise ValueError("At least one group column is required.")
         quantile_df = pd.DataFrame(
             data=combined_results,
-            index=pd.MultiIndex.from_tuples(grp_idxs.keys(), names=self.group_cols),
+            index=quant_idx,
             columns=combined_columns,
         )
         return quantile_df
