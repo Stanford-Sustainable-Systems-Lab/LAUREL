@@ -27,6 +27,7 @@ from .nodes import (
     build_eval_columns,
     build_time_ordered_slice,
     compress_bootstrap_profiles,
+    compress_bootstrap_summaries,
     compute_adoption_totals,
     compute_class_dwell_counts,
     compute_class_probs,
@@ -385,6 +386,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="compress_bootstrap_profiles",
             ),
             Node(
+                func=compress_bootstrap_summaries,
+                inputs=[
+                    "bootstrap_summaries",
+                    "params:sample_profiles",
+                    "eval_columns",
+                ],
+                outputs="report_by_region_summaries",
+                name="compress_bootstrap_summaries",
+            ),
+            Node(
                 func=write_scenario_partition,
                 inputs=["sampling_source", "params:results_partition"],
                 outputs="sampling_source_partition",
@@ -392,7 +403,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             Node(
                 func=write_scenario_partition,
-                inputs=["bootstrap_summaries", "params:results_partition"],
+                inputs=["report_by_region_summaries", "params:results_partition"],
                 outputs="report_by_region_summaries_partition",
                 name="write_scenario_partition_hexes_summaries",
             ),

@@ -954,3 +954,31 @@ def compress_bootstrap_profiles(
         possible_count_col="possible_count",
     )
     return quantiles
+
+
+def compress_bootstrap_summaries(
+    summs: pd.DataFrame, params: dict, pcols: dict
+) -> pd.DataFrame:
+    """Compress bootstrap profiles by discretizing time and then quantiling."""
+    n_bootstraps = summs[params["bootstrap_id_col"]].nunique()
+    summs["possible_count"] = n_bootstraps
+
+    logger.info("Calculate quantiles")
+    summ_cols = pcols["group_cols"]
+    summer = NonzeroGroupedSummarizer(
+        group_cols=summ_cols,
+        quantiles=np.array(params["quantiles"]),
+    )
+
+    val_cols = list(pcols["cum_cols"].values()) + list(pcols["peak_cols"].values())
+    quantiles = summer.summarize(
+        events=summs,
+        value_cols=val_cols,
+        possible_count_col="possible_count",
+    )
+
+    means = summs.groupby(summ_cols)[val_cols].mean()
+    means.columns = [f"{col}_mean" for col in means.columns]
+
+    comps = quantiles.join(means, how="outer")
+    return comps
