@@ -763,7 +763,9 @@ def sample_profiles_node(
     locs_counts["m_hex_observed"] = m_hex_obs
 
     exp_dwell_rate_col = params["n_dwells_expected_elect_col"]
-    loc_cls = classes.groupby(params["loc_group_col"])[exp_dwell_rate_col].sum()
+    loc_cls = classes.groupby(params["loc_group_col"], observed=False)[
+        exp_dwell_rate_col
+    ].sum()
     loc_cls.index = loc_cls.index.map(class_map)  # In case categories were scrambled
     loc_cls = loc_cls.sort_index()
     n_locs_per_class = Cy.sum(axis=0)
