@@ -201,9 +201,7 @@ eval_columns:
 substation.group_columns:
     - substation_id
 
-state_op_dist.group_columns:
-    - state
-    - primary_op_dist
+county.group_columns:
 
 stratify_columns:
   - loc_group_id
