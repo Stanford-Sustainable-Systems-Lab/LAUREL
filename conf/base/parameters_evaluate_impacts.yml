@@ -205,6 +205,7 @@ county.group_columns:
 
 stratify_columns:
   - loc_group_id
+  - primary_op_dist
 
 assign_metadata_location:
   keep_right_columns:
