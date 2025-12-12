@@ -33,6 +33,12 @@ state_boundaries:
   load_args:
     layer: cb_2023_us_state_500k
 
+county_boundaries:
+  type: megaplug.datasets.geodatabase.GeoDataBaseDataset
+  filepath: data/01_raw/Census_Geographies/cb_2023_us_all_500k.gdb
+  load_args:
+    layer: cb_2023_us_county_500k
+
 substations_continent:
   type: megaplug.datasets.geopackage.GeoPackageDataset
   filepath: data/01_raw/HIFLD/electric_substation_hifld_v4/electric_substation_hifld_v4.gpkg
