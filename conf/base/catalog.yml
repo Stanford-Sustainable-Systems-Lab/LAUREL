@@ -474,6 +474,20 @@ vehicle_peak_load_by_substation:
     index: True
     layer: vehicle_peak_load_by_substation
 
+min_adoption_by_substation:
+  type: megaplug.datasets.geopackage.GeoPackageDataset
+  filepath: data/08_reporting/min_adoption_by_substation.gpkg
+  save_args:
+    index: True
+    layer: min_adoption_by_substation
+
+min_adoption_by_substation_points:
+  type: megaplug.datasets.geopackage.GeoPackageDataset
+  filepath: data/08_reporting/min_adoption_by_substation.gpkg
+  save_args:
+    index: True
+    layer: min_adoption_by_substation_points
+
 vehicle_peak_load_by_substation_and_scenario_partition:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/substation_scenario_peaks/"
@@ -610,9 +624,33 @@ peak_load_substation_distributions_across_scenarios:
   save_args:
     bbox_inches: tight
 
+energy_utilization_substation_distributions_across_scenarios:
+  type: matplotlib.MatplotlibDataset
+  filepath: data/08_reporting/energy_utilization_substation_distributions_across_scenarios.png
+  save_args:
+    bbox_inches: tight
+
 example_substation_stacked_profiles:
   type: matplotlib.MatplotlibDataset
   filepath: data/08_reporting/example_substation_stacked_profiles.png
+  save_args:
+    bbox_inches: tight
+
+factor_prioritization:
+  type: matplotlib.MatplotlibDataset
+  filepath: data/08_reporting/factor_prioritization.png
+  save_args:
+    bbox_inches: tight
+
+single_factor_minimum:
+  type: matplotlib.MatplotlibDataset
+  filepath: data/08_reporting/single_factor_minimum.png
+  save_args:
+    bbox_inches: tight
+
+robust_upgrade_combos:
+  type: matplotlib.MatplotlibDataset
+  filepath: data/08_reporting/robust_upgrade_combos.png
   save_args:
     bbox_inches: tight
 
