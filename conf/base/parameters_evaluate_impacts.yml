@@ -199,9 +199,10 @@ eval_columns:
   duration_col: duration
 
 substation.group_columns:
-    - substation_id
+  - substation_id
 
 county.group_columns:
+  - county_fips
 
 stratify_columns:
   - loc_group_id
