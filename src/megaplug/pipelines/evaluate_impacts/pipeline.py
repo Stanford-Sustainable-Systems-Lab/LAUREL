@@ -424,12 +424,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="report_by_region_quantiles_partition",
                 name="write_scenario_partition_hexes_quants",
             ),
-            # Node(
-            #     func=write_scenario_partition,
-            #     inputs=["report_by_region_energies", "params:results_partition"],
-            #     outputs="report_by_region_energies_partition",
-            #     name="write_scenario_partition_region_energies",
-            # ),
         ],
         tags="report_profiles",
     )
