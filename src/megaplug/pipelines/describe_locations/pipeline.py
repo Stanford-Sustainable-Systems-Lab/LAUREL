@@ -212,7 +212,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             Node(
                 func=format_states,
-                inputs=["state_boundaries", "params:format_states"],
+                inputs=["county_boundaries", "params:format_states"],
                 outputs="states_formatted_raw",
                 name="format_states",
             ),

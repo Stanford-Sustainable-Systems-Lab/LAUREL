@@ -87,11 +87,13 @@ continental.geo_partition:
 format_states:
   col_renamer:
     state_code: STUSPS
-    state_name: NAME
+    state_name: STATE_NAME
+    county_fips: COUNTYFP
 
 states.select_columns:
   keep_cols:
     - state_code
+    - county_fips
 
 filter_state_codes:
   filters:
