@@ -202,7 +202,7 @@ substation.group_columns:
   - substation_id
 
 county.group_columns:
-  - county_fips
+  - county_code
 
 stratify_columns:
   - loc_group_id

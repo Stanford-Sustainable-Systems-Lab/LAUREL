@@ -88,12 +88,12 @@ format_states:
   col_renamer:
     state_code: STUSPS
     state_name: STATE_NAME
-    county_fips: COUNTYFP
+    county_code: COUNTYNS
 
 states.select_columns:
   keep_cols:
     - state_code
-    - county_fips
+    - county_code
 
 filter_state_codes:
   filters:
