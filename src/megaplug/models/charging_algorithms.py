@@ -1,3 +1,65 @@
+"""Charging-choice simulation strategies for the ``electrify_trips`` pipeline (Model Module 4).
+
+Implements the per-vehicle utility-maximisation charging-choice model described
+in the paper.  Each concrete :class:`AbstractChargingChoiceStrategy` encodes a
+different decision rule for *when* and *how much* to charge at each dwell, and
+is invoked by :meth:`AbstractChargingChoiceStrategy.run` which iterates over
+all vehicles in a :class:`~megaplug.models.dwell_sets.DwellSet`.
+
+Pipeline overview
+-----------------
+1. :meth:`AbstractChargingChoiceStrategy.run` — outer loop: converts
+   ``DwellSet.data``, vehicle parameters, and mode tables to NumPy recarrays;
+   dispatches per-vehicle to :meth:`_simulate`.
+2. :meth:`AbstractChargingChoiceStrategy._simulate` — JIT-compiled vehicle
+   loop: evolves SoC step-by-step, calling :meth:`_choose_charging` at each
+   eligible dwell.
+3. :meth:`AbstractChargingChoiceStrategy._choose_charging` — abstract static
+   method; each concrete strategy overrides this with a ``@jit``-decorated
+   function expressing its decision logic.
+
+Concrete strategies
+-------------------
+- :class:`SoCThreshChargingChoiceStrategy`: charges when SoC falls below a
+  threshold; simple rule used for baseline and validation runs.
+- :class:`ForwardLookingChargingChoiceStrategy`: evaluates six charging-energy
+  options × available modes, scores each by an indirect utility function
+  (SoC target + delay cost + feasibility penalties), and selects the maximum.
+
+Key design decisions
+--------------------
+- **Recarray-based Numba interface**: all simulation inputs are converted to
+  NumPy structured arrays (recarrays) before being passed to JIT functions.
+  Column names are mapped to recarray field names via ``_renamer`` (a reversed
+  ``{column_name → attribute_name}`` dict).  Pandas nullable types
+  (``Float64``, ``Int64``) and booleans are substituted by
+  ``_replace_dtypes`` to avoid Numba incompatibility.
+- **Bitmask mode availability**: available charging modes per dwell are encoded
+  as a ``uint64`` bitmask in the ``modes_avail`` field and decoded inside the
+  JIT function via :func:`~megaplug.utils.mode_masks.bits_to_bool_vec`.  This
+  avoids passing variable-length arrays across the Python/Numba boundary.
+- **``_output_records_dtype``**: a fixed structured dtype shared by all
+  strategies ensures that the output recarray can always be concatenated with
+  the input DwellSet data without column-name conflicts.
+- **Delay accounting**: ``delay_inc_hrs`` and ``delay_dec_hrs`` track
+  separately the delay incurred and recovered at each dwell; ``cur_delay`` is
+  the running balance.  The ``max_delay_recoverable_hrs`` vehicle parameter
+  caps how much accumulated delay can be erased at a single refresh point
+  (depot or destination stop).
+- **Revive logic**: a vehicle whose SoC goes negative is treated as "broken
+  down" and neither charges nor accumulates delay until it reaches the next
+  ``refresh`` dwell (a depot or destination stop with sufficient dwell time),
+  where it is revived with SoC = 0.
+
+References
+----------
+Passow, F., & Rajagopal, R. (2026). Identifying indicators to inform proactive
+substation upgrades for charging electric heavy-duty trucks. *Applied Energy*.
+
+Liu, Y., et al. (2021). A hierarchical optimization charging strategy for
+plug-in hybrid electric vehicles. *IEEE Transactions on Vehicular Technology*.
+"""
+
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 
@@ -13,11 +75,31 @@ from megaplug.utils.mode_masks import bits_to_bool_vec
 
 
 class AbstractChargingChoiceStrategy(ABC):
-    """Defines how charging choice strategies should be implemented.
+    """Abstract base class for per-dwell charging choice strategies.
 
-    This applies the strategy for a sequence of dwells which may cover multiple vehicles.
-    Ensure that the vehicles have a "reset == True" at the beginning of their dwell
-    set to ensure isolation.
+    Subclasses implement :meth:`_choose_charging` (a static ``@jit``-decorated
+    function) to express their decision rule.  The base class provides the
+    full simulation driver — recarray conversion, per-vehicle iteration, and
+    output assembly — so subclasses only need to supply the decision logic.
+
+    Each strategy instance stores the names of the input columns it expects
+    from the dwell DataFrame and vehicle/mode parameter tables.  These names
+    are used to build ``_renamer``, a dict mapping *input column names* to the
+    *recarray field names* that the JIT functions address.
+
+    Class attributes:
+        _replace_dtypes: Dtype substitution map used when building recarrays
+            from DataFrames.  Converts pandas nullable types and Python bools
+            to Numba-compatible equivalents.
+        _output_records_dtype: Fixed NumPy structured dtype for the output
+            recarray produced by :meth:`_simulate`.  Fields are
+            ``dwell_init_kwh``, ``charge_kwh``, ``dwell_init_delay_hrs``,
+            ``delay_inc_hrs``, ``delay_dec_hrs``, ``charge_mode_id``.
+
+    .. note::
+        All vehicles in the supplied :class:`~megaplug.models.dwell_sets.DwellSet`
+        must have a ``reset == True`` at their first dwell to ensure their SoC
+        is initialised correctly before any trip energy is subtracted.
     """
 
     consumed_kwh: str
@@ -72,26 +154,36 @@ class AbstractChargingChoiceStrategy(ABC):
         rng_alpha: str,
         rng_beta: str,
     ) -> None:
-        """Set up the column name mappings to be used for this strategy.
+        """Store column-name mappings for dwell, vehicle, and mode inputs.
 
-        Because of the renaming during the creation of the recarrays, you can refer
-        to the variables in the recarrays by the corresponding attribute names from
-        the ChargingChoiceStrategy class which you are using.
+        All arguments are *column names* (not values).  They are stored as
+        instance attributes and used to build ``_renamer``, a dict mapping
+        each input column name to the corresponding recarray field name used
+        inside the JIT functions.
 
-        At a minimum, we need the columns in the dwells:
-            - consumed_kwh
-            - dwell_hrs
-            - modes_avail
-            - avail_kw
-            - refresh
-            - reset
-            - critical
-
-        And we need the vehicle parameters:
-            - battery_capacity
-            - max_delay_recoverable_hrs
-            - rng_alpha
-            - rng_beta
+        Args:
+            consumed_kwh: Dwell-table column: energy consumed by the preceding
+                trip (kWh).
+            dwell_hrs: Dwell-table column: duration of this dwell (hours).
+            modes_avail: Dwell-table column: ``uint64`` bitmask of charging
+                modes available at this location.
+            avail_kw: Mode-table column: charging power for each mode (kW).
+            refresh: Dwell-table column: boolean; ``True`` at depot/destination
+                dwells that are eligible for delay recovery and SoC revival.
+            reset: Dwell-table column: boolean; ``True`` at the start of each
+                vehicle's simulation epoch.
+            critical: Dwell-table column: boolean; ``True`` at dwells where
+                charging should always be considered (e.g. all stops ≥ some
+                minimum dwell time).
+            batt_cap: Vehicle-table column: usable battery capacity (kWh).
+            max_delay_recoverable_hrs: Vehicle-table column: maximum delay that
+                can be erased at a single refresh point (hours).
+            random_seed: Vehicle-table column: integer seed for the vehicle's
+                RNG (reserved for future stochastic extensions).
+            rng_alpha: Vehicle-table column: Beta distribution alpha parameter
+                (reserved).
+            rng_beta: Vehicle-table column: Beta distribution beta parameter
+                (reserved).
         """
         self.consumed_kwh = consumed_kwh
         self.dwell_hrs = dwell_hrs
@@ -109,9 +201,20 @@ class AbstractChargingChoiceStrategy(ABC):
         self._renamer = {v: k for k, v in self.__dict__.items() if isinstance(v, str)}
 
     def convert_to_records(self, df: pd.DataFrame) -> np.recarray:
-        """Convert a dataframe to a format which can be passed into the JIT-ed simulation.
+        """Convert a DataFrame to a Numba-compatible recarray.
 
-        This method performs two primary tasks: renaming and type casting.
+        Selects only the columns whose names appear in ``_renamer``, renames
+        them to their recarray field names (attribute names of this strategy
+        instance), substitutes incompatible dtypes, and converts to a NumPy
+        structured array.  Array-valued columns (e.g. ``avail_kw`` which holds
+        a per-mode power vector per row) are stacked via ``np.vstack``.
+
+        Args:
+            df: Input DataFrame (dwell table, vehicle table, or mode table).
+
+        Returns:
+            NumPy recarray with field names matching this strategy's attribute
+            names.
         """
         rename_key_set = set(self._renamer.keys())
         use_cols = list(rename_key_set.intersection(set(df.columns)))
@@ -126,10 +229,21 @@ class AbstractChargingChoiceStrategy(ABC):
         return recs
 
     def _get_recarray_dtypes(self, df: pd.DataFrame) -> dict[str, str]:
-        """Convert a DataFrame to a Record Array using opinionated type conversions.
+        """Build a per-column dtype dict for recarray construction.
 
-        Note: Boolean values seem to not convert as bytes, so I will use a small unsigned
-        integer instead
+        Inspects each column's dtype.  For scalar columns, substitutes any
+        dtype name listed in ``_replace_dtypes``.  For object-dtype columns
+        that contain NumPy arrays (e.g. per-mode power vectors), extracts the
+        element dtype and shape and constructs a ``(dtype_str, shape)``
+        sub-array type.
+
+        Args:
+            df: DataFrame after column renaming (field names match strategy
+                attributes).
+
+        Returns:
+            Dict mapping column names to ``np.dtype`` objects suitable for
+            ``np.rec.fromarrays``.
         """
         col_dtypes = {}
         for col, dtype in zip(df.columns, df.dtypes):
@@ -163,7 +277,33 @@ class AbstractChargingChoiceStrategy(ABC):
         modes: pd.DataFrame,
         show_progress: bool = True,
     ) -> pd.DataFrame:
-        """Run the simulation for a single vehicle by calling the sub-class-specific JIT-ed simulator."""
+        """Simulate charging choices for all vehicles and return an annotated dwell table.
+
+        Converts all inputs to recarrays, builds per-vehicle RNGs from the
+        ``random_seed`` column, then iterates over vehicle groups (using
+        ``groupby.indices`` for O(1) integer-indexed recarray slicing).  Calls
+        :meth:`_simulate` for each vehicle and assembles the output recarray
+        back into a DataFrame aligned with ``dwells.data``.
+
+        Args:
+            dwells: :class:`~megaplug.models.dwell_sets.DwellSet` containing
+                dwell-level input features.
+            vehs: DataFrame of per-vehicle parameters indexed by vehicle ID.
+                Must not contain duplicate vehicle IDs.
+            modes: DataFrame of charging modes indexed by integer mode ID.
+                The index must be (or be convertible to) integer.
+            show_progress: Display a ``tqdm`` progress bar over vehicles.
+                Defaults to ``True``.
+
+        Returns:
+            ``dwells.data`` concatenated with the output recarray columns
+            (``dwell_init_kwh``, ``charge_kwh``, ``dwell_init_delay_hrs``,
+            ``delay_inc_hrs``, ``delay_dec_hrs``, ``charge_mode_id``).
+
+        Raises:
+            RuntimeError: If ``vehs`` contains duplicate vehicle IDs.
+            TypeError: If ``modes.index`` cannot be converted to integer.
+        """
         if np.any(vehs.index.duplicated()):
             raise RuntimeError("Duplicate vehicle ids detected")
 
@@ -229,11 +369,42 @@ class AbstractChargingChoiceStrategy(ABC):
         rng: np.random.Generator,
         round_decimals: int = 4,
     ) -> np.ndarray:
-        """Simulate the evolution of the SoC with charging choices.
+        """JIT-compiled vehicle-level SoC evolution loop.
 
-        Because of the renaming during the creation of the recarrays, you should refer
-        to the variables in the recarrays by the corresponding attribute names from
-        the ChargingChoiceStrategy class which you are using.
+        Steps through each dwell in ``dwls`` and:
+
+        1. Resets the vehicle's SoC to full (``batt_cap``) at each ``reset``
+           boundary.
+        2. Subtracts ``consumed_kwh`` to update the current energy.
+        3. Decides whether to charge:
+
+           - If the vehicle is alive and the dwell is ``critical`` or
+             ``refresh``: calls ``choice_func`` for a charging decision.
+           - If the vehicle is alive but neither: no charging, no delay.
+           - If the vehicle is dead (SoC < 0) at a ``refresh`` point: revives
+             with SoC = 0 then charges.
+           - If the vehicle is dead at any other dwell: records ``NaN`` charge,
+             zero delay.
+
+        4. Limits delay recovery at ``refresh`` points by
+           ``max_delay_recoverable_hrs``.
+        5. Writes results into ``outs``.
+
+        Field names in the recarrays must match the strategy's attribute names
+        (set up by :meth:`__init__` and applied by :meth:`convert_to_records`).
+
+        Args:
+            choice_func: The concrete :meth:`_choose_charging` static method.
+            dwls: Per-dwell recarray for one vehicle.
+            veh: Single-vehicle parameter recarray (shape ``(1,)``).
+            modes: Charging-mode parameter recarray.
+            outs: Pre-allocated output recarray for this vehicle's dwells.
+            rng: NumPy random Generator for stochastic extensions (currently
+                unused in deterministic strategies).
+            round_decimals: Reserved for future rounding of output values.
+
+        Returns:
+            ``outs`` filled with simulation results for this vehicle.
         """
         nsteps = dwls.shape[0]
         cur_energy = np.nan
@@ -285,14 +456,19 @@ class AbstractChargingChoiceStrategy(ABC):
 
     @classmethod
     def get_output_schema(cls, input: pd.DataFrame | dd.DataFrame) -> pd.DataFrame:
-        """Generate empty DataFrame with correct output schema for dask meta.
+        """Generate an empty DataFrame matching the output schema of :meth:`run`.
+
+        Used to supply ``meta`` to Dask ``map_partitions`` calls.  Starts from
+        the input schema and appends the columns defined in
+        ``_output_records_dtype``.
 
         Args:
-            input_columns: List of column names from the input DwellSet data
-            input_index: Index from the input DwellSet data (optional)
+            input: Representative DataFrame or Dask DataFrame whose schema
+                (columns and dtypes) forms the base of the output schema.
 
         Returns:
-            Empty DataFrame with correct dtypes and column names for the output
+            Empty pandas DataFrame with input columns plus the output columns
+            (``dwell_init_kwh``, ``charge_kwh``, etc.) at their correct dtypes.
         """
         # Create empty DataFrame with input columns (these pass through unchanged)
         schema_df = dd.utils.make_meta(input)
@@ -311,16 +487,36 @@ class AbstractChargingChoiceStrategy(ABC):
         veh: np.recarray,
         modes: np.recarray,
     ) -> tuple[float, float, int]:
-        """Choose charging energy, delay, and mode.
+        """Select charging energy, delay change, and mode for one dwell.
 
-        Note: Will be passed to JIT-ed _simulate().
+        Called from the JIT-compiled :meth:`_simulate` loop.  Must itself be
+        decorated with ``@jit`` in concrete subclasses.
+
+        Args:
+            cur_energy: Vehicle's current energy (kWh) after subtracting this
+                dwell's consumed energy.
+            dwl: Single-dwell recarray row.
+            veh: Single-vehicle parameter recarray row.
+            modes: Full charging-mode parameter recarray.
+
+        Returns:
+            Three-tuple ``(charge_kwh, delay_hrs, mode_id)`` where
+            ``delay_hrs`` is positive for new delay and negative for
+            recovered delay.
         """
         pass
 
 
 class SoCThreshChargingChoiceStrategy(AbstractChargingChoiceStrategy):
-    """A charging choice strategy where the vehicle charges whenever it falls below
-    an SoC threshold.
+    """Threshold-based charging strategy: charge when SoC falls below a fixed level.
+
+    At each eligible dwell, charges to full at the maximum available power if
+    the current SoC is at or below ``charge_soc``; otherwise does not charge.
+    Used for baseline comparisons and validation.
+
+    Additional Args (beyond :class:`AbstractChargingChoiceStrategy`):
+        charge_soc: Vehicle-table column containing the SoC threshold
+            (fraction of ``batt_cap``) below which charging is triggered.
     """
 
     charge_soc: str
@@ -337,9 +533,18 @@ class SoCThreshChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         veh: np.recarray,
         modes: np.recarray,
     ) -> tuple[float, float, int]:
-        """Choose charging energy and mode.
+        """Charge to full at maximum power if SoC ≤ threshold, else skip.
 
-        Note: Will be passed to JIT-ed _simulate().
+        Args:
+            cur_energy: Current energy (kWh).
+            dwl: Dwell recarray row.
+            veh: Vehicle recarray row; must contain ``batt_cap`` and
+                ``charge_soc`` fields.
+            modes: Mode recarray; highest-index mode is used for charging.
+
+        Returns:
+            ``(charge_kwh, 0.0, mode_id)`` — no delay is modelled by this
+            simple strategy.
         """
         # TODO: Convert this to a discrete choice framework
         # TODO: Return the selected mode
@@ -357,8 +562,42 @@ class SoCThreshChargingChoiceStrategy(AbstractChargingChoiceStrategy):
 
 
 class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
-    """A charging choice strategy where the vehicle looks ahead to the next trip and
-    the rest of the current shift to determine when to charge.
+    """Utility-maximising charging strategy with forward-looking shift awareness.
+
+    At each eligible dwell, enumerates six charging-energy options ×
+    ``n_modes`` charging modes, evaluates an indirect utility function for each
+    combination, and selects the (option, mode) pair with the highest utility.
+
+    The six energy options are:
+
+    0. No charging.
+    1. Charge for the full available dwell time.
+    2. Charge for the next trip plus a low SoC buffer.
+    3. Charge for the remainder of the shift plus a low SoC buffer.
+    4. Charge to the target (high) SoC.
+    5. Charge to full battery.
+
+    The utility function penalises:
+
+    - Delay relative to the counterfactual delay from charging later in the
+      shift at the highest remaining power level.
+    - Deviation from the target SoC (quadratic penalty).
+    - Constraint violations (infeasible trip, battery overflow, infeasible
+      shift) via ``-inf`` masks.
+
+    Additional Args (beyond :class:`AbstractChargingChoiceStrategy`):
+        soc_buffer_low: Vehicle-table column: minimum SoC buffer for trip/shift
+            energy calculations (fraction of ``batt_cap``).
+        soc_buffer_high: Vehicle-table column: target SoC (fraction of
+            ``batt_cap``).
+        min_soc_charge: Vehicle-table column: minimum fraction of ``batt_cap``
+            to charge per session (avoids tiny plug-ins).
+        plug_in_and_out_delay_hrs: Vehicle-table column: fixed delay penalty
+            for plug-in/out at zero-duration optional stops.
+        consumed_kwh_next: Dwell-table column: energy needed for the next trip.
+        consumed_kwh_shift: Dwell-table column: total remaining shift energy.
+        power_kw_shift_max_remaining: Dwell-table column: highest charging
+            power available at any future dwell in this shift.
     """
 
     soc_buffer_low: str
@@ -397,7 +636,42 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
         veh: np.recarray,
         modes: np.recarray,
     ) -> tuple[float, float, int]:
-        """Choose the charging energy, delay, and mode for a dwell."""
+        """Select the utility-maximising charging energy and mode for one dwell.
+
+        Implements the forward-looking utility maximisation described in the
+        paper (Model Module 4).  The algorithm proceeds as follows:
+
+        1. Decode the ``modes_avail`` bitmask to a boolean availability vector.
+        2. Exit immediately with no charging if no power is available.
+        3. Build a ``(N_CHG_OPTS × n_modes)`` energy matrix ``e`` for the six
+           options described in the class docstring.
+        4. Zero out energy on unavailable modes.
+        5. Compute outcomes: final energy, trip success, battery-bounds
+           compliance, shift feasibility (all as 0 / ``-inf`` masks).
+        6. Compute charging time and resulting delay at this dwell.
+        7. Compute counterfactual delay if charging were deferred to the
+           highest-power future dwell.
+        8. Compute SoC-targeting quadratic utility (penalises deviation from
+           ``soc_buffer_high``).
+        9. Sum all utility components and find the argmax.
+        10. Return the selected energy, net delay change, and mode index.
+
+        Args:
+            cur_energy: Current energy (kWh) after subtracting trip consumption.
+            dwl: Dwell recarray row; must contain ``modes_avail``, ``dwell_hrs``,
+                ``consumed_kwh_next``, ``consumed_kwh_shift``, and
+                ``power_kw_shift_max_remaining``.
+            veh: Vehicle recarray row; must contain ``batt_cap``,
+                ``soc_buffer_low``, ``soc_buffer_high``, ``min_soc_charge``,
+                and ``plug_in_and_out_delay_hrs``.
+            modes: Mode recarray; must contain ``avail_kw``.
+
+        Returns:
+            Three-tuple ``(charge_kwh, delay_hrs, mode_id)`` where
+            ``delay_hrs`` is the net change in accumulated delay (positive =
+            new delay incurred, negative = delay recovered relative to the
+            counterfactual deferral).
+        """
 
         n_modes = modes["avail_kw"].shape[0]
         modes_avail = bits_to_bool_vec(dwl["modes_avail"], n_modes=n_modes)

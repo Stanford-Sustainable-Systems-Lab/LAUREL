@@ -1,3 +1,53 @@
+"""Bootstrap load-profile assembly for the ``evaluate_impacts`` pipeline (Model Module 6).
+
+Assembles per-substation peak-load and energy estimates by bootstrap sampling
+across the telematics-observed dwell population for each hexagonal TAZ.  The
+central function is :func:`sample_profiles`, which performs a two-stage
+inverse-propensity-weighted draw:
+
+- **Stage 1 (class-level draw)**: For each hex cell, draw candidate dwells
+  from the observed dwell population in the same freight-activity class, using
+  normalised inverse-propensity weights ``Om_class``.  This ensures that each
+  hex's sample is drawn from a class-representative pool even when the hex
+  itself has few direct observations.
+- **Stage 2 (self draw)**: Supplement with dwells drawn directly from the
+  hex's own observed dwell population, up to the available count.
+
+Supporting sparse-matrix utilities
+-----------------------------------
+- :func:`build_entity_mask_array`: builds a ``(n_obs, n_ent)`` CSC indicator
+  array mapping observations to entities.
+- :func:`normalize_sparse`: column- or row-normalises a sparse array, with
+  configurable zero-sum handling.
+- :func:`sample_sparse_multinomial` / :func:`sample_sparse_multinomial_core`:
+  JIT-compiled multinomial draw from each column of a sparse probability
+  matrix.
+- :func:`collate_sparse_diffs` / :func:`_collate_sparse_diffs_core`: converts
+  sparse power-difference arrays to cumulative load-profile DataFrames (one
+  region × event row per entry).
+- :func:`calculate_value_time_units`, :func:`calculate_peak_units`,
+  :func:`discretize_sparse_profiles`: summarise profiles into kWh totals, peak
+  kW, and discretised time-series DataFrames.
+
+Key design decisions
+--------------------
+- **Sparse representation**: each possible charging event is stored as a row
+  in the event-observation matrix; the sparse format avoids materialising
+  dense ``(n_events × n_regions)`` arrays that would be prohibitively large
+  for 52,000 substations × 100 bootstrap draws.
+- **Bernoulli fractional-sample rounding**: expected dwell counts are
+  non-integer; fractional parts are rounded stochastically via a Bernoulli
+  draw (``Binomial(n=1, p=fractional_part)``) to avoid systematic bias.
+- **JIT inner loop**: :func:`sample_sparse_multinomial_core` iterates over
+  regions in a tight loop that would be slow in interpreted Python; the
+  ``@jit`` decorator eliminates the per-region Python overhead.
+
+References
+----------
+Passow, F., & Rajagopal, R. (2026). Identifying indicators to inform proactive
+substation upgrades for charging electric heavy-duty trucks. *Applied Energy*.
+"""
+
 import logging
 import warnings
 from typing import Literal
@@ -17,18 +67,26 @@ logger = logging.getLogger(__name__)
 def build_entity_mask_array(
     ids: NDArray[np.int_], n_ent: int | None = None
 ) -> sp.sparse.coo_array:
-    """Build an array whose columns are each a mask on the observations for a particular entity.
+    """Build a sparse binary indicator matrix mapping observations to entities.
+
+    Constructs a ``(n_obs, n_ent)`` COO sparse array where entry ``[i, j]``
+    is 1 if observation ``i`` belongs to entity ``j`` and 0 otherwise.
+    Used to construct inverse-propensity weight matrices in
+    :func:`sample_profiles`.
 
     Args:
-        ids: The array (n_obs,) of entity ids for each observation
-        n_ent: The number of entities which exist
+        ids: 1-D integer array of length ``n_obs`` giving the entity index for
+            each observation.  Entity indices must be in ``[0, n_ent)``.
+        n_ent: Total number of entities (number of columns in the output).  If
+            ``None``, inferred as ``len(np.unique(ids))``.
 
-    Returns: Sparse COO Array of (n_obs, n_ent) whose columns are a mask on the observations
-    belonging to a particular entity.
+    Returns:
+        Sparse COO array of shape ``(n_obs, n_ent)`` with ``1.0`` entries.
 
-    Example Usage:
-    obs["entity_id_compact"] = pd.Categorical(sess["entity_id"]).codes
-    mask = build_entity_mask_array(obs["entity_id_compact"])
+    Example::
+
+        obs["entity_id_compact"] = pd.Categorical(obs["entity_id"]).codes
+        mask = build_entity_mask_array(obs["entity_id_compact"].values)
     """
     n_obs = ids.shape[0]
 
@@ -110,10 +168,33 @@ def sample_sparse_multinomial_core(
     indptr: NDArray,
     loc_grp_arr: NDArray | None = None,
 ) -> tuple[NDArray, NDArray, NDArray]:
-    """Sample a from a multinomial distribution for each row/column of a sparse array.
+    """JIT-compiled inner loop: draw multinomial samples from each column of a CSC array.
 
-    Note that this function will return no samples when there are no samples available.
-    This allows it to not error out.
+    Iterates over locations (columns of the probability matrix), draws
+    ``n_arr[hex]`` samples from the probability distribution stored in that
+    column, and writes the non-zero counts into output CSC arrays.  Pre-allocates
+    the output arrays to the maximum possible size (``n_arr.sum()``) and trims
+    at the end.
+
+    When ``loc_grp_arr`` is not ``None``, each location ``hex`` samples from
+    the column indexed by ``loc_grp_arr[hex]`` in the probability matrix
+    (class-level pooling).  Locations with zero samples requested are skipped,
+    and locations for which the probability column is empty (no eligible
+    observations) produce no output entries.
+
+    Args:
+        n_arr: 1-D integer array of sample counts for each location.
+        data: CSC ``data`` array of the probability matrix (non-zero values).
+        indices: CSC ``indices`` array (row indices of non-zeros).
+        indptr: CSC ``indptr`` array (column pointers).
+        loc_grp_arr: Optional 1-D integer array mapping each location to its
+            class-pool column index.  If ``None``, each location uses its own
+            column.
+
+    Returns:
+        Three-tuple ``(w_data, w_indices, w_indptr)`` — the CSC storage arrays
+        for the output sparse sample-count matrix of shape
+        ``(n_obs, len(n_arr))``.
     """
     # Pre-allocate arrays to store the sample weights for dwells for each location
     #  We know that, at most, we'll have one entry for each expected sample. However,
@@ -165,26 +246,30 @@ def sample_sparse_multinomial(
     p_arr: sp.sparse.sparray,
     loc_grp_arr: NDArray | None = None,
 ) -> sp.sparse.sparray:
-    """Sample a from a multinomial distribution for each row/column of a sparse array.
+    """Draw multinomial samples from each column of a sparse probability matrix.
 
-    Parameters
-    ----------
-    n_arr : NDArray
-        1D array of sample counts for each location/column
-    p_arr : sp.sparse.sparray
-        Sparse probability matrix in CSC format (dwells x locations)
-    loc_grp_arr : NDArray | None
-        Optional 1D array mapping each location to a group index
+    Validates inputs, converts to CSC format if needed, and delegates to the
+    JIT-compiled :func:`sample_sparse_multinomial_core`.
 
-    Returns
-    -------
-    sp.sparse.sparray
-        Sparse matrix of sampled counts with same shape as p_arr
+    Args:
+        n_arr: 1-D integer array of length ``n_locs`` giving the number of
+            samples to draw for each location.
+        p_arr: Sparse probability matrix of shape ``(n_obs, n_locs)`` (or
+            ``(n_obs, n_classes)`` when ``loc_grp_arr`` is provided).  Columns
+            must sum to 1 (call :func:`normalize_sparse` beforehand).
+        loc_grp_arr: Optional 1-D integer array of length ``n_locs`` mapping
+            each location to a column index in ``p_arr``.  Used for
+            class-level pooling where many locations share one probability
+            distribution.
 
-    Raises
-    ------
-    ValueError
-        If input dimensions are incompatible
+    Returns:
+        Sparse CSC array of shape ``(n_obs, n_locs)`` with integer sample
+        counts.
+
+    Raises:
+        ValueError: If ``n_arr`` is not 1-D, ``p_arr`` is not 2-D sparse, or
+            their dimensions are incompatible; if ``loc_grp_arr`` has invalid
+            indices or length; if ``n_arr`` contains negative values.
     """
     # Dimension checks
     if not isinstance(n_arr, np.ndarray) or n_arr.ndim != 1:
@@ -263,16 +348,34 @@ def _collate_sparse_diffs_core(
     NDArray[np.timedelta64],
     NDArray,
 ]:
-    """Core functionality for flattening and grouping sparse array diffs.
+    """Inner loop: convert sparse region-event power differences to cumulative profiles.
+
+    For each region (column in the CSR layout given by ``indptr``), extracts
+    the subset of events belonging to that region, takes a cumulative sum of
+    the power differences along the profile axis to recover instantaneous
+    power, and computes the duration of each event as the time delta to the
+    next event (with ``final_time`` appended as a sentinel).
 
     Args:
-        diffs: array of dimension (n_obs, n_profs) giving data to process
-        indices: array of dimension (n_obs,) giving indices from sparse matrix
-        indptr: array of dimension (n_regs + 1) giving column/row pointers
-        times: array of dimension (n_events,) giving the time for all possible events
-        final_time: datetime64 giving time to append when taking time diffs
+        diffs: ``(n_obs, n_profs)`` array of power-difference values at each
+            sparse event entry.  ``n_profs`` is the number of profile columns
+            (e.g. one per bootstrap draw or quantile).
+        indices: ``(n_obs,)`` CSR row-index array giving the event-time index
+            for each non-zero entry.
+        indptr: ``(n_regs + 1,)`` CSR column-pointer array.
+        times: ``(n_events,)`` datetime64 array of all possible event
+            timestamps (indexed by ``indices``).
+        final_time: Sentinel datetime64 appended when computing the trailing
+            duration for the last event in each region.
 
-    Returns
+    Returns:
+        Four-tuple ``(reg_arr, time_arr, dur_arr, prof_arr)`` where:
+
+        - ``reg_arr`` (``n_obs,``): region index for each output row.
+        - ``time_arr`` (``n_obs,``): event timestamp for each row.
+        - ``dur_arr`` (``n_obs,``): timedelta to the next event (or
+          ``final_time``).
+        - ``prof_arr`` (``n_obs, n_profs``): cumulative power at each event.
     """
     n_regs = indptr.shape[0] - 1
     n_obs = diffs.shape[0]
@@ -314,15 +417,35 @@ def collate_sparse_diffs(
     validate_structure: bool = True,
     **sparses: sp.sparse.sparray,
 ) -> pd.DataFrame:
-    """
-    Collate sparse sets of difference values into a dataframe of cumsum-ed profiles.
+    """Convert sparse power-difference arrays to a long-format cumulative-profile DataFrame.
+
+    Validates that all input sparse arrays share the same shape and (if
+    ``validate_structure=True``) the same explicit non-zero structure, stacks
+    their ``data`` vectors column-wise, converts to CSR, and calls
+    :func:`_collate_sparse_diffs_core` to recover instantaneous power profiles.
 
     Args:
-        times: Ordered event timestamps associated with the sparse diffs.
-        final_time: Terminal timestamp used when computing trailing durations.
-        validate_structure: Whether to require identical explicit elements across inputs.
-        sparses: A dict of sparse arrays of shape (n_regions, n_events). The keys are
-            the column names that will be used in the resulting DataFrame.
+        times: 1-D array of event timestamps; the ``i``-th element is the
+            timestamp associated with row ``i`` of the sparse arrays.
+        final_time: Sentinel timestamp appended when computing trailing event
+            durations.
+        group_name: Column name for the region index in the output DataFrame.
+        time_name: Column name for the event timestamps in the output DataFrame.
+        dur_name: Column name for the inter-event durations.  Defaults to
+            ``"duration"``.
+        validate_structure: If ``True``, raises a ``ValueError`` when any two
+            input sparse arrays have different CSR sparsity patterns.
+        **sparses: Named sparse arrays, each of shape ``(n_regions, n_events)``.
+            Keys become the power-profile column names in the output DataFrame.
+
+    Returns:
+        Long-format DataFrame with columns ``[group_name, time_name, dur_name,
+        *profile_columns]``, one row per (region, event) pair.
+
+    Raises:
+        ValueError: If no arrays are provided, any value is not a sparse
+            array, shapes differ, or structures differ when validation is
+            enabled.
     """
     if sparses is None or len(sparses) == 0:
         raise ValueError("At least one sparse array must be passed through kwargs.")
@@ -412,6 +535,72 @@ def sample_profiles(
     seed: int | None = None,
     **event_diffs: dict[str, NDArray],
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Bootstrap-sample per-region load profiles using inverse-propensity weighting.
+
+    Implements the two-stage sampling strategy for Model Module 6:
+
+    1. **(Optional) Class-level first stage**: for each hex, pre-select up to
+       ``max_first_stage_options`` candidate dwells from the class-level pool
+       by drawing from ``Om_class`` and constructing a restricted probability
+       matrix ``Om_class_reduced``.
+    2. **Self draw**: draw ``min(m_hex_obs, m_hex_samp)`` dwells from the hex's
+       own pool ``Om_hex``.
+    3. **Class draw**: draw the remaining ``m_hex_samp - m_self`` dwells from
+       the restricted class-level pool.
+    4. Combine the two draws, multiply through the ``events_by_dwells @
+       dwells_by_region @ region_by_hex`` chain to obtain sampled event
+       indicator matrices, and call :func:`collate_sparse_diffs` to produce
+       load profiles.
+    5. Compute kWh totals (:func:`calculate_value_time_units`), peak kW
+       (:func:`calculate_peak_units`), and hourly discretised profiles
+       (:func:`discretize_sparse_profiles`).
+
+    Args:
+        m_hex_expected: ``(n_hex,)`` float array of expected dwell counts per
+            hex under this scenario.
+        m_hex_obs: ``(n_hex,)`` integer array of observed dwell counts per hex.
+        m_class_expected: ``(n_classes,)`` float array of expected dwell counts
+            per freight-activity class.
+        m_class_obs: ``(n_classes,)`` integer array of observed dwell counts per
+            class.
+        hex_class: ``(n_hex,)`` integer array mapping each hex to its class
+            index.
+        max_first_stage_options: Maximum number of candidates to pre-select
+            from each class pool in the first stage.
+        Om_hex: ``(n_dwells, n_hex)`` sparse probability matrix (hex-level
+            inverse-propensity weights, column-normalised).
+        Om_class: ``(n_dwells, n_classes)`` sparse probability matrix
+            (class-level weights, column-normalised).
+        events_by_dwells: ``(n_events, n_dwells)`` sparse indicator matrix
+            mapping events to the dwell that generated them.
+        region_by_hex: ``(n_regions, n_hex)`` sparse indicator matrix mapping
+            hex cells to aggregation regions (e.g. substations).
+        event_times: ``(n_events,)`` datetime64 array of event timestamps.
+        slice_freq: Pandas frequency string used as the time-slice period for
+            profile wrapping (passed as ``final_time`` in
+            :func:`collate_sparse_diffs`).
+        discrete_freq: Pandas frequency string for the discretised output
+            profiles (passed to :func:`discretize_sparse_profiles`).
+        dur_col: Column name for event durations in intermediate DataFrames.
+        summary_suffixes: Dict with keys ``"cumul"`` and ``"peak"`` giving the
+            suffixes for energy and peak columns in the summary DataFrame.
+        region_name: Column name for the region identifier in outputs.
+        time_col: Column name for event timestamps in outputs.
+        sample_self: If ``True``, include the self-draw stage.
+        sample_class: If ``True``, include the class-draw stage.
+        seed: Random seed for reproducibility.  Defaults to ``None``.
+        **event_diffs: Named sparse ``(n_obs, n_events)`` arrays of power
+            differences.  Keys become the profile column names in the output.
+
+    Returns:
+        Two-tuple ``(discs, summs)`` where:
+
+        - ``discs``: discretised load-profile DataFrame from
+          :func:`discretize_sparse_profiles`.
+        - ``summs``: summary DataFrame with kWh and peak-kW columns per
+          region, joined from :func:`calculate_value_time_units` and
+          :func:`calculate_peak_units`.
+    """
     if sample_self or sample_class:
         np.random.seed(seed=seed)
 
@@ -512,7 +701,22 @@ def calculate_value_time_units(
     prof_cols: list[str],
     time_unit: str = "1h",
 ) -> pd.DataFrame:
-    """Calculate the total value-[time units] (e.g. kWh) for each region-profile pair."""
+    """Calculate total energy (kWh) per region by integrating power over time.
+
+    Computes ``value × duration_in_units`` for each row, then sums by group.
+
+    Args:
+        profs: Long-format profile DataFrame with one event per row.
+        group_cols: Columns to group by (typically ``[region_name]``).
+        dur_col: Column containing event durations (``pd.Timedelta``).
+        prof_cols: Power-value columns to integrate.
+        time_unit: Pandas frequency string for the time unit (denominator of
+            the duration conversion).  Defaults to ``"1h"`` for kWh.
+
+    Returns:
+        DataFrame indexed by ``group_cols`` with one column per entry in
+        ``prof_cols``, containing the summed energy values.
+    """
     tot_hrs = total_time_units(profs[dur_col], unit=time_unit)
     cum_cols = {col: profs[col] * tot_hrs for col in prof_cols}
 
@@ -530,7 +734,17 @@ def calculate_peak_units(
     group_cols: list[str],
     prof_cols: list[str],
 ) -> pd.DataFrame:
-    """Calculate the peak values (e.g. peak kW) for each region-profile pair."""
+    """Return the peak power (kW) per region by taking the group-wise maximum.
+
+    Args:
+        profs: Long-format profile DataFrame.
+        group_cols: Columns to group by (typically ``[region_name]``).
+        prof_cols: Power-value columns to aggregate.
+
+    Returns:
+        DataFrame indexed by ``group_cols`` with one column per entry in
+        ``prof_cols``, containing the maximum observed value.
+    """
     peaks_df = profs.groupby(group_cols)[prof_cols].max()
     return peaks_df
 
@@ -544,7 +758,30 @@ def discretize_sparse_profiles(
     tz_col: str | None = None,
     freq: str = "1h",
 ) -> pd.DataFrame:
-    """Discretize profiles by region and time grouping."""
+    """Aggregate load profiles onto a regular time grid by region.
+
+    Drops zero-power or duration-less rows, spreads each remaining event onto
+    all ``freq``-aligned time-bin beginnings it covers via
+    :class:`~megaplug.models.summarize.IntervalBeginSpreader`, then groups by
+    ``group_cols + [pd.Grouper(key=time_col, freq=freq)]`` and takes the
+    maximum power in each bin (appropriate for step-function profiles).
+
+    Args:
+        profs: Long-format profile DataFrame from :func:`collate_sparse_diffs`.
+        time_col: Timestamp column name.
+        dur_col: Duration column name.
+        prof_cols: Power-value columns to aggregate.
+        group_cols: Spatial grouping columns (e.g. ``[region_name]``).
+        tz_col: Optional timezone column; if provided, it is included in the
+            grouping so that outputs are localised.
+        freq: Pandas frequency string for the output time grid.  Defaults to
+            ``"1h"``.
+
+    Returns:
+        DataFrame with columns ``group_cols + [time_col] + prof_cols`` at the
+        requested temporal resolution, one row per (region, time-bin) with
+        at least one non-zero event.
+    """
     # First drop the observations with no duration or zero power
     is_na_dur = profs[dur_col].isna()
     any_nonzero = (profs.loc[:, prof_cols] != 0).any(axis=1)

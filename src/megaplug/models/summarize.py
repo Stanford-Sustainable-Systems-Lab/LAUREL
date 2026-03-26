@@ -1,3 +1,42 @@
+"""Time-series spreading and sparse quantile summarisation utilities.
+
+Provides two core classes used throughout the load-profile assembly pipeline:
+
+- :class:`IntervalBeginSpreader`: given a DataFrame of events with start
+  timestamps and durations, "spreads" each event onto every ``freq``-aligned
+  time-bin beginning that it covers.  Used by
+  :func:`~megaplug.models.sampling.discretize_sparse_profiles` to assign
+  constant-power observations to each hourly bin they span.
+
+- :class:`NonzeroGroupedSummarizer`: computes quantiles of sparse data where
+  many possible observations are zero but only the non-zero values are
+  stored.  Correctly pads with the appropriate number of zeros before
+  quantile calculation.  Used to compress many-draw bootstrap profiles to
+  a small set of quantiles (e.g. 20th, 50th, 80th, 95th percentile) per
+  (substation, hour) cell.
+
+Key design decisions
+--------------------
+- **Interval-begin convention**: the spreader produces new rows at the start of
+  each covered time bin (not the end).  This is consistent with the step-
+  function load-profile convention used throughout the pipeline: a constant
+  power level ``p`` starts at time ``t`` and persists until the next event.
+- **UTC-only timestamps**: :meth:`IntervalBeginSpreader.spread` requires the
+  time column to be either timezone-naive or UTC; other timezones raise an
+  error.  Timezone-naive inputs are temporarily localised to UTC for the
+  spreading arithmetic and then de-localised on output.
+- **``IndexIntegerizer`` for group labels**: group columns may contain string
+  or categorical labels that are expensive to compare.  The spreader converts
+  them to compact integer codes before passing to the JIT core and restores
+  the original labels afterward.
+- **Zero-padding in quantiles**: :class:`NonzeroGroupedSummarizer` only stores
+  non-zero events; the ``possible_count_col`` tells the summariser how many
+  total observations exist (including zeros) so that quantiles correctly
+  account for the zero-inflation.  The JIT core
+  (:meth:`~NonzeroGroupedSummarizer._calc_sparse_quantiles_core`) pads with
+  zeros at the front of the sorted array.
+"""
+
 import datetime
 from typing import Self
 
@@ -10,16 +49,25 @@ from megaplug.utils.data import IndexIntegerizer, get_basic_dtype_ser
 
 
 class IntervalBeginSpreader:
-    """Spread time-interval observations onto the interval beginnings of a given
-    frequency which they cover. This is achieved by creating new observations with the
-    same value as the original observation at these covered interval-beginnings.
+    """Expand time-interval events onto every ``freq``-aligned bin start they cover.
+
+    For each row in the input DataFrame that crosses at least one frequency
+    boundary, creates additional rows — one per covered bin beginning — with
+    the same value(s) as the original row.  Rows that fit entirely within a
+    single bin are kept as-is.
+
+    This implements the "interval-begin" step-function convention: a constant
+    power level ``p`` that starts at time ``t`` and lasts for ``dur`` is
+    represented by one row at ``t`` and one additional row at each
+    ``freq``-boundary inside ``(t, t + dur)``.
 
     Attributes:
-        time_col (str): Name of the column containing timestamps.
-        dur_col (str): Name of the column containing observation durations.
-        value_cols (list[str]): List of column names containing values to be spread.
-        group_cols (list[str]): List of column names to group by.
-        freq (str): Frequency string for time block definition (e.g., '1H', '1D').
+        time_col: Name of the timestamp column.
+        dur_col: Name of the duration column (``pd.Timedelta``-compatible).
+        value_cols: Column name(s) whose values are replicated at each
+            spread timestamp.
+        group_cols: Column name(s) used as grouping keys; preserved in output.
+        freq: Pandas frequency string defining the bin width (e.g. ``"1h"``).
     """
 
     time_col: str
@@ -54,22 +102,33 @@ class IntervalBeginSpreader:
     def spread(
         self: Self, obs: pd.DataFrame, return_spreaded_only: bool = False
     ) -> pd.DataFrame:
-        """Spread observations to cover all intermediate time units given their start
-        times and durations.
+        """Expand events to cover all ``freq``-aligned bin beginnings within their duration.
+
+        Identifies rows in ``obs`` whose event end-time crosses at least one
+        ``freq`` boundary (``is_overflow``).  For those rows, calls
+        :meth:`_spread_wrapper` → :meth:`_spread_core` (JIT) to produce one
+        output row per covered bin start.  Rows that do not overflow are kept
+        unchanged (the original row already represents the bin it starts in).
+
+        When ``return_spreaded_only=False`` (default), the original rows minus
+        the ``dur_col`` column are appended to the spread rows so the output
+        contains both the original event positions and the intermediate bin
+        starts.
 
         Args:
-            obs (pd.DataFrame): DataFrame containing observations with time, duration, and
-                value columns.
-            return_spreaded_only (bool, optional): If True, return only the rows \
-                corresponding to the "spreaded" observations. If False, return rows for both
-                original and spreaded observations. Defaults to False.
+            obs: Input DataFrame with :attr:`time_col`, :attr:`dur_col`,
+                :attr:`value_cols`, and :attr:`group_cols` columns.
+            return_spreaded_only: If ``True``, return only the newly generated
+                intermediate bin rows (not the original event rows).  Defaults
+                to ``False``.
 
         Returns:
-            pd.DataFrame: DataFrame with expanded observations, containing group columns,
-                time column, and all value columns with original data types preserved.
+            DataFrame with :attr:`group_cols`, :attr:`time_col`, and
+            :attr:`value_cols` columns, with original dtypes preserved.
 
         Raises:
-            RuntimeError: If the source time column is not timezone-naive or UTC.
+            RuntimeError: If :attr:`time_col` has a timezone other than UTC.
+            ValueError: If any duration in :attr:`dur_col` is negative.
         """
         source_tz = obs[self.time_col].dt.tz
         if source_tz == datetime.UTC:
@@ -124,15 +183,26 @@ class IntervalBeginSpreader:
         return result
 
     def _spread_wrapper(self: Self, df: pd.DataFrame) -> pd.DataFrame:
-        """Convert pandas Series to numpy arrays and set dtypes for self._spread_core().
+        """Convert DataFrame columns to NumPy arrays, call the JIT core, and reconstruct.
+
+        Prepares inputs for :meth:`_spread_core` by:
+
+        1. Computing floor-of-start and floor-of-end timestamps as ``int64``
+           nanoseconds.
+        2. Converting group codes and value columns to basic NumPy dtypes via
+           :func:`~megaplug.utils.data.get_basic_dtype_ser`.
+        3. Calling :meth:`_spread_core` separately for each value column (so
+           that each can have its own dtype in the output).
+        4. Using the first column's group and time arrays (which are identical
+           across columns) and combining value arrays into the final DataFrame.
 
         Args:
-            df (pd.DataFrame): DataFrame with events that need expansion, must contain
-                time_col, dur_col, value_cols, and 'codes' columns.
+            df: Subset of overflow rows with integer group codes in the
+                ``"codes"`` column and UTC-localised timestamps.
 
         Returns:
-            pd.DataFrame: DataFrame with expanded events containing 'codes', time_col,
-                and all value_cols with original data types preserved.
+            DataFrame with ``"codes"``, :attr:`time_col`, and all
+            :attr:`value_cols` columns at their original dtypes.
         """
         orig_time_type = df[self.time_col].dtype
         starts = df[self.time_col].dt.floor(self.freq)
@@ -236,15 +306,24 @@ class IntervalBeginSpreader:
 
 
 class NonzeroGroupedSummarizer:
-    """Summarize dataframe groups which only contain the nonzero elements. Uses a
-    correspondence table to determine how many zeros to include in the summary
-    calculations.
+    """Compute quantiles of zero-inflated grouped data stored in sparse (non-zero-only) form.
+
+    The input DataFrame contains only the non-zero values from a larger
+    population.  A ``possible_count_col`` specifies the true population size
+    (including zeros) for each group.  The summariser pads each group's
+    non-zero values with the appropriate number of zeros before computing
+    quantiles, so the result correctly reflects the full distribution.
+
+    This is used to compress many-draw bootstrap load profiles (stored as only
+    non-zero kW values) to a small set of quantile estimates per
+    (substation, hour-of-week) cell.
 
     Attributes:
-        group_cols (list[str]): List of column names to group by.
-        quantiles (np.ndarray): Array of quantile values to calculate (e.g., [0.25, 0.5, 0.75]).
-        value_cols (list[str] | None): List of column names containing values to calculate quantiles for.
-            If None, value columns must be specified in summarize() method.
+        group_cols: Column name(s) to group by.
+        quantiles: Array of quantile fractions to compute (e.g.
+            ``[0.2, 0.5, 0.8, 0.95]``).
+        value_cols: Default value column(s); can be overridden per
+            :meth:`summarize` call.
     """
 
     group_cols: list[str]
@@ -281,23 +360,31 @@ class NonzeroGroupedSummarizer:
         value_cols: list[str] | str,
         possible_count_col: str,
     ) -> pd.DataFrame:
-        """Calculate quantiles using observations paired with the count of possible
-        observations to represent zeros.
+        """Compute zero-padded quantiles per group for one or more value columns.
+
+        For each group, retrieves the non-zero values and the total population
+        count (from ``possible_count_col``), then calls the JIT core to pad
+        with zeros and compute quantiles.  Processes multiple value columns in
+        a loop and concatenates results column-wise.
 
         Args:
-            events (pd.DataFrame): DataFrame containing the events to summarize.
-            value_cols (list[str] | str): Name(s) of column(s) containing values to calculate
-                quantiles for. Can be a single string or list of strings.
-            possible_count_col (str): Name of the column containing the total count of
-                possible observations (including zeros).
+            events: DataFrame containing at least :attr:`group_cols`,
+                ``value_cols``, and ``possible_count_col``.  Should contain
+                only non-zero rows.
+            value_cols: Value column(s) for which quantiles are computed.
+            possible_count_col: Column giving the total count of possible
+                observations (including zeros) for each group.  Must be
+                constant within each group.
 
         Returns:
-            pd.DataFrame: DataFrame with quantiles calculated for each group. For single column,
-                indexed by group columns with quantile values as column names. For multiple columns,
-                indexed by group columns with MultiIndex columns (value_col_name, quantile_value).
+            DataFrame indexed by the grouping key(s) with columns named
+            ``"{value_col}_{quantile}"`` for each (value_col, quantile)
+            combination.
 
         Raises:
-            ValueError: If the number of observations exceeds the number of possible observations.
+            ValueError: If the DataFrame is empty, if any group has more
+                non-zero observations than its ``possible_count_col`` value,
+                or if no group columns are provided.
         """
         # Convert to list format
         cols_to_process = [value_cols] if isinstance(value_cols, str) else value_cols

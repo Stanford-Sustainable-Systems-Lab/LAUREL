@@ -1,3 +1,44 @@
+"""Charging management classes that convert dwell records to load-profile events.
+
+After the charging-choice simulation (:mod:`megaplug.models.charging_algorithms`)
+determines *how much* energy each vehicle charges at each dwell, the charging
+managers in this module determine *when* that energy flows.  They translate
+per-dwell charging assignments into a sequence of timestamped power events
+that can be assembled into load profiles.
+
+The class hierarchy is:
+
+- :class:`AbstractChargingManager` — stores column bindings and the abstract
+  :meth:`get_events` interface.
+- :class:`IndependentDwellChargingManager` — handles the common case where
+  each dwell is managed independently (no cross-dwell optimisation).  Defines
+  the ``seq_names`` pattern and the dwell-to-event pipeline.
+- :class:`MinPowerChargingManager` — spreads energy at the minimum constant
+  power needed to deliver the required kWh over the full dwell duration.
+- :class:`ImmediateChargingManager` — charges at maximum available power as
+  early as possible, computing the exact charge-end timestamp.
+
+Key design decisions
+--------------------
+- **``seq_names`` event structure**: each concrete manager defines a list of
+  named event-sequence prefixes (e.g. ``["dwell_start", "dwell_end"]``).  For
+  each sequence name, the manager adds columns ``{seq_name}_time``,
+  ``{seq_name}_duration``, ``{seq_name}_power_kw``, and
+  ``{seq_name}_plugged``.  The :meth:`~DwellSet.to_events` method then pivots
+  from wide (one dwell per row) to long (one event per row) format.
+- **``ProfileType`` enum**: ``OBSERVATIONS`` mode writes absolute power at each
+  event boundary (suitable for step-function integration); ``DIFFERENCES`` mode
+  writes the *change* in power (positive at plug-in, negative at plug-out),
+  which enables efficient sparse load profile construction via cumulative sum.
+- **Property renaming pattern**: the ``energy``, ``duration``, ``max_power``,
+  ``region``, ``scale_up``, and ``cost`` properties delegate to
+  :meth:`~DwellSet._rename_idx_col`, so assigning a new column name
+  transparently renames the underlying DataFrame column.
+- **``_MANAGER_MAP``**: populated at module load time by introspecting
+  ``globals()`` for subclasses of :class:`AbstractChargingManager`.  Allows
+  pipeline nodes to instantiate managers by name without a static registry.
+"""
+
 import logging
 from abc import ABC, abstractmethod
 from enum import IntEnum, auto
@@ -14,17 +55,32 @@ logger = logging.getLogger(__name__)
 
 
 class ProfileType(IntEnum):
-    """Possible profile type to be used by AbstractChargingManager."""
+    """Output encoding for power events in :class:`IndependentDwellChargingManager`.
+
+    Members:
+        OBSERVATIONS: Each event records the absolute charging power at that
+            timestamp.  Suitable for step-function load profiles.
+        DIFFERENCES: Each event records the *change* in charging power (positive
+            at plug-in, negative at plug-out).  Enables sparse cumulative-sum
+            profile assembly.
+    """
 
     OBSERVATIONS = auto()
     DIFFERENCES = auto()
 
 
 class AbstractChargingManager(ABC):
-    """This class sets the interface for all concrete charging managers.
+    """Abstract base class for charging management strategies.
+
+    Stores column-name bindings for the dwell features needed to build load
+    profiles and defines the :meth:`get_events` interface that concrete
+    managers must implement.  Column bindings are exposed as properties that
+    rename the underlying :attr:`dw` DataFrame columns transparently when
+    assigned.
 
     Attributes:
-        dw: DwellSet that this ChargingManager will compute over
+        dw: :class:`~megaplug.models.dwell_sets.DwellSet` over which this
+            manager operates.
     """
 
     _dw: DwellSet = None
@@ -49,7 +105,27 @@ class AbstractChargingManager(ABC):
         id_cols: list[str] = None,
         prof_type: ProfileType = ProfileType.OBSERVATIONS,
     ) -> None:
-        """Initialize the ChargingManager."""
+        """Initialise the charging manager with column bindings.
+
+        Args:
+            dw: :class:`~megaplug.models.dwell_sets.DwellSet` containing
+                dwell records with charging decisions already assigned.
+            energy: Column name for the energy to deliver at each dwell (kWh).
+            duration: Column name for the available dwell duration (hours).
+            max_power: Column name for the maximum available charging power at
+                each dwell (kW).
+            region: Column name for the spatial aggregation grouping variable
+                (e.g. substation or hex ID).  ``None`` if not used.
+            scale_up: Column name for the population-scaling weight applied to
+                power values before aggregation.  ``None`` if not used.
+            cost: Column name for the per-kWh cost promised to the vehicle
+                during the choice model.  ``None`` if not used.
+            id_cols: Additional columns to carry through to the event output.
+                ``None`` uses the DwellSet default.
+            prof_type: :class:`ProfileType` controlling whether output events
+                encode absolute power or power differences.  Defaults to
+                ``ProfileType.OBSERVATIONS``.
+        """
         self.dw = dw
         self.energy = energy
         self.duration = duration
@@ -62,7 +138,14 @@ class AbstractChargingManager(ABC):
 
     @abstractmethod
     def get_events(self) -> pd.DataFrame:
-        """Get the load profiles which result from the given charging management."""
+        """Build and return a long-format event DataFrame from the dwell records.
+
+        Returns:
+            DataFrame with one event per row, columns include at minimum a
+            timestamp, a power value, a plugged indicator, and the duration of
+            the event.  Exact column names depend on the concrete manager's
+            ``seq_names`` and ``suffixes``.
+        """
         pass
 
     @property
@@ -136,7 +219,21 @@ class AbstractChargingManager(ABC):
 
 
 class IndependentDwellChargingManager(AbstractChargingManager):
-    """Charge each dwell independently without considering influences within a region."""
+    """Base class for managers that treat each dwell independently.
+
+    Defines the four-suffix column convention (``time``, ``duration``,
+    ``power_kw``, ``plugged``) and the shared :meth:`get_events` pipeline:
+    add event columns via :meth:`set_dwell_events`, optionally scale power
+    by ``scale_up``, then reshape via :meth:`~DwellSet.to_events`.
+
+    Concrete subclasses implement :meth:`set_dwell_events` and declare
+    :attr:`seq_names`.
+
+    Class attributes:
+        suffixes: Dict mapping logical role (``"time"``, ``"duration"``,
+            ``"power"``, ``"plugged"``) to the column-name suffix appended
+            after each sequence name.
+    """
 
     suffixes = {
         "time": "time",
@@ -148,16 +245,31 @@ class IndependentDwellChargingManager(AbstractChargingManager):
     @property
     @abstractmethod
     def seq_names(self) -> list[str]:
-        """Get the column prefixes used to track the sequence of events within a dwell."""
+        """Ordered list of event-sequence prefixes for this manager.
+
+        For example ``["dwell_start", "dwell_end"]`` causes the manager to
+        create columns ``dwell_start_time``, ``dwell_start_power_kw``, etc.
+        """
         pass  # Implement this in the concrete classes by setting the attribute seq_names
 
     @abstractmethod
     def set_dwell_events(self) -> Self:
-        """Set the charging management power change events within the dwell."""
+        """Add event-sequence columns to ``self.dw.data`` and return ``self``.
+
+        Must create all columns defined by :attr:`seq_names` × :attr:`suffixes`
+        before returning so that :meth:`get_events` can pivot them.
+        """
         pass
 
     def get_events(self: Self) -> pd.DataFrame:
-        """Take dwells and convert to events."""
+        """Execute the dwell-to-event pipeline.
+
+        1. Calls :meth:`set_dwell_events` to add event columns.
+        2. Optionally scales power columns by ``self.scale_up``.
+        3. Sets :attr:`~DwellSet.seq_names` on the DwellSet.
+        4. Calls :meth:`~DwellSet.to_events` to reshape to long format.
+        Logs a warning if any existing columns already use the suffix convention.
+        """
         checks = self.check_for_suffixes()
         if len(checks) > 0:
             logger.warning(
@@ -173,7 +285,7 @@ class IndependentDwellChargingManager(AbstractChargingManager):
         return events
 
     def check_for_suffixes(self) -> list[str]:
-        """Check if any of the suffixes are being used in DwellSet columns."""
+        """Return any DwellSet columns that already end with a managed suffix."""
         matches = []
         for col, suf in product(self.dw.data.columns, self.suffixes.values()):
             if col.endswith(suf):
@@ -182,11 +294,28 @@ class IndependentDwellChargingManager(AbstractChargingManager):
 
 
 class MinPowerChargingManager(IndependentDwellChargingManager):
-    """Charge the vehicles at minimum acceptable power for the full dwell duration."""
+    """Deliver energy at constant minimum power over the full dwell duration.
+
+    Computes power as ``energy / duration`` (zero when either is zero) and
+    schedules a single charge-start event at ``dwell_start`` and a charge-end
+    event at ``dwell_end``.
+
+    ``seq_names = ["dwell_start", "dwell_end"]``.
+    """
 
     seq_names = ["dwell_start", "dwell_end"]
 
     def set_dwell_events(self) -> Self:
+        """Populate dwell-start and dwell-end event columns for constant-power charging.
+
+        Computes ``dwell_start_power_kw = energy / duration`` (0 for zero-energy
+        or zero-duration dwells), sets ``dwell_end_power_kw = 0`` (or
+        ``-dwell_start_power_kw`` for ``DIFFERENCES`` mode), and calculates the
+        ``dwell_start_duration`` as the interval between the two event timestamps.
+
+        Returns:
+            ``self`` with event columns added to ``self.dw.data``.
+        """
         cnames = {}
         for k, v in self.suffixes.items():
             cnames[k] = [f"{seqn}_{v}" for seqn in self.seq_names]
@@ -231,11 +360,29 @@ class MinPowerChargingManager(IndependentDwellChargingManager):
 
 
 class ImmediateChargingManager(IndependentDwellChargingManager):
-    """Charge the vehicles at maximum available power as soon as possible."""
+    """Deliver energy at maximum available power starting at dwell arrival.
+
+    Computes the charge-end timestamp as
+    ``dwell_start + ceil(energy / max_power, "s")``, capped at ``dwell_end``.
+    Schedules a charge-start event at ``dwell_start`` and a charge-end event
+    at the computed charge-end time.
+
+    ``seq_names = ["dwell_start", "charge_end"]``.
+    """
 
     seq_names = ["dwell_start", "charge_end"]
 
     def set_dwell_events(self) -> Self:
+        """Populate dwell-start and charge-end event columns for immediate charging.
+
+        Computes the charge duration as ``energy / max_power`` (0 when either
+        is zero), converts to a timedelta ceiled to the nearest second, and
+        clips to the available dwell window.  Sets ``charge_end_power_kw = 0``
+        (or ``-max_power`` for ``DIFFERENCES`` mode).
+
+        Returns:
+            ``self`` with event columns added to ``self.dw.data``.
+        """
         cnames = {}
         for k, v in self.suffixes.items():
             cnames[k] = [f"{seqn}_{v}" for seqn in self.seq_names]
@@ -291,7 +438,11 @@ class ImmediateChargingManager(IndependentDwellChargingManager):
 
 
 class OptimizerDwellChargingManager(AbstractChargingManager):
-    """Charge each dwell based on an optimization algorithm."""
+    """Placeholder for a future optimisation-based charging manager.
+
+    Intended to support time-of-use rates and joint SoC optimisation across
+    dwells within a region.  Not yet implemented.
+    """
 
     # TODO: Eventually, I could make only some very slight modifications to the
     # optimization code I wrote in the winter, which fix the charging energy of each

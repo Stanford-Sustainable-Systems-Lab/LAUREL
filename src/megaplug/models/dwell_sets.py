@@ -1,3 +1,52 @@
+"""Central data structure for vehicle dwell histories and dwell-level operations.
+
+:class:`DwellSet` wraps a pandas or Dask DataFrame in which each row represents a
+single dwell (parking stop) for a heavy-duty truck.  It enforces a canonical
+sort order (vehicle, dwell-start time), manages a set of named semantic columns
+(vehicle ID, hex cell, start/end times, trip distance/duration, reset flag), and
+provides the core operations that downstream pipelines build on:
+
+- **Masked accumulation** (:meth:`~DwellSet.accum_masked`): forward or reverse
+  cumulative aggregation of trip-distance/duration across consecutive dwells
+  that will be removed, respecting ``reset`` boundaries.  Used to propagate
+  consumed-energy estimates from inserted optional stops back to their flanking
+  depots.
+- **Masked reset propagation** (:meth:`~DwellSet.reset_masked`): ensures that
+  the first retained dwell after a gap introduced by masking has ``reset=True``,
+  so that the charging-choice simulator restarts the SoC correctly.
+- **Dwell → event conversion** (:meth:`~DwellSet.to_events`): reshapes from
+  one-dwell-per-row to one-event-per-row for load profile construction.
+
+Module-level helper functions :func:`load_dwell_set` and :func:`save_dwell_set`
+provide the Kedro I/O interface.
+
+Key design decisions
+--------------------
+- **Vehicle ID as DataFrame index**: The vehicle-ID column is stored as the
+  DataFrame index rather than a regular column.  This lets Dask partition by
+  vehicle so that per-vehicle groupby operations never need cross-partition
+  communication.
+- **Numba JIT inner loops**: The accumulation core
+  (:meth:`~DwellSet._accum_masked_core`) and reset core
+  (:meth:`~DwellSet._reset_masked_grp_core`) are decorated with ``@njit``.
+  NumPy structured-array dtypes that are incompatible with Numba (booleans,
+  nullable integers) are substituted via ``_replace_dtypes`` before the
+  recarray is created.
+- **``reset`` column semantics**: a ``True`` value at row ``i`` means "this
+  dwell begins a new simulation epoch" — the charging simulator resets the
+  vehicle's SoC to full at the start of each epoch.  The default behaviour
+  (when no ``reset`` column is supplied) marks only the first dwell of each
+  vehicle as a reset.
+- **``CumAggFunc`` enum**: accumulation supports SUM, PRODUCT, MAX, and MIN so
+  the same ``accum_masked`` method can propagate both additive quantities (trip
+  distance, trip duration) and multiplicative ones.
+
+References
+----------
+Passow, F., & Rajagopal, R. (2026). Identifying indicators to inform proactive
+substation upgrades for charging electric heavy-duty trucks. *Applied Energy*.
+"""
+
 import copy
 import logging
 import re
@@ -29,7 +78,14 @@ DEFAULT_COLUMN_NAMES = {
 
 
 class CumAggFunc(IntEnum):
-    """Possible aggregation functions to be used by DwellSet."""
+    """Aggregation function selector for :meth:`DwellSet.accum_masked`.
+
+    Members:
+        SUM: Accumulate by addition (``cur + cum_sum``).
+        PRODUCT: Accumulate by multiplication (``cur * cum_sum``).
+        MAX: Accumulate by element-wise maximum.
+        MIN: Accumulate by element-wise minimum.
+    """
 
     SUM = auto()
     PRODUCT = auto()
@@ -38,10 +94,31 @@ class CumAggFunc(IntEnum):
 
 
 class DwellSet:
-    """The DwellSet represents tours taken by one or more vehicles.
+    """Container for vehicle dwell records supporting Dask-compatible operations.
 
-    We use as many `dask`-compatible functions as possible to ease scalability. As such,
-    we pay special attention to the indices and ordering.
+    Each row of the underlying DataFrame represents one dwell (parking stop).
+    The DataFrame index must be the vehicle-ID column; all other semantic
+    columns (hex cell, start/end times, trip distance/duration, reset flag) are
+    tracked by name via properties that transparently rename the underlying
+    column when assigned.
+
+    Class attributes:
+        _replace_dtypes: Mapping from pandas/NumPy dtype names to Numba-safe
+            equivalents used when constructing recarrays for JIT cores.
+        is_dask: ``True`` when the underlying ``data`` is a Dask DataFrame;
+            updated automatically by the ``data`` property setter.
+
+    Typical usage::
+
+        dw = DwellSet(
+            data=df,
+            veh="veh_id",
+            hex="hex_id",
+            start="dwell_start_time",
+            end="dwell_end_time",
+            trip_dist="trip_distance",
+            trip_dur="trip_duration",
+        )
     """
 
     _veh = None
@@ -73,6 +150,39 @@ class DwellSet:
         *args,
         **kwargs,
     ):
+        """Initialise a DwellSet from a pandas or Dask DataFrame.
+
+        Validates that all named columns are present and unique, then sorts the
+        data by ``(veh, start)`` (or skips sorting if ``sorted=True``).  If no
+        ``reset`` column is provided, creates a default one that marks only the
+        first dwell of each vehicle as a reset epoch.
+
+        Args:
+            data: DataFrame with one dwell per row.  The vehicle-ID column may
+                be in the index or as a regular column; after construction it
+                will always be the index.
+            veh: Column name for vehicle identifiers.
+            hex: Column name for H3 hex cell IDs at the dwell location.
+            start: Column name for dwell start timestamps.
+            end: Column name for dwell end timestamps.
+            trip_dist: Column name for distance of the preceding trip (units
+                consistent with the energy model, typically miles).
+            trip_dur: Column name for duration of the preceding trip.
+            reset: Column name for a boolean reset flag.  If ``None``, a default
+                column named ``"reset_state_before"`` is created with ``True``
+                only at the first dwell of each vehicle.
+            verify_sorting: If ``True``, the :meth:`sort_by_veh_time` check is
+                run before operations that require sorted order.  Defaults to
+                ``True``.
+            sorted: If ``True``, skip the initial sort and assume the data is
+                already sorted by ``(veh, start)`` with ``veh`` as the index.
+                Emits a warning because mis-ordered data will produce silently
+                wrong results.  Defaults to ``False``.
+
+        Raises:
+            RuntimeError: If any two of the named columns share the same name,
+                or if a named column is not found in the DataFrame.
+        """
         self.data = data
 
         def has_duplicates(lst):
@@ -120,14 +230,26 @@ class DwellSet:
         self.sum_cols = [self.trip_dist, self.trip_dur]
 
     def copy_without_data(self: Self) -> Self:
-        """Copy the DwellSet without its underlying data. This is used for filtering."""
+        """Return a deep copy of the DwellSet with ``data`` set to ``None``.
+
+        Used to clone column-name bindings and settings before attaching new
+        underlying data (e.g. when filtering to a subset of vehicles).
+        """
         new = copy.copy(self)
         new.data = None
         newer = copy.deepcopy(new)
         return newer
 
     def sort_by_veh_time(self, force: bool = False) -> None:
-        """Sort the DwellSet by vehicle and time."""
+        """Sort ``data`` by ``(veh, start)`` and set ``veh`` as the index.
+
+        Checks whether sorting is already correct unless ``force=True``.  For
+        Dask DataFrames, always forces a sort because the check is expensive.
+
+        Args:
+            force: Skip the sorted-check and sort unconditionally.  Defaults to
+                ``False``.
+        """
         if not force:
             logger.info("Checking if DwellSet is sorted by vehicle and time.")
             is_sorted = self.is_sorted_by_veh_time()
@@ -151,7 +273,23 @@ class DwellSet:
         time_col: str,
         drop_cur_idx: bool = False,
     ) -> pd.DataFrame | dd.DataFrame:
-        """Sort a dataframe by a group and a time, then set the index."""
+        """Sort ``df`` by ``(grp_col, time_col)`` and set ``grp_col`` as index.
+
+        For Dask DataFrames, sets the index (repartitions by group) then sorts
+        within each partition via ``groupby.apply``.  For pandas DataFrames,
+        resets the current index (optionally dropping it), sorts on both
+        columns, then sets the group column as the new index.
+
+        Args:
+            df: DataFrame to sort.
+            grp_col: Column to use as grouping key and final index.
+            time_col: Column to sort by within each group.
+            drop_cur_idx: For pandas DataFrames, whether to discard the
+                existing index during ``reset_index``.  Ignored for Dask.
+
+        Returns:
+            Sorted DataFrame with ``grp_col`` as the index.
+        """
         if df.index.name == grp_col:
             grp_is_idx = True
             drop_cur_idx = False
@@ -174,7 +312,7 @@ class DwellSet:
         return df
 
     def is_sorted_by_veh_time(self: Self) -> bool:
-        """Check if the DwellSet is sorted by start time within each vehicle."""
+        """Return ``True`` if ``data`` is sorted by ``start`` within each vehicle."""
         return DwellSet._is_grp_time_structured(
             self.data,
             grp_col=self.veh,
@@ -187,11 +325,20 @@ class DwellSet:
         grp_col: str,
         time_col: str,
     ) -> bool | np.ndarray:
-        """Check if the dataset is sorted by a time column within groups.
+        """Return ``True`` if ``df`` is monotonically sorted by ``time_col`` within each group.
 
-        We assume here that the grouping column must be the index, since other
-        operations in the class depend on this, especially if using Dask as the backend
-        for speed.
+        Requires ``grp_col`` to be the DataFrame index; returns ``False``
+        immediately if it is not.  For Dask DataFrames, performs a
+        ``map_partitions`` check assuming partitions respect group boundaries.
+
+        Args:
+            df: DataFrame to check.
+            grp_col: Expected index column name.
+            time_col: Time column to check for monotonic increase within groups.
+
+        Returns:
+            Boolean scalar (``False`` immediately) or boolean value derived
+            from the per-group monotonicity check.
         """
         # If group column isn't index, then no good
         if df.index.name != grp_col:
@@ -219,7 +366,7 @@ class DwellSet:
         return not_any_unsorted
 
     def _groupby_increasing(df: pd.DataFrame, grp_col: str, sort_col: str) -> pd.Series:
-        """Calculate if a dataframe is increasing on sort_col within each group."""
+        """Return a per-group boolean Series indicating monotone increase of ``sort_col``."""
         time_sorted = df.groupby(grp_col)[sort_col].agg(
             lambda ser: ser.is_monotonic_increasing
         )
@@ -234,15 +381,50 @@ class DwellSet:
         write_all: bool = False,
         inplace: bool = False,
     ) -> Self | None:
-        """Filter out individual dwells while merging trips together.
+        """Accumulate trip quantities across consecutive dwells that will be removed.
 
-        Merging trips together means summing the distances traveled of the trips on
-        either side of the eliminated trip.
+        For each vehicle, iterates through dwells in chronological (or reverse)
+        order and accumulates ``accum_cols`` values into the preceding (or
+        following) *kept* dwell when the current dwell is masked out.  A
+        ``reset`` boundary always restarts the accumulation counter.
 
-        Note: This can take a very long time if records for a vehicle cross
-        partition boundaries
+        This is used, for example, to propagate the consumed-energy of an
+        inserted optional truck-stop dwell back onto the depot dwell that
+        precedes it, so that the charging simulator sees the correct total
+        energy demand at each depot stop.
 
-        Note: This function operates inplace for efficiency.
+        The result is written to new columns named ``{col}_{keep_mask_col}``
+        for each column in ``accum_cols``.  When ``write_all=False``, these
+        new columns contain ``NaN``/``NA`` for rows where ``keep_mask_col`` is
+        ``False`` (i.e. rows that would be dropped).
+
+        .. note::
+            Records for a vehicle that cross Dask partition boundaries will
+            cause incorrect accumulation.  Ensure vehicles are fully contained
+            within a single partition before calling this method.
+
+        Args:
+            keep_mask_col: Boolean column name; ``True`` means "keep this dwell".
+            accum_cols: Column(s) to accumulate.  Defaults to
+                ``[trip_dist, trip_dur, reset]`` if ``None``.
+            reverse: If ``True``, accumulate backward (from end to start of each
+                vehicle's dwell sequence).  May be a single bool or a per-column
+                list of bools.  Defaults to ``False``.
+            agg_func: Aggregation function(s) to apply.  May be a single
+                :class:`CumAggFunc` or a per-column list.  Defaults to
+                :attr:`CumAggFunc.SUM`.
+            write_all: If ``True``, write accumulated values for both kept and
+                dropped rows.  Defaults to ``False``.
+            inplace: If ``True``, modify ``self.data`` in place and return
+                ``None``; otherwise return a deep copy.  Defaults to ``False``.
+
+        Returns:
+            Modified :class:`DwellSet` (or ``None`` if ``inplace=True``), with
+            new ``{col}_{keep_mask_col}`` columns added to ``data``.
+
+        Raises:
+            ValueError: If ``reverse`` or ``agg_func`` are lists whose length
+                does not match ``accum_cols``.
         """
         if self.verify_sorting:
             self.sort_by_veh_time()
@@ -290,6 +472,29 @@ class DwellSet:
         write_all: bool = False,
         show_progress: bool = True,
     ) -> pd.DataFrame:
+        """Apply :meth:`_accum_masked_core` per vehicle on a pandas DataFrame.
+
+        Converts the keep-mask and reset columns to a NumPy recarray (using
+        ``replace_dtypes`` to substitute Numba-incompatible types), then
+        iterates over per-vehicle index groups and calls the JIT core.  Writes
+        accumulated values into new columns and optionally nulls out rows that
+        will be dropped.
+
+        Args:
+            df: Input pandas DataFrame sorted by ``(veh_col, time)``.
+            keep_mask_col: Boolean column name.
+            accum_cols: Column(s) to accumulate.
+            reset_col: Boolean column indicating epoch boundaries.
+            veh_col: Vehicle-ID column (used for ``groupby`` index lookup).
+            replace_dtypes: Dtype substitution map for recarray construction.
+            reverse: Backward-accumulation flag(s).
+            agg_func: Aggregation function(s).
+            write_all: Whether to also write values for dropped rows.
+            show_progress: Whether to show a ``tqdm`` progress bar.
+
+        Returns:
+            ``df`` with new ``{col}_{keep_mask_col}`` columns added.
+        """
         if isinstance(accum_cols, str):
             accum_cols = [accum_cols]
         if isinstance(reverse, bool):
@@ -356,10 +561,21 @@ class DwellSet:
     def _get_recarray_dtypes(
         df: pd.DataFrame, replace_dtypes: dict[str, str]
     ) -> dict[str, str]:
-        """Convert a DataFrame to a Record Array using opinionated type conversions.
+        """Build a column-dtype dict suitable for ``DataFrame.to_records``.
 
-        Note: Boolean values seem to not convert as bytes, so I will use a small unsigned
-        integer instead
+        Substitutes any dtype whose name appears in ``replace_dtypes`` (e.g.
+        NumPy ``bool`` → ``"u1"``) so the resulting recarray is compatible with
+        Numba JIT functions.
+
+        Args:
+            df: DataFrame whose column dtypes will be inspected.
+            replace_dtypes: Mapping from incompatible dtype names to replacement
+                dtype strings.
+
+        Returns:
+            Dict mapping column names to dtype strings for columns that require
+            substitution; other columns are not included (``to_records`` will
+            use their native dtypes).
         """
         col_dtypes = {}
         for col, dtype in zip(df.columns, df.dtypes):
@@ -376,6 +592,26 @@ class DwellSet:
         reverse: bool = False,
         agg_func: CumAggFunc = CumAggFunc.SUM,
     ) -> np.ndarray:
+        """JIT-compiled inner loop for masked accumulation over a single vehicle.
+
+        Iterates through ``vals`` (forward or backward) and applies
+        ``agg_func`` to accumulate values from dropped rows onto the next
+        retained row.  When a reset boundary is encountered, the running
+        accumulator is reset to the current raw value instead.
+
+        Args:
+            logics: Structured NumPy array with fields ``"keep"`` (uint8 bool)
+                and ``"reset"`` (uint8 bool), one element per dwell.
+            vals: 1-D array of the quantity to accumulate, one element per
+                dwell.
+            outs: Pre-allocated output array of the same shape as ``vals``.
+            reverse: If ``True``, iterate from last to first dwell.
+            agg_func: :class:`CumAggFunc` member controlling how values are
+                combined.  Defaults to :attr:`CumAggFunc.SUM`.
+
+        Returns:
+            ``outs`` filled with accumulated values.
+        """
         nsteps = logics.shape[0]
         if not nsteps == vals.shape[0] == outs.shape[0]:
             raise RuntimeError("The three arrays must have the same length.")
@@ -413,7 +649,21 @@ class DwellSet:
     def drop_masked(
         self, keep_mask_col: str, inplace: bool = False, drop_mask_col: bool = True
     ) -> Self | None:
-        """Drop rows using a boolean mask column."""
+        """Remove rows where ``keep_mask_col`` is ``False`` or ``NA``.
+
+        Converts ``keep_mask_col`` to nullable boolean, replaces ``False``
+        with ``pd.NA``, and calls ``dropna``.  Optionally removes the mask
+        column from the result.
+
+        Args:
+            keep_mask_col: Boolean column; rows with ``True`` are retained.
+            inplace: Modify in place if ``True``, return deep copy otherwise.
+            drop_mask_col: Drop ``keep_mask_col`` from the result.  Defaults
+                to ``True``.
+
+        Returns:
+            Modified :class:`DwellSet` (or ``None`` if ``inplace=True``).
+        """
         if inplace:
             new = self
         else:
@@ -436,9 +686,25 @@ class DwellSet:
             return new
 
     def reset_masked(self, keep_mask_col: str, inplace: bool = False) -> Self | None:
-        """Filter out individual dwells while forcing a reset in the new gaps.
+        """Set ``reset=True`` on the first kept dwell after each removed gap.
 
-        Note: This function operates inplace for efficiency.
+        After masking out dwells, the first retained dwell that immediately
+        follows one or more removed dwells must be flagged as a reset so the
+        charging simulator restarts the SoC correctly.  This method writes a
+        new column ``"{reset}_{keep_mask_col}"`` with the updated reset flags.
+
+        The JIT core (:meth:`_reset_masked_grp_core`) is pre-compiled with a
+        small dummy array before the main loop to avoid Numba cold-start
+        overhead.
+
+        Args:
+            keep_mask_col: Boolean column; ``True`` means "keep this dwell".
+            inplace: Modify in place if ``True``, return deep copy otherwise.
+                Defaults to ``False``.
+
+        Returns:
+            Modified :class:`DwellSet` (or ``None`` if ``inplace=True``), with
+            new column ``"{reset}_{keep_mask_col}"`` added to ``data``.
         """
         if self.verify_sorting:
             self.sort_by_veh_time()
@@ -484,6 +750,18 @@ class DwellSet:
     def _reset_masked_grp(
         grp: pd.DataFrame, keep_mask_col: str, reset_col: str
     ) -> pd.DataFrame:
+        """Apply :meth:`_reset_masked_grp_core` to a single vehicle group.
+
+        Writes updated reset flags into ``"{reset_col}_{keep_mask_col}"``.
+
+        Args:
+            grp: Single-vehicle pandas DataFrame partition.
+            keep_mask_col: Boolean column indicating retained rows.
+            reset_col: Existing reset column whose values will be updated.
+
+        Returns:
+            ``grp`` with the new reset column added.
+        """
         new_name = f"{reset_col}_{keep_mask_col}"
         grp.loc[:, new_name] = DwellSet._reset_masked_grp_core(
             keep=grp[keep_mask_col].values,
@@ -494,6 +772,24 @@ class DwellSet:
     @staticmethod
     @njit
     def _reset_masked_grp_core(keep: np.ndarray, reset: np.ndarray) -> np.ndarray:
+        """JIT-compiled core: set ``reset=True`` at each transition from dropped to kept.
+
+        Scans ``keep`` and sets the corresponding ``reset`` element to ``True``
+        whenever the current row is kept and the previous row was not (i.e. the
+        start of a new retained segment), provided the row was not already a
+        reset boundary.
+
+        Args:
+            keep: 1-D boolean array (uint8); ``1`` = keep this dwell.
+            reset: 1-D boolean array (uint8) of existing reset flags.  Modified
+                in place.
+
+        Returns:
+            Updated ``reset`` array.
+
+        Raises:
+            RuntimeError: If ``keep`` and ``reset`` have different shapes.
+        """
         if not keep.shape == reset.shape:
             raise RuntimeError("The two arrays must have the same shape.")
         prev_keep = False
@@ -505,8 +801,10 @@ class DwellSet:
         return reset
 
     def set_default_reset_col(self):
-        """Set the default reset_state_before column to assuming that only the first
-        dwell for each vehicle requires a reset before.
+        """Initialise ``data[reset]`` so only each vehicle's first dwell is ``True``.
+
+        Creates the ``reset`` column with all-``False`` values, then uses a
+        per-vehicle groupby to flip the first row of each group to ``True``.
         """
         self.data[self.reset] = False
         if self.is_dask:
@@ -645,6 +943,7 @@ class DwellSet:
             self.data = self.data.rename(columns={old: new})
 
     def get_tracked_cols(self):
+        """Return a list of all semantic column/index names tracked by this DwellSet."""
         return [
             self._veh,
             self._hex,
@@ -670,7 +969,30 @@ class DwellSet:
         *args,
         **kwargs,
     ):
-        """Create a DwellSet from trip-formatted data."""
+        """Construct a DwellSet from trip-formatted data.
+
+        Interprets each row as a trip arrival, so the dwell starts at
+        ``end_trip`` and ends at the ``start_trip`` of the *next* trip for the
+        same vehicle (computed by a within-group shift).  The last trip of each
+        vehicle is dropped because no subsequent start time exists.
+
+        After construction the dwell start/end columns are renamed to the
+        canonical ``DEFAULT_COLUMN_NAMES["start"]`` and ``["end"]`` values.
+
+        Args:
+            trips: DataFrame with one trip per row.
+            veh: Vehicle-ID column name.
+            hex: Dwell-location hex column name.
+            start_trip: Trip departure timestamp column.
+            end_trip: Trip arrival timestamp column (becomes dwell start).
+            trip_dist: Preceding-trip distance column.
+            trip_dur: Preceding-trip duration column.
+            verify_sorting: Passed through to :meth:`__init__`.
+            sorted: Passed through to :meth:`__init__`.
+
+        Returns:
+            New :class:`DwellSet` with canonical start/end column names.
+        """
         dw = cls(
             data=trips,
             veh=veh,
@@ -712,7 +1034,26 @@ class DwellSet:
         return dw
 
     def to_events(self: Self, id_cols: list[str] = None) -> dd.DataFrame | pd.DataFrame:
-        """Convert dwells into hexagon event profiles."""
+        """Reshape from one-dwell-per-row to one-event-per-row format.
+
+        Uses :attr:`seq_names` to identify column groups (e.g.
+        ``"dwell_start_time"``, ``"dwell_start_power_kw"`` share the prefix
+        ``"dwell_start"``).  Each named sequence becomes a separate row in the
+        output, stacked via a MultiIndex column pivot then ``stack``.
+
+        :attr:`seq_names` must be set before calling this method.
+
+        Args:
+            id_cols: Columns to retain as identifiers in the output (default:
+                ``[veh, hex]``).
+
+        Returns:
+            DataFrame with one event per row, indexed by ``event_id``, and
+            columns matching the suffix components of the sequence columns.
+
+        Raises:
+            RuntimeError: If :attr:`seq_names` is ``None``.
+        """
         if self.seq_names is None:
             raise RuntimeError("Sequence names must be set before calling 'to_events'.")
 
@@ -735,8 +1076,25 @@ class DwellSet:
         seq_names: list[str],
         drop_cur_idx: bool = False,
     ) -> pd.DataFrame:
-        """Convert one-dwell-per-row format to one-event-per-row format for a single
-        pandas DataFrame.
+        """Pivot one partition from dwell-wide to event-long format.
+
+        For each sequence name in ``seq_names``, finds all columns whose name
+        contains that prefix, extracts the tail (the part after
+        ``"{seq_name}_"``), builds a MultiIndex column structure, and stacks
+        on ``seq_id``/``seq_name`` to produce one row per (dwell × sequence
+        event).
+
+        Args:
+            dw: Single pandas DataFrame partition, one row per dwell.
+            id_cols: Identifier columns preserved in the output.
+            seq_names: Column-prefix strings identifying each event sequence
+                within a dwell (e.g. ``["dwell_start", "dwell_end"]``).
+            drop_cur_idx: Whether to drop the current index during
+                ``reset_index``.
+
+        Returns:
+            Long-format DataFrame indexed by ``event_id``, with one row per
+            sequence event per dwell.
         """
         # Set new column MultiIndex to prepare for stacking
         dw = dw.reset_index(drop=drop_cur_idx)
@@ -770,15 +1128,44 @@ class DwellSet:
         return matches[0]
 
     def to_geodataframe(self, geom_type: str = "point") -> None:
-        """Convert the underlying dataset into a GeoDataFrame."""
+        """Attach H3-derived geometries to ``data``, converting it to a GeoDataFrame.
+
+        Delegates to :func:`~megaplug.utils.h3.add_geometries` using the hex
+        column.  Mutates ``data`` in place.
+
+        Args:
+            geom_type: Geometry type passed to ``add_geometries`` —
+                ``"point"`` for hex centroids or ``"polygon"`` for hex
+                boundaries.  Defaults to ``"point"``.
+        """
         self.data = add_geometries(self.data, hex_col=self.hex, geom_type=geom_type)
 
 
 def load_dwell_set(dwells: pd.DataFrame, params: dict) -> DwellSet:
-    """Load the dwell set from disk with column name parameters."""
+    """Construct a DwellSet from a Kedro-loaded DataFrame and parameter dict.
+
+    Passes all keys in ``params`` as keyword arguments to :class:`DwellSet`,
+    so ``params`` must at minimum supply ``veh``, ``hex``, ``start``, ``end``,
+    ``trip_dist``, and ``trip_dur``.
+
+    Args:
+        dwells: Raw DataFrame loaded by Kedro.
+        params: Dict of column-name and option arguments for :class:`DwellSet`.
+
+    Returns:
+        Configured :class:`DwellSet` instance.
+    """
     dw = DwellSet(data=dwells, **params)
     return dw
 
 
 def save_dwell_set(dw: DwellSet) -> pd.DataFrame:
+    """Extract the underlying DataFrame from a DwellSet for Kedro persistence.
+
+    Args:
+        dw: Populated :class:`DwellSet`.
+
+    Returns:
+        The ``data`` attribute ready for Kedro to save.
+    """
     return dw.data
