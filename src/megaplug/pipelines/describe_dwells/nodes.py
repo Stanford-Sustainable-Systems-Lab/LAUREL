@@ -1,3 +1,62 @@
+"""Kedro pipeline nodes for the ``describe_dwells`` pipeline (Model Module 2 — Augment dwell data).
+
+Transforms the raw telematics trip records into a clean, shift-annotated
+``DwellSet`` that is ready for the electrification simulation.  This pipeline
+implements the second part of Model Module 2 (Augment Dwell Data): coalescing
+brief return trips that break a dwell without meaningfully changing the
+vehicle's location, and marking the start of each new FMCSA-compliant driver
+shift.
+
+Pipeline overview
+-----------------
+1. **format_trips_columns** — Parses timestamps, converts H3 hex strings to
+   integers, recodes the vehicle-ID column as a compact integer category,
+   and optionally persists the Dask DataFrame in memory.
+2. **calc_derived_trip_cols** — Computes trip duration in hours from start and
+   end timestamps.
+3. **create_dwells** — Converts the trip-oriented DataFrame into a
+   ``DwellSet`` (one row per dwell event) using ``DwellSet.from_trips``.
+4. **coalesce_interrupted_dwells** — Merges dwells that are separated by a
+   short "circle trip" (same origin and destination, below distance and
+   duration thresholds) into a single, longer dwell.
+5. **mark_vehicle_shifts** — Marks dwell events that start a new driver shift
+   (dwell duration >= ``min_refresh_hrs``, per FMCSA HOS regulations) and
+   assigns a monotonically increasing shift ID within each vehicle.
+6. **calc_rolling_dwell_ratios** — Computes a rolling time-window dwell ratio
+   for each (vehicle, location) pair as the fraction of the vehicle's total
+   dwell time spent at that location.
+7. **map_location_groups** — Joins freight-activity-class labels from the
+   ``describe_locations`` pipeline onto each dwell row.
+
+Key design decisions
+--------------------
+- **Coalescing via ``accum_masked``**: Rather than a forward-fill or group-join,
+  coalescing is implemented by propagating the latest end-time of the
+  interrupted dwell sequence *backwards* through the masked rows and then
+  dropping the non-masked rows.  This avoids a sort-dependent join and is
+  compatible with Dask partitioned DataFrames.
+- **Reset column neutralisation**: The ``DwellSet.reset`` column has special
+  semantics inside ``accum_masked``.  Setting it to ``False`` before calling
+  ``accum_masked`` and restoring it afterwards prevents the coalescing logic
+  from treating existing shift boundaries as accumulation barriers.
+- **FMCSA 6.9-hour threshold**: The ``min_refresh_hrs`` parameter encodes the
+  FMCSA 8-hour off-duty rest requirement.  A slightly lower threshold of 6.9
+  hours is used to accommodate GPS rounding in the telematics data.
+- **Deprecated rolling-ratio functions**: ``calc_inter_visit_stats``,
+  ``calc_inter_visit_times``, ``describe_veh_loc_pairs``,
+  ``filter_substantial_dwells``, and ``cluster_veh_loc_pairs`` are preserved
+  for potential future use but are not connected to the active pipeline as of
+  2025-10-20.
+
+References
+----------
+Passow, F., & Rajagopal, R. (2026). Identifying indicators to inform proactive
+substation upgrades for charging electric heavy-duty trucks. *Applied Energy*.
+
+Federal Motor Carrier Safety Administration. Hours of Service Regulations,
+49 CFR Part 395.
+"""
+
 import logging
 from copy import deepcopy
 
@@ -17,7 +76,34 @@ logger = logging.getLogger(__name__)
 
 
 def format_trips_columns(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
-    """Preprocess trips data columns."""
+    """Parse timestamps, encode H3 hex strings, and recode vehicle IDs in the raw trips DataFrame.
+
+    Categorising the vehicle-ID column *before* converting timestamp columns
+    prevents a known Dask issue in which ``dd.to_datetime`` silently converts
+    integer category codes to ``float64``.  H3 hexagon strings are converted
+    to ``uint64`` integers for memory efficiency and join performance.
+
+    Args:
+        trips: Raw trips Dask DataFrame as loaded from the ``01_raw`` catalog.
+        params: Pipeline parameters dict with keys:
+
+            - ``category_columns`` (list[str]): columns to categorise before
+              timestamp conversion.
+            - ``time_columns`` (list[str]): columns to convert to UTC-aware
+              ``datetime64``.
+            - ``h3_columns`` (list[str]): H3 hexagon string columns to convert
+              to ``uint64``.
+            - ``col_renamer`` (dict[str, str]): mapping from raw to internal
+              column names (applied after all other transformations).
+            - ``veh_id_col`` (str): vehicle identifier column; category codes
+              are cast to ``int64`` after renaming.
+            - ``persist`` (bool): if ``True``, trigger Dask computation and
+              pin the result in distributed memory.
+
+    Returns:
+        A Dask DataFrame with parsed timestamps, integer hex IDs, compact
+        integer vehicle IDs, and columns renamed to internal names.
+    """
     trips = trips.categorize(params["category_columns"])
 
     for col in params["time_columns"]:
@@ -38,7 +124,20 @@ def format_trips_columns(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
 
 
 def calc_derived_trip_cols(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
-    """Calculate derived variables which are needed for events."""
+    """Compute trip duration in hours from start and end timestamp columns.
+
+    Args:
+        trips: Trips DataFrame with UTC-aware timestamp columns.
+        params: Pipeline parameters dict with keys:
+
+            - ``time_cols`` (dict): sub-keys ``trip_start`` and ``trip_end``
+              naming the timestamp columns.
+            - ``persist`` (bool): if ``True``, trigger Dask computation and
+              pin the result in distributed memory.
+
+    Returns:
+        The trips DataFrame with a new ``trip_hrs`` column (float).
+    """
     trips["trip_hrs"] = total_hours(
         trips[params["time_cols"]["trip_end"]]
         - trips[params["time_cols"]["trip_start"]]
@@ -50,7 +149,44 @@ def calc_derived_trip_cols(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
 
 
 def create_dwells(trips: dd.DataFrame, params: dict, client: Client) -> DwellSet:
-    """Create dwell data from trips data."""
+    """Convert a trip-oriented DataFrame into a ``DwellSet`` of dwell events.
+
+    A dwell event represents the period during which a vehicle is stationary
+    at a location between two consecutive trips.  ``DwellSet.from_trips``
+    infers each dwell's start time, end time, and hexagon from the
+    surrounding trip records.
+
+    An optional debug subsample limits computation to the first ``n`` rows of
+    the Dask DataFrame for rapid iteration.  If ``load_into_memory`` is set,
+    the entire Dask DataFrame is materialised before conversion, which can be
+    faster when working on smaller datasets.
+
+    Args:
+        trips: Trips Dask DataFrame (output of ``calc_derived_trip_cols``).
+        params: Pipeline parameters dict with keys:
+
+            - ``debug_subsample`` (dict): ``active`` (bool) and ``n`` (int)
+              to limit the input to the first ``n`` rows.
+            - ``load_into_memory`` (bool): if ``True``, call ``.compute()``
+              before conversion.
+            - ``drop_cols`` (list[str]): trip columns to remove before
+              conversion.
+            - ``col_renamer`` (dict[str, str]): additional column renames to
+              apply before conversion.
+            - ``from_trips_cols`` (dict): column-name keyword arguments
+              forwarded to ``DwellSet.from_trips`` (e.g., ``veh``, ``hex``,
+              ``start``, ``end``).
+            - ``verify_sorting`` (bool): if ``True``, ``DwellSet.from_trips``
+              verifies that trips are sorted by (vehicle, time).
+            - ``set_index_kwargs`` (dict): additional keyword arguments for
+              setting the index in ``DwellSet.from_trips``.
+        client: Active Dask distributed ``Client`` (used implicitly by the
+            Dask scheduler; not called directly in this function).
+
+    Returns:
+        A ``DwellSet`` with one dwell record per stationary event, sorted by
+        (vehicle, start time).
+    """
     if params["debug_subsample"]["active"]:
         trips = trips.loc[0 : params["debug_subsample"]["n"]]
 
@@ -73,16 +209,42 @@ def create_dwells(trips: dd.DataFrame, params: dict, client: Client) -> DwellSet
 
 
 def coalesce_interrupted_dwells(dw: DwellSet, params: dict) -> DwellSet:
-    """Coalesce dwells interrupted by trips with identical origin and destination which
-    are short in time and distance.
+    """Merge dwells that are split by short circle trips into single, continuous dwells.
 
-    This algorithm assumes that the distances and durations for these short trips are
-    negligible for the purposes of a charging model, so they are dropped instead of
-    being accumulated. The algorithm could be modified easily to have them included.
+    A "circle trip" is a trip whose origin and destination hexagon are
+    identical and whose distance and duration both fall below configurable
+    thresholds.  Such trips most likely represent GPS noise or brief vehicle
+    movements within a depot and should not break the surrounding dwell into
+    two separate events.
 
-    If the distances and times do not need to be accumulated, then an alternative
-    implementation would simply drop short trips from the trips dataset before dwells
-    were created.
+    The algorithm proceeds as follows:
+
+    1. Mark non-circle trips with ``is_not_short_circle = True``.
+    2. Temporarily set ``dw.reset`` to ``False`` for all rows to prevent
+       shift boundaries from interrupting the accumulation.
+    3. Use ``DwellSet.accum_masked`` with ``CumAggFunc.MAX`` to propagate the
+       *latest* end time backwards through each circle-trip gap (``reverse=True``),
+       so that the dwell preceding the circle trip absorbs the end time of
+       the dwell following it.
+    4. Drop rows marked as circle trips.
+    5. Restore ``dw.reset`` from the saved copy and rename accumulated columns
+       back to their original names.
+
+    The distances and durations of the dropped circle trips are not
+    accumulated into the surviving dwell (they are treated as negligible).
+
+    Args:
+        dw: Input ``DwellSet`` freshly created from trips.
+        params: Pipeline parameters dict with keys:
+
+            - ``max_short_dist_miles`` (float): maximum trip distance (miles)
+              for a trip to qualify as a circle trip.
+            - ``max_short_dur_hrs`` (float): maximum trip duration (hours) for
+              a trip to qualify as a circle trip.
+
+    Returns:
+        The ``DwellSet`` with circle trips coalesced; ``dw.data`` has the same
+        schema as the input but with fewer rows.
     """
     prev_col = f"{dw.hex}_prev"
     mask_col = "is_not_short_circle"
@@ -155,11 +317,31 @@ def coalesce_interrupted_dwells(dw: DwellSet, params: dict) -> DwellSet:
 
 
 def mark_vehicle_shifts(dw: DwellSet, params: dict) -> DwellSet:
-    """Mark shifts by setting a 'refresh' column and giving a shift id.
+    """Identify driver shift boundaries and assign shift IDs.
 
-    This is done using a time threshold, currently based on the Federal Motor Carrier
-    Safety Administration (FMCSA) hours of service regulations for commercial vehicle
-    drivers.
+    A dwell whose duration meets or exceeds ``min_refresh_hrs`` is classified
+    as a shift-refresh dwell (the driver's mandatory off-duty rest period under
+    FMCSA 49 CFR Part 395).  The shift ID for the *following* dwell is
+    incremented, so that the refresh dwell itself is the last event of the
+    preceding shift.  Shift IDs are vehicle-local (i.e., they restart at 0
+    for each vehicle).
+
+    Args:
+        dw: Coalesced ``DwellSet`` (output of ``coalesce_interrupted_dwells``).
+        params: Pipeline parameters dict with keys:
+
+            - ``columns`` (dict): sub-keys:
+
+                - ``dur`` (str): temporary column name for dwell duration.
+                - ``refresh`` (str): boolean column name marking shift-refresh
+                  dwells.
+                - ``shift_id`` (str): integer shift-ID column name.
+            - ``min_refresh_hrs`` (float): minimum dwell duration in hours to
+              classify as a shift refresh (typically 6.9 hours).
+
+    Returns:
+        The ``DwellSet`` with ``refresh`` and ``shift_id`` columns added to
+        ``dw.data``.
     """
     # Mark the shift "refresh" dwells
     pcols = params["columns"]
@@ -181,7 +363,30 @@ def mark_vehicle_shifts(dw: DwellSet, params: dict) -> DwellSet:
 
 
 def calc_rolling_dwell_ratios(dw: DwellSet, params: dict) -> DwellSet:
-    """Calculate the maximum rolling dwell ratios for each vehicle-location pair."""
+    """Compute each dwell's maximum rolling location-specific dwell ratio.
+
+    For each dwell, the rolling ratio is the fraction of the vehicle's total
+    dwell time (within a rolling time window) that was spent at the same
+    hexagon.  The *maximum* of this ratio across all windows in the observation
+    period is recorded for each (vehicle, location) pair and then mapped back
+    onto individual dwell rows.
+
+    Dispatches to ``_calc_rolling_dwell_ratios_part`` via ``map_partitions``
+    for Dask-backed ``DwellSet`` instances, or calls it directly for pandas.
+
+    Args:
+        dw: Shift-annotated ``DwellSet`` (output of ``mark_vehicle_shifts``).
+        params: Pipeline parameters dict with keys:
+
+            - ``output_ratio_col`` (str): name of the output rolling-ratio
+              column.
+            - ``rolling_kwargs`` (dict): keyword arguments forwarded to
+              ``pd.Series.rolling`` (e.g., ``window``, ``min_periods``).
+
+    Returns:
+        The ``DwellSet`` with ``params["output_ratio_col"]`` added to
+        ``dw.data``.
+    """
     dw.data["dur_hrs_col"] = total_hours(dw.data[dw.end] - dw.data[dw.start])
 
     out_col = params["output_ratio_col"]
@@ -215,6 +420,7 @@ def _calc_rolling_dwell_ratios_part(
     time_col: str,
     **roll_kwargs: dict,
 ) -> pd.DataFrame:
+    """Apply ``_calc_rolling_dwell_ratios_one_veh`` to each vehicle in a partition."""
     part[out_col] = part.groupby(veh_col, sort=False, group_keys=False).apply(
         func=_calc_rolling_dwell_ratios_one_veh,
         val_col=val_col,
@@ -228,7 +434,26 @@ def _calc_rolling_dwell_ratios_part(
 def _calc_rolling_dwell_ratios_one_veh(
     dwells: pd.DataFrame, val_col: str, loc_col: str, time_col: str, **roll_kwargs: dict
 ) -> pd.Series:
-    """Calculate the maximum rolling dwell ratios for each location for a single vehicle."""
+    """Compute per-dwell maximum rolling location dwell ratio for a single vehicle.
+
+    Sets ``time_col`` as the index to enable time-based rolling windows, then
+    computes both the location-specific rolling sum and the overall rolling sum
+    of dwell duration.  The ratio of these two quantities is computed at each
+    timestamp; the *maximum* ratio observed for each location is then mapped
+    back onto each dwell row.
+
+    Args:
+        dwells: Single-vehicle dwell DataFrame, sorted by ``time_col``.
+        val_col: Dwell-duration column name.
+        loc_col: Hexagon/location column name.
+        time_col: Timestamp column name (used as the rolling index).
+        **roll_kwargs: Keyword arguments forwarded to ``pd.Series.rolling``
+            (e.g., ``window="30D"``).
+
+    Returns:
+        A ``pd.Series`` aligned with ``dwells`` containing the maximum rolling
+        dwell ratio for the location visited at each dwell.
+    """
     roller = dwells.loc[:, [time_col, loc_col, val_col]]
     roller = roller.set_index(time_col)
     loc_specific = roller.groupby(loc_col)[val_col].rolling(**roll_kwargs).sum()
@@ -249,7 +474,30 @@ def _calc_rolling_dwell_ratios_one_veh(
 def map_location_groups(
     dw: DwellSet, hex_corresp: pd.DataFrame, params: dict
 ) -> DwellSet:
-    """Map location groups onto the DwellSet."""
+    """Join freight-activity-class labels from the hex correspondence table onto dwells.
+
+    Maps the cluster/group label for each hexagon (computed by the
+    ``describe_locations`` pipeline) onto the ``DwellSet`` rows by hexagon ID.
+    For Dask-backed ``DwellSet`` instances, the mapping is performed lazily
+    via ``dw.data[dw.hex].map(map_ser, meta=...)``.
+
+    Args:
+        dw: ``DwellSet`` with a hex-ID column.
+        hex_corresp: DataFrame indexed by hexagon ID with a location-group
+            column.
+        params: Pipeline parameters dict with keys:
+
+            - ``location_group_col`` (str): name of the group column in
+              ``hex_corresp`` and the output column added to ``dw.data``.
+            - ``missing_values`` (dict): sub-keys:
+
+                - ``fill_missing`` (bool): whether to fill NaN group labels.
+                - ``fill_value``: value used to fill unmapped hexagons (e.g.,
+                  ``"undeveloped"``).
+
+    Returns:
+        The ``DwellSet`` with a new location-group column added to ``dw.data``.
+    """
     grp_col = params["location_group_col"]
     map_ser = hex_corresp[grp_col]
 
@@ -269,7 +517,12 @@ def map_location_groups(
 
 
 def calc_inter_visit_stats(dw: DwellSet) -> DwellSet:
-    """Describe vehicle-location pairs by inter-visit summary statistics."""
+    """Compute inter-visit time and mileage for each (vehicle, location) pair.
+
+    .. deprecated::
+        Not connected to the active pipeline as of 2025-10-20.  Preserved for
+        potential future use.
+    """
     tqdm.pandas()
     # TODO: Consider moving this within DwellSet class and using a Numba for loop
     dw.data = dw.data.groupby(dw.veh, group_keys=False, sort=False).progress_apply(
@@ -289,14 +542,19 @@ def calc_inter_visit_stats(dw: DwellSet) -> DwellSet:
 def calc_inter_visit_times(
     grp: pd.DataFrame, hex_col: str, end_col: str, start_col: str
 ) -> pd.DataFrame:
-    """Calculate inter-visit times, assuming that `grp` is from a single vehicle and sorted by time."""
+    """Calculate inter-visit times for a single vehicle's dwells, sorted by time."""
     prev_end_time = grp.groupby(hex_col, sort=False)[end_col].shift(1)
     grp.loc[:, "inter_visit_hrs"] = total_hours(grp[start_col] - prev_end_time)
     return grp
 
 
 def describe_veh_loc_pairs(dw: DwellSet) -> pd.DataFrame:
-    """Describe each vehicle location pair with summary statistics."""
+    """Summarise each (vehicle, location) pair with visit counts, dwell hours, and inter-visit statistics.
+
+    .. deprecated::
+        Not connected to the active pipeline as of 2025-10-20.  Preserved for
+        potential future use.
+    """
     veh_locs = dw.data.groupby([dw.veh, dw.hex], sort=False).agg(
         n_visits=pd.NamedAgg("dwell_hrs", "count"),
         mean_inter_miles=pd.NamedAgg("inter_visit_miles", "mean"),
@@ -319,7 +577,12 @@ def describe_veh_loc_pairs(dw: DwellSet) -> pd.DataFrame:
 
 
 def filter_substantial_dwells(dw: DwellSet, params: dict) -> DwellSet:
-    """Filter to retain only substantial dwells to be described."""
+    """Drop dwells shorter than a duration threshold, accumulating trip stats across gaps.
+
+    .. deprecated::
+        Not connected to the active pipeline as of 2025-10-20.  Preserved for
+        potential future use.
+    """
     dw.data["dwell_hrs"] = total_hours(dw.data[dw.end] - dw.data[dw.start])
     dw.data["long_enough"] = dw.data["dwell_hrs"] > params["thresh_hrs"]
     accum_cols = [dw.trip_dist, dw.trip_dur, dw.reset]
@@ -331,7 +594,32 @@ def filter_substantial_dwells(dw: DwellSet, params: dict) -> DwellSet:
 
 
 def cluster_veh_loc_pairs(veh_locs: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Cluster vehicle-location pairs to uncover latent groups."""
+    """Cluster (vehicle, location) pairs using HDBSCAN on log-scaled, standardised features.
+
+    .. deprecated::
+        Not connected to the active pipeline as of 2025-10-20.  Preserved for
+        potential future use.
+
+    Selects ``params["feature_cols"]``, optionally subsamples, applies
+    ``log10`` transformation (skipping ratio columns), standardises with
+    ``StandardScaler``, and fits HDBSCAN with a minimum cluster size of
+    ``n_obs / min_cluster_size_denom``.
+
+    Args:
+        veh_locs: (vehicle, location) summary DataFrame (output of
+            ``describe_veh_loc_pairs``).
+        params: Pipeline parameters dict with keys:
+
+            - ``feature_cols`` (list[str]): feature columns for clustering.
+            - ``sample`` (dict): ``active`` (bool), ``n`` (int), ``seed``
+              (int) for optional subsampling.
+            - ``min_cluster_size_denom`` (int): denominator for deriving
+              HDBSCAN's ``min_cluster_size`` from ``n_obs``.
+            - ``cluster_col`` (str): output cluster-label column name.
+
+    Returns:
+        The input DataFrame with a categorical ``cluster_col`` column added.
+    """
     # Prepare for clustering by standardizing variables
     logger.info("Select feature variables")
     clusterable = deepcopy(veh_locs.dropna(axis=0))

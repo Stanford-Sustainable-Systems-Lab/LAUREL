@@ -1,6 +1,59 @@
-"""
-This is a boilerplate pipeline 'prepare_totals'
-generated using Kedro 0.19.11
+"""Kedro pipeline nodes for the ``prepare_totals`` pipeline (Model Module 1 — Select SoWs).
+
+Prepares the vehicle-count denominators and adoption-projection tables that
+the ``evaluate_impacts`` pipeline uses to scale telematics observations to
+realistic fleet-level charging loads.  This pipeline implements the first
+half of Model Module 1 (Select States of the World): constructing the
+disaggregation crosswalk that maps national NREL Ledna adoption forecasts
+down to the (region × operating-distance class × weight class) strata used
+by the model.  An optional ACF (Advanced Clean Fleets) mandate variant
+overrides projections wherever the regulatory minimum exceeds the forecast.
+
+Pipeline overview
+-----------------
+1. **prepare_for_merging** — Renames VIUS microdata columns and derives each
+   respondent's primary operating-distance class from a set of distance-bin
+   indicator columns.
+2. **aggregate_vius_totals** — One-hot encodes the home-base-code variable,
+   redistributes survey weight from out-of-state or unknown home-base
+   respondents, and aggregates into a conditional probability table
+   ``P(region, op_dist | weight_class)`` used as a disaggregation factor.
+3. **aggregate_adoption_forecast_totals** — Renames and aggregates the raw
+   NREL Ledna vehicle-count projections to the required group level, applying
+   a vehicle-stock multiplier to convert units if necessary.
+4. **create_disaggregated_adoption** — Merges the VIUS disaggregation factors
+   onto the national adoption totals to produce stratum-level vehicle counts.
+5. **build_mandates_by_group** — Expands the sparse ACF mandate schedule into
+   a dense (year × operating-distance class × weight class × state) table,
+   interpolating linearly between known mandate fractions and broadcasting
+   each mandate to the set of MOU-signatory states.
+6. **concat_projections_with_mandates** — Appends a mandate-adjusted copy of
+   the adoption projections in which ZEV fractions that fall below the
+   regulatory minimum are raised to the mandate level, while non-ZEV fractions
+   are correspondingly reduced.
+
+Key design decisions
+--------------------
+- **Proportional weight redistribution**: Vehicles with "Home Base not in
+  Register State" cannot be attributed to a known state, so their weight is
+  redistributed to same-stratum "Home Base in Register State" respondents.
+  This preserves the marginal totals while making every vehicle attributable.
+- **Zero-denominator default technology**: When Ledna projects zero adoption
+  in an entire emissions class, the model defaults to a single representative
+  fuel type (``default_fuel_types``) with probability 1.0 rather than leaving
+  the conditional probability undefined.
+- **Mandate override threshold**: The mandate override is only applied when
+  the mandate fraction *exceeds* the forecast ZEV fraction for a group; if the
+  market forecast already meets or exceeds the mandate, the forecast is left
+  unchanged.
+
+References
+----------
+Passow, F., & Rajagopal, R. (2026). Identifying indicators to inform proactive
+substation upgrades for charging electric heavy-duty trucks. *Applied Energy*.
+
+NREL. (2023). Ledna: Light- and Medium-Duty Electric Vehicle Adoption Model.
+California Air Resources Board. Advanced Clean Fleets regulation.
 """
 
 import pandas as pd
@@ -10,7 +63,30 @@ from megaplug.utils.params import build_df_from_dict
 
 
 def prepare_for_merging(vius: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Prepare the VIUS microdata for merging of groups."""
+    """Rename VIUS columns and derive each respondent's primary operating-distance class.
+
+    The VIUS encodes operating distance as a set of binary indicator columns
+    (one per distance bin).  This function identifies the bin with the
+    highest value for each respondent to assign a single ``primary_dist_col``
+    label.  Respondents with all-NA distance bins are assigned a sentinel
+    value of ``"NA"`` so they can be excluded downstream.
+
+    Args:
+        vius: Raw VIUS microdata DataFrame as loaded by the ``preprocess``
+            pipeline.
+        params: Pipeline parameters dict with keys:
+
+            - ``col_renamer`` (dict[str, str]): mapping from raw column names
+              to internal names.
+            - ``dist_bin_col_prefix`` (str): prefix shared by all operating-
+              distance indicator columns (used to identify them by name).
+            - ``primary_dist_col`` (str): name of the output column for the
+              primary operating-distance label.
+
+    Returns:
+        The input DataFrame with columns renamed and a new ``primary_dist_col``
+        column added.
+    """
     scaler = vius.rename(columns={v: k for k, v in params["col_renamer"].items()})
 
     dist_cols = [
@@ -25,7 +101,54 @@ def prepare_for_merging(vius: pd.DataFrame, params: dict) -> pd.DataFrame:
 
 
 def aggregate_vius_totals(vius: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Aggregate VIUS totals, and prepare for that aggregation."""
+    """Build a disaggregation crosswalk from VIUS survey weights.
+
+    Constructs the conditional probability table
+    ``P(region, op_dist | weight_class)`` that is later used to disaggregate
+    national adoption-forecast totals into the (region, operating-distance
+    class, weight class) strata required by the model.
+
+    The procedure handles three home-base categories:
+
+    - **"Home Base in Register State"**: Retained and scaled by
+      ``1 / P(known_home_base | has_home_base)`` to absorb the weight of
+      out-of-state records.
+    - **"Home Base not in Register State"**: Dropped after contributing to the
+      scaling denominator.
+    - **"No Home Base"**: Retained but assigned a default operating distance.
+    - Respondents with unknown operating distance have their weight zeroed out.
+
+    The final groupby aggregation over ``group_cols`` normalises by the
+    conditional total to produce probabilities.
+
+    Args:
+        vius: VIUS microdata with ``primary_dist_col`` already assigned (output
+            of ``prepare_for_merging``).
+        params: Pipeline parameters dict with keys:
+
+            - ``home_base_code_col`` (str): column containing the home-base
+              category label.
+            - ``home_base_region_col`` (str): output column for the region
+              label derived from the home-base category.
+            - ``region_source_col`` (str): raw column providing the state name
+              for "Home Base in Register State" records.
+            - ``weight_col`` (str): survey weight column.
+            - ``op_dist_col`` (str): operating-distance class column.
+            - ``fill_op_dist`` (str): default operating-distance label for
+              "No Home Base" vehicles.
+            - ``spread_condition_cols`` (list[str]): columns defining strata
+              within which the home-base-known probability is computed.
+            - ``group_cols`` (list[str]): columns to group by for the final
+              aggregation.
+            - ``disagg_condition_cols`` (list[str]): conditioning columns for
+              the normalisation denominator.
+            - ``out_prob_col`` (str): name of the output probability column.
+
+    Returns:
+        A ``pd.DataFrame`` with one row per (group_cols) combination and a
+        probability column ``out_prob_col`` summing to 1.0 within each
+        ``disagg_condition_cols`` stratum.
+    """
     enc = OneHotEncoder(sparse_output=False)
     ohot = enc.fit_transform(vius.loc[:, [params["home_base_code_col"]]])
     ohot = pd.DataFrame(ohot, columns=enc.categories_[0], dtype=bool)
@@ -89,7 +212,27 @@ def aggregate_vius_totals(vius: pd.DataFrame, params: dict) -> pd.DataFrame:
 def aggregate_adoption_forecast_totals(
     adopts: pd.DataFrame, params: dict
 ) -> pd.DataFrame:
-    """Aggregate the adoption forecast totals to prepare for merging."""
+    """Aggregate and unit-scale the NREL Ledna adoption-forecast vehicle counts.
+
+    Renames columns, groups to the required dimensionality, and multiplies
+    by a stock scalar (e.g., to convert from thousands of vehicles to
+    individual vehicles).
+
+    Args:
+        adopts: Raw Ledna adoption-forecast DataFrame.
+        params: Pipeline parameters dict with keys:
+
+            - ``col_renamer`` (dict[str, str]): mapping from raw to internal
+              column names.
+            - ``group_cols`` (list[str]): columns to group by.
+            - ``weight_col`` (str): vehicle-count column.
+            - ``vehicle_stock_mult`` (float): scalar multiplier applied to
+              the aggregated totals (e.g., 1000 if Ledna reports in thousands).
+
+    Returns:
+        A ``pd.DataFrame`` with one row per ``group_cols`` combination and
+        a scaled vehicle-count column.
+    """
     adpt = adopts.rename(columns={v: k for k, v in params["col_renamer"].items()})
     wgt_col = params["weight_col"]
     adpt = adpt.groupby(params["group_cols"])[wgt_col].sum().reset_index()
@@ -100,7 +243,31 @@ def aggregate_adoption_forecast_totals(
 def create_disaggregated_adoption(
     adopts: pd.DataFrame, disagg: pd.DataFrame, params: dict
 ) -> pd.DataFrame:
-    """Merge a disaggregation factor dataframe onto an adoption forecast dataframe."""
+    """Disaggregate national adoption totals to stratum-level vehicle counts.
+
+    Merges the VIUS-derived conditional probability table (``disagg``) onto
+    the aggregated adoption forecast (``adopts``) and multiplies to produce
+    vehicle counts broken out by region and operating-distance class.
+
+    Args:
+        adopts: Aggregated adoption totals (output of
+            ``aggregate_adoption_forecast_totals``).
+        disagg: Disaggregation crosswalk with a probability column (output of
+            ``aggregate_vius_totals``).
+        params: Pipeline parameters dict with keys:
+
+            - ``merge_cols`` (list[str]): columns to join on.
+            - ``orig_totals_col`` (str): vehicle-count column in ``adopts``.
+            - ``disagg_factor_col`` (str): probability column in ``disagg``.
+            - ``final_totals_col`` (str): name of the output vehicle-count
+              column (rounded to the nearest integer).
+            - ``keep_group_cols`` (list[str]): columns to retain in the
+              output.
+
+    Returns:
+        A ``pd.DataFrame`` with integer vehicle counts per stratum, sorted
+        by ``keep_group_cols``.
+    """
     totals = adopts.merge(disagg, how="left", on=params["merge_cols"])
     totals[params["final_totals_col"]] = (
         (totals[params["orig_totals_col"]] * totals[params["disagg_factor_col"]])
@@ -115,8 +282,40 @@ def create_disaggregated_adoption(
 def build_mandates_by_group(
     mands: pd.DataFrame, mand_states: pd.DataFrame, params: dict
 ) -> pd.DataFrame:
-    """Take the ACF mandates dataframe and expand it out to be merge-able with
-    Ledna adoptions.
+    """Expand the sparse ACF mandate schedule into a dense, merge-ready table.
+
+    The raw ACF mandate data provides ZEV fraction requirements at a small
+    number of (year, vehicle-class) combinations.  This function:
+
+    1. Maps ACF vehicle classes to the model's operating-distance/weight-class
+       groups via a correspondence table.
+    2. Creates a full (group × year) grid spanning ``frame_years``.
+    3. Linearly interpolates mandate fractions between known anchor years;
+       years before the first anchor are filled with 0.0.
+    4. Broadcasts the result across all MOU-signatory states in
+       ``mand_states``.
+
+    Args:
+        mands: Sparse ACF mandate DataFrame with (year, class, fraction) rows.
+        mand_states: DataFrame of MOU-signatory state identifiers.
+        params: Pipeline parameters dict with keys:
+
+            - ``acf_groups`` (dict): ``values`` (correspondence mapping),
+              ``id_columns`` (list), ``value_column`` (str) — defines the
+              mapping from ACF vehicle class to model group.
+            - ``frame_years`` (dict): ``min`` and ``max`` year for the output
+              grid.
+            - ``mandate_fraction_col`` (str): column name for the ZEV fraction.
+            - ``mou_state_col`` (str): column in ``mand_states`` containing
+              state identifiers.
+            - ``col_renamer`` (dict[str, str]): mapping to harmonise column
+              names with the adoption-forecast tables.
+            - ``weight_class_col`` (str): weight-class column to cast to str.
+
+    Returns:
+        A ``pd.DataFrame`` with one row per (state, group, year) combination
+        and a ``mandate_fraction_col`` column suitable for merging with
+        adoption-forecast tables.
     """
     cor_pars = params["acf_groups"]
     corresp = build_df_from_dict(
@@ -155,15 +354,52 @@ def build_mandates_by_group(
 def concat_projections_with_mandates(
     adopts: pd.DataFrame, mands: pd.DataFrame, params: dict
 ) -> pd.DataFrame:
-    """Concatenate onto the original adoption projections a new set with mandates.
+    """Append a mandate-adjusted copy of the adoption projections to the original forecasts.
 
-    Throughout, we refer to the group as the combination of all variables which set the
-    type of vehicle we are talking about **other than fuel type**.
+    The group is defined as the combination of all variables that characterise a
+    vehicle type *other than* fuel type (e.g., weight class, operating distance,
+    region, year, scenario).  The *mandate class* (``mclass``) is the ZEV
+    designation: a vehicle is in the mandate class if and only if its fuel type
+    is in ``zev_fuel_types``.
 
-    Also, an "mclass" refers to the mandate class. If a vehicle is in the mandate class,
-    **and** the mandate share exceeds the projected share for those mandated vehicles,
-    then they will get the mandate share applied to them. If a vehicle is not in the
-    mandate class, then they will get 1 - mandate share applied to them.
+    The override logic is:
+
+    1. Compute ``P(mclass | group)`` from the adoption forecast.
+    2. Merge the mandate fraction for each group from ``mands``.
+    3. If the mandate fraction exceeds ``P(mclass | group)``, mark the group
+       as ``mandate_override = True``.
+    4. For overridden groups, replace ZEV counts with
+       ``N_group × mandate_fraction × P(tech | group, mclass)`` and non-ZEV
+       counts with ``N_group × (1 − mandate_fraction) × P(tech | group, ~mclass)``.
+    5. When Ledna projected zero ZEVs in a group, default to a single
+       representative technology (``default_fuel_types``) with probability 1.
+
+    The original and mandate-adjusted projections are stacked with a boolean
+    index level indicating whether the mandate is active.
+
+    Args:
+        adopts: Disaggregated adoption-forecast totals.
+        mands: Dense mandate schedule (output of ``build_mandates_by_group``).
+        params: Pipeline parameters dict with keys:
+
+            - ``group_cols`` (list[str]): columns that define a group (all
+              dimensions except fuel type).
+            - ``fuel_type_col`` (str): column containing the fuel-type label.
+            - ``zev_fuel_types`` (list[str]): fuel-type labels counted as ZEVs.
+            - ``totals_col`` (str): vehicle-count column.
+            - ``scenario_col`` (str): scenario identifier (excluded from the
+              mandate merge join to apply mandates across all scenarios).
+            - ``mandate_fraction_col`` (str): ZEV fraction column from
+              ``mands``.
+            - ``default_fuel_types`` (list[str]): fallback fuel type when
+              Ledna projected zero ZEVs.
+            - ``mandate_active_col`` (str): name of the boolean index level
+              added to the output.
+
+    Returns:
+        A ``pd.DataFrame`` with a boolean index level ``mandate_active_col``
+        (``False`` = original forecast, ``True`` = mandate-adjusted forecast)
+        and the same columns as ``adopts``.
     """
     # Prepare for grouping calculations
     group_cols = params["group_cols"]

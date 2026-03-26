@@ -1,6 +1,33 @@
-"""
-This is a boilerplate pipeline 'build_runners'
-generated using Kedro 0.18.13
+"""Kedro pipeline nodes for the ``build_runners`` pipeline (scenario configuration generation).
+
+Generates the per-scenario configuration files (YAML partitions) that drive
+HPC batch execution of the 512 States-of-the-World (SoW) array on the
+Stanford Sherlock cluster.  Each generated partition encodes the full
+parameter override set for one scenario run of the ``electrify_trips`` and
+``evaluate_impacts`` pipelines.
+
+Pipeline overview
+-----------------
+1. **generate_scenario_configs** — Discovers the appropriate
+   ``ScenarioBuilder`` subclass by name, instantiates it, and returns a dict
+   of YAML partition callables—one per scenario—that Kedro writes to
+   ``conf/scenario_runners/``.
+
+Key design decisions
+--------------------
+- **Dynamic dispatch via globals()**: Rather than a hard-coded ``if/elif``
+  chain, the node inspects the module's global namespace at runtime to find
+  all ``ScenarioBuilder`` subclasses.  New builders are automatically
+  available once they are imported at the top of the module; no registry
+  update is required.
+- **Separation of config generation from execution**: The ``build_runners``
+  pipeline only produces configuration files; actual scenario execution is
+  handled by shell scripts in ``src/runners/`` that read those files.
+
+References
+----------
+Passow, F., & Rajagopal, R. (2026). Identifying indicators to inform proactive
+substation upgrades for charging electric heavy-duty trucks. *Applied Energy*.
 """
 
 import inspect

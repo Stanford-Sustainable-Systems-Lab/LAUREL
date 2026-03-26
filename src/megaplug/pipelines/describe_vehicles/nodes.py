@@ -1,6 +1,60 @@
-"""
-This is a boilerplate pipeline 'describe_vehicles'
-generated using Kedro 0.19.3
+"""Kedro pipeline nodes for the ``describe_vehicles`` pipeline (vehicle characterisation).
+
+Characterises each vehicle in the telematics dataset along three dimensions
+used by the electrification model: (1) the primary operating-distance class
+(0–99, 100–249, 250–499, or 500+ miles), which determines the battery-range
+option assigned during electrification; (2) the time-weighted geographic
+center of operations, used as a spatial reference point; and (3) the
+operating radius, which measures how far vehicles travel from their center.
+These attributes feed directly into the ``electrify_trips`` pipeline.
+
+Pipeline overview
+-----------------
+1. **filter_dwells_for_op_segment** — Removes zero-duration dwells
+   (optional truck-stop records with identical start and end times) before
+   computing distance-based vehicle statistics.
+2. **spatialize_dwells** — Converts the ``DwellSet`` to a GeoDataFrame by
+   adding H3-centroid geometries if they are not already present.
+3. **partition_dwellset** — Re-partitions the Dask-backed ``DwellSet`` to
+   the desired number of partitions before on-disk checkpointing.
+4. **strip_vehicle_attrs** — Extracts vehicle-level constant attributes
+   (weight class, cab type, etc.) and drops vehicles that appear fewer than
+   ``min_trips_per_veh`` times.
+5. **mark_weight_class_group** — Merges a VIUS-to-model weight-class
+   correspondence onto the vehicle table.
+6. **get_vehicle_observation_frames** — Records the first and last observed
+   timestamps, total distance traveled, and first/last hexagon for each
+   vehicle.
+7. **get_operating_radius** — Computes the operating radius of each vehicle
+   as the maximum haversine distance from the H3-centroid of any dwell to
+   the vehicle's center.
+8. **get_time_weighted_centers** — Computes the time-weighted geographic
+   center of each vehicle's dwell history by projecting to a planar CRS and
+   computing a dwell-duration-weighted centroid.
+9. **get_operating_segment** — Assigns a primary operating-distance class
+   (distance bin label) by binning dwell-to-center distances and selecting
+   the bin that accounts for the most cumulative trip miles.
+
+Key design decisions
+--------------------
+- **Dask/pandas dispatch**: Each spatial aggregation function contains an
+  explicit ``dw.is_dask`` branch.  Dask partitions are mapped with
+  ``map_partitions``; pandas is computed directly.  This lets the pipeline
+  run in memory for debugging while retaining distributed-compute capability
+  for the full 69,000-vehicle dataset.
+- **Zero-duration dwell exclusion**: Optional truck-stop dwells inserted by
+  ``compute_routes`` have zero duration and would contribute zero weight to
+  a time-weighted centroid, but they introduce artificial distance-bin
+  assignments.  Filtering them out before characterisation ensures that
+  centroid and segment calculations reflect only genuine activity.
+- **Deprecated functions**: ``classify_vehicles``, ``mark_vehicle_centers``,
+  and ``mark_location_regions`` are preserved for potential future use but
+  are not connected to the active pipeline as of 2025-11-19.
+
+References
+----------
+Passow, F., & Rajagopal, R. (2026). Identifying indicators to inform proactive
+substation upgrades for charging electric heavy-duty trucks. *Applied Energy*.
 """
 
 import logging
@@ -25,14 +79,35 @@ logger = logging.getLogger(__name__)
 
 
 def filter_dwells_for_op_segment(dw: DwellSet) -> DwellSet:
-    """Filter down the dwells in preparation for computing the operating segment."""
+    """Remove zero-duration dwells before computing operating-segment statistics.
+
+    Optional truck-stop dwells inserted by the ``compute_routes`` pipeline
+    have identical start and end timestamps (zero duration).  Leaving them in
+    would artificially inflate visit counts along the route and introduce
+    false intermediate locations into the distance-bin computation.
+
+    Args:
+        dw: Input ``DwellSet`` potentially containing optional stops.
+
+    Returns:
+        The ``DwellSet`` with all zero-duration rows dropped from ``dw.data``.
+    """
     # Filter out all optional stops, which have the same start and end time (zero duration)
     dw.data = dw.data.loc[dw.data[dw.end] != dw.data[dw.start]]
     return dw
 
 
 def spatialize_dwells(dw: DwellSet) -> DwellSet:
-    """Add geometries to dwells."""
+    """Convert the ``DwellSet`` data to a GeoDataFrame if not already spatial.
+
+    Args:
+        dw: Input ``DwellSet`` whose data may be a plain ``DataFrame`` or
+            ``GeoDataFrame``.
+
+    Returns:
+        The ``DwellSet`` with ``dw.data`` guaranteed to be a ``GeoDataFrame``
+        containing point geometries at each dwell's H3-hexagon centroid.
+    """
     if not isinstance(dw.data, gpd.GeoDataFrame):
         logger.info("Converting DwellSet data to GeoDataFrame.")
         dw.to_geodataframe()
@@ -41,7 +116,18 @@ def spatialize_dwells(dw: DwellSet) -> DwellSet:
 
 
 def partition_dwellset(dw: DwellSet, params: dict) -> DwellSet:
-    """Re-partition the trips to save to disk, in preparation for routing."""
+    """Re-partition a Dask-backed ``DwellSet`` before writing to disk.
+
+    Args:
+        dw: Input ``DwellSet``.
+        params: Pipeline parameters dict with keys:
+
+            - ``n_partitions`` (int): target number of Dask partitions.
+
+    Returns:
+        The ``DwellSet`` with ``dw.data`` repartitioned (no-op for
+        pandas-backed ``DwellSet`` instances).
+    """
     if dw.is_dask:
         dw.data = dw.data.repartition(npartitions=params["n_partitions"])
     return dw
@@ -50,7 +136,26 @@ def partition_dwellset(dw: DwellSet, params: dict) -> DwellSet:
 def strip_vehicle_attrs(
     trips: dd.DataFrame, params: dict
 ) -> tuple[dd.DataFrame, pd.DataFrame]:
-    """Get vehicle-specific attributes which stay constant."""
+    """Extract vehicle-level constant attributes and drop low-observation vehicles.
+
+    Vehicles with fewer than ``min_trips_per_veh`` observed trips are excluded
+    because they lack sufficient data to reliably estimate an operating-distance
+    class or time-weighted center.
+
+    Args:
+        trips: Dask DataFrame of trip records with one row per trip.
+        params: Pipeline parameters dict with keys:
+
+            - ``veh_id_col`` (str): vehicle identifier column.
+            - ``veh_attr_cols`` (list[str]): columns containing vehicle-level
+              constant attributes (e.g., weight class, cab type).
+            - ``min_trips_per_veh`` (int): minimum number of trips required to
+              retain a vehicle.
+
+    Returns:
+        A ``pd.DataFrame`` indexed by ``veh_id_col``, one row per vehicle,
+        with columns from ``veh_attr_cols``.
+    """
     n_trips_by_veh = trips[params["veh_id_col"]].value_counts().compute()
     drop_idx = n_trips_by_veh.loc[n_trips_by_veh < params["min_trips_per_veh"]].index
 
@@ -62,7 +167,21 @@ def strip_vehicle_attrs(
 
 
 def mark_weight_class_group(vehs: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Mark the vehicles with VIUS weight class groups."""
+    """Merge a VIUS-to-model weight-class correspondence onto the vehicle table.
+
+    Args:
+        vehs: Vehicle attributes DataFrame indexed by vehicle ID.
+        params: Pipeline parameters dict with keys:
+
+            - ``values`` (dict): correspondence mapping values.
+            - ``id_dimensions`` (list[str]): columns used to join the
+              correspondence table.
+            - ``value_col`` (str): name of the output weight-class-group
+              column.
+
+    Returns:
+        The vehicle DataFrame with a new weight-class-group column added.
+    """
     wgt_corresp = build_df_from_dict(
         params["values"],
         id_cols=params["id_columns"],
@@ -78,7 +197,29 @@ def mark_weight_class_group(vehs: pd.DataFrame, params: dict) -> pd.DataFrame:
 def get_vehicle_observation_frames(
     vehs: pd.DataFrame, dw: DwellSet, params: dict
 ) -> pd.DataFrame:
-    """Get the total time and mileage over which each vehicle is observed."""
+    """Record each vehicle's temporal span, total distance, and first/last location.
+
+    Aggregates dwell-level records to one row per vehicle, capturing the
+    observation window (first start time to last end time), total trip
+    distance, and the hexagons at the start and end of the observation period.
+    These values are used to weight vehicle-level statistics in downstream
+    sampling.
+
+    Args:
+        vehs: Vehicle attributes DataFrame indexed by vehicle ID.
+        dw: ``DwellSet`` containing the full dwell history; assumed to be
+            sorted by (vehicle, time) or a Dask-backed instance (sorting
+            is assumed in that case).
+        params: Pipeline parameters dict with keys:
+
+            - ``column_namer`` (dict[str, str]): mapping from generic aggregation
+              output names to final column names (e.g., ``dist_traveled_col``).
+
+    Returns:
+        The vehicle DataFrame with observation-frame columns merged in:
+        first/last timestamps, first/last hexagon, total trip distance, and
+        total observation duration.
+    """
     if not dw.is_dask:
         dw.sort_by_veh_time()
     else:
@@ -102,7 +243,26 @@ def get_vehicle_observation_frames(
 def get_operating_radius(
     vehs: pd.DataFrame, dw: DwellSet, params: dict
 ) -> pd.DataFrame:
-    """Compute the operating radius of each vehicle."""
+    """Compute the maximum haversine distance from any dwell to the vehicle's center.
+
+    Projects the dwell GeoDataFrame to the H3 geographic CRS (WGS-84) so that
+    ``calc_operating_radius`` can use haversine distances, then groups by
+    vehicle and aggregates the geometry series.  For Dask-backed ``DwellSet``
+    instances the computation is distributed with ``map_partitions`` and then
+    triggered with a ``ProgressBar``.
+
+    Args:
+        vehs: Vehicle attributes GeoDataFrame indexed by vehicle ID.
+        dw: Spatialised ``DwellSet`` containing H3-centroid geometries.
+        params: Pipeline parameters dict with keys:
+
+            - ``out_col`` (str): name of the output operating-radius column
+              (in miles).
+
+    Returns:
+        The vehicle DataFrame with ``params["out_col"]`` added, containing
+        the operating radius in miles for each vehicle.
+    """
     dw.data = dw.data.to_crs(H3_CRS)  # since calc_operating_radius uses haversine dist
 
     def _get_op_rad(part: pd.DataFrame, grp_cols: list) -> pd.Series:
@@ -128,7 +288,30 @@ def get_operating_radius(
 def get_time_weighted_centers(
     vehs: pd.DataFrame, dw: DwellSet, params: dict
 ) -> gpd.GeoDataFrame:
-    """Compute the time-weighted centers of a vehicle's history."""
+    """Compute the dwell-duration-weighted geographic center for each vehicle.
+
+    Projects dwells to a planar CRS, computes dwell duration in hours, then
+    calls ``find_time_weighted_centers`` to calculate a weighted centroid per
+    vehicle.  The resulting centers are re-projected to the H3 geographic CRS
+    before being merged onto the vehicle table, which is returned as a
+    ``GeoDataFrame`` with the center column as the active geometry.
+
+    Args:
+        vehs: Vehicle attributes DataFrame indexed by vehicle ID.
+        dw: Spatialised ``DwellSet``; geometries are projected in-place to
+            ``params["proj_crs"]`` during this call.
+        params: Pipeline parameters dict with keys:
+
+            - ``proj_crs`` (str | CRS): projected CRS for planar distance
+              calculations (e.g., an equal-area projection).
+            - ``out_col`` (str): name of the output geometry column for the
+              time-weighted center.
+
+    Returns:
+        A ``gpd.GeoDataFrame`` indexed by vehicle ID with a new point geometry
+        column ``params["out_col"]`` containing each vehicle's time-weighted
+        center in the H3 geographic CRS.
+    """
     proj_crs = params["proj_crs"]
     dw.data = dw.data.to_crs(proj_crs)
 
@@ -159,9 +342,38 @@ def get_time_weighted_centers(
 def get_operating_segment(
     vehs: gpd.GeoDataFrame, dw: DwellSet, params: dict
 ) -> gpd.GeoDataFrame:
-    """Calculate the operating segment of each vehicle based primary operating distance.
-    If a vehicle does not have a home base, then use the time-weighted center as the
-    reference point instead.
+    """Assign each vehicle's primary operating-distance class from its dwell geography.
+
+    For each dwell, computes the planar distance from the dwell's H3-centroid
+    to the vehicle's time-weighted center (``params["center_col"]``).  Each
+    distance is placed into a labelled bin defined by ``radius_bin_low_bounds_miles``.
+    The cumulative trip mileage within each (vehicle, bin) combination is then
+    summed, and the bin with the highest total mileage is selected as the primary
+    operating-distance class.
+
+    Vehicles without a home base use the time-weighted center as the reference
+    point; since the center is already computed from all dwells, this is
+    handled automatically by the geometry merge.
+
+    Args:
+        vehs: Vehicle GeoDataFrame with a geometry column for time-weighted
+            centers (output of ``get_time_weighted_centers``).
+        dw: Spatialised ``DwellSet``; geometries are projected in-place to
+            ``params["proj_crs"]`` during this call.
+        params: Pipeline parameters dict with keys:
+
+            - ``proj_crs`` (str | CRS): projected CRS for planar distance
+              measurements.
+            - ``center_col`` (str): column name for the time-weighted center
+              geometry in ``vehs``.
+            - ``radius_bin_low_bounds_miles`` (dict[str, float]): ordered
+              mapping of label → lower bound (miles) for each distance bin.
+            - ``segment_col`` (str): name of the output operating-segment
+              column.
+
+    Returns:
+        The vehicle GeoDataFrame with ``params["segment_col"]`` added,
+        containing the primary operating-distance class label for each vehicle.
     """
     proj_crs = params["proj_crs"]
     dw.data = dw.data.to_crs(proj_crs)
@@ -210,7 +422,26 @@ def get_operating_segment(
 def classify_vehicles(
     vehs: pd.DataFrame, veh_locs: pd.DataFrame, params: dict
 ) -> pd.DataFrame:
-    """Classify vehicles by their route type, home base status, etc."""
+    """Classify vehicles by home-base status from a vehicle-location summary table.
+
+    .. deprecated::
+        Not connected to the active pipeline as of 2025-11-19.  Preserved for
+        potential future use.
+
+    Args:
+        vehs: Vehicle attributes DataFrame.
+        veh_locs: Vehicle-location-pair summary with a multi-index of
+            (vehicle_id, hex_id).
+        params: Pipeline parameters dict with keys:
+
+            - ``veh_col`` (str): vehicle identifier column.
+            - ``loc_col`` (str): location-type column.
+            - ``base_location_type`` (str): location-type label that indicates
+              a depot/home base.
+
+    Returns:
+        The vehicle DataFrame with a boolean ``has_home_base`` column added.
+    """
     veh_loc_cts = veh_locs.groupby(params["veh_col"], sort=False)[
         params["loc_col"]
     ].value_counts()
@@ -227,10 +458,37 @@ def classify_vehicles(
 def mark_vehicle_centers(
     vehs: pd.DataFrame, veh_locs: pd.DataFrame, params: dict, dwell_params: dict
 ) -> pd.DataFrame:
-    """Mark the characteristic center coordinates for each vehicle.
+    """Assign a characteristic home-base hexagon to each vehicle with a known depot.
 
-    If the vehicle has any depot locations, then select one of those based on priority
-    parameters and sorting.
+    Selects the highest-priority depot location for vehicles that have one,
+    using sort columns and ascending flags from ``params``.  Vehicles without
+    a depot receive a sentinel hexagon value (``params["nan_int"]``) cast to
+    ``int`` so that all values share the same dtype.
+
+    .. deprecated::
+        Not connected to the active pipeline as of 2025-11-19.  Preserved for
+        potential future use.
+
+    Args:
+        vehs: Vehicle attributes DataFrame.
+        veh_locs: Vehicle-location-pair summary.
+        params: Pipeline parameters dict with keys:
+
+            - ``location_col`` (str): column containing the location-type
+              label.
+            - ``base_location_type`` (str): label used to identify depot
+              locations.
+            - ``sort_primary_locations_to_top`` (dict): ``columns`` and
+              ``ascending`` lists for sorting.
+            - ``home_base_col`` (str): output column name for the home-base
+              hexagon.
+            - ``nan_int`` (int): sentinel value for vehicles without a depot.
+        dwell_params: ``DwellSet`` column-name parameters with keys ``veh``
+            and ``hex``.
+
+    Returns:
+        The vehicle DataFrame indexed by ``veh_col`` with a home-base hexagon
+        column added.
     """
     veh_col = dwell_params["veh"]
     hex_col = dwell_params["hex"]
@@ -259,7 +517,32 @@ def mark_location_regions(
     regions: gpd.GeoDataFrame,
     params: dict,
 ) -> pd.DataFrame:
-    """Mark the region of chosen locations by intersecting location points with region polygons."""
+    """Assign a region label to each vehicle by spatial join of its home-base hexagon.
+
+    Converts the home-base hexagon to a point geometry, reprojects to the
+    region CRS, performs a left spatial join, and fills vehicles with no
+    matched region (e.g., those without a home base) with a sentinel string.
+
+    .. deprecated::
+        Not connected to the active pipeline as of 2025-11-19.  Preserved for
+        potential future use.
+
+    Args:
+        vehs: Vehicle DataFrame with a home-base hexagon column.
+        regions: GeoDataFrame of region polygons.
+        params: Pipeline parameters dict with keys:
+
+            - ``veh_col`` (str): vehicle identifier column.
+            - ``home_base_col`` (str): hexagon column for the home base.
+            - ``nan_int`` (int): sentinel value indicating no home base.
+            - ``region_name_col`` (str): column in ``regions`` containing the
+              region label.
+            - ``location_region_col`` (str): output column name.
+            - ``na_region_fill`` (str): fill value for unmatched vehicles.
+
+    Returns:
+        The vehicle DataFrame with a region-label column added.
+    """
     veh_col = params["veh_col"]
     loc_reg_col = params["location_region_col"]
 

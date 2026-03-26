@@ -1,6 +1,109 @@
-"""
-This is a boilerplate pipeline 'describe_locations'
-generated using Kedro 0.19.3
+"""Kedro pipeline nodes for the ``describe_locations`` pipeline (Model Module 3 — Augment TAZs).
+
+Constructs the spatial foundation of the model: H3 resolution-8 hexagonal
+Traffic Analysis Zones (TAZs) covering the continental U.S., each labelled
+with a freight-activity class that determines which charger types are deployed
+there and how many.  This pipeline implements Model Module 3 (Augment TAZs)
+from the paper.
+
+Pipeline overview
+-----------------
+Substation territory construction:
+1. **format_substation_boundaries_pg_and_e** — Sums transformer bank ratings
+   to substation level and adds provenance metadata for PG&E ICA data.
+2. **format_substation_profiles** — Collapses hour-month baseload profiles to
+   a characteristic 24-hour day per substation.
+3. **describe_substation_usage** — Joins profiles and capacities to compute
+   available headroom at each substation hour.
+4. **format_substations_contin** — Formats HIFLD point-based substation data
+   (continental U.S.) for merging with polygon data.
+5. **fill_out_substations** — Fills in substation territories not covered by
+   ICA polygon data using Voronoi tessellation of HIFLD point locations.
+6. **build_remainder_polys** — Constructs Voronoi-based territory polygons for
+   point substations outside the ICA coverage area (called by
+   ``fill_out_substations``).
+
+Spatial layer formatting:
+7. **format_states** — Renames columns in the U.S. state polygons layer.
+8. **format_urban** — Renames columns in the urban-area polygons layer.
+9. **format_highways** — Dissolves and buffers highway polylines to create
+   highway-corridor polygons.
+10. **build_land_use_areas** — Constructs three mutually exclusive land-use
+    area polygons: urban, rural-highway, and rural-non-highway.
+11. **clip_to_extent** — Clips any spatial layer to the extent of a reference
+    layer.
+12. **hexify_polygons** — Converts polygon layers to H3 hex grids by assigning
+    each hex that overlaps the polygon the polygon's attributes.
+
+Establishment data preparation:
+13. **concat_columns** — Joins per-hexagon feature tables by shared hex index.
+14. **fill_missingness** — Drops rows with missing required values and fills
+    optional columns with configured defaults.
+15. **prepare_shared_locations** — Formats shared truck-stop locations (e.g.,
+    Jason's Law) with a standardised location-type label.
+16. **format_estabs** — Merges raw Data Axle establishment core, geo, and
+    relationship tables; assigns H3 hex IDs.
+17. **reassign_hqs** — Reassigns NAICS codes for corporate-headquarters
+    establishments to a HQ-specific code to prevent them from being
+    misidentified as large freight facilities.
+18. **prepare_stop_locations_public** — Formats publicly available truck-stop
+    locations from Jason's Law for use as establishment records.
+19. **get_osm_estabs_truck_stops** — Extracts fuel stations matching a truck-
+    stop name pattern from an OSM PBF file.
+20. **get_osm_estabs_warehouses** — Extracts warehouse/distribution-centre
+    candidates from an OSM PBF file by name pattern.
+21. **concat_extra_estabs** — Concatenates supplementary establishment sources.
+22. **format_extra_estabs** — Reprojects extra establishments, assigns H3 hex
+    IDs, and deduplicates.
+23. **collapse_naics_classes** — Maps 8-digit NAICS codes to the smaller set
+    of leaf classes used for clustering.
+24. **pivot_hex_estabs** — Pivots the establishment table to a per-hexagon
+    employment matrix (one column per NAICS leaf class).
+25. **pivot_hex_land_use** — Pivots the land-use coverage table to a
+    per-hexagon land-use-group fraction matrix.
+
+Freight-activity-class assignment:
+26. **group_hexes** — Assigns each hexagon a freight-activity class using a
+    combination of development threshold, freight-intensity rules, special-
+    establishment flags, and K-Means clustering.
+27. **apply_groups** — Merges freight-activity-class labels onto the hexagon
+    feature table.
+
+Key design decisions
+--------------------
+- **Voronoi gap-filling**: HIFLD substation data provides points for most of
+  the U.S., but ICA data provides polygons for PG&E territory only.  Voronoi
+  tessellation fills the remaining territory while avoiding overlap with known
+  ICA polygons.  Disconnected Voronoi shards (islands separated from their
+  substation point) are merged into the nearest connected territory to prevent
+  orphaned hexagons.
+- **Headquarters NAICS reassignment**: Data Axle assigns some large corporate
+  headquarters the NAICS of the parent company's primary activity.  Without
+  reassignment, a trucking-company HQ would be indistinguishable from a
+  freight terminal.  The heuristic (employment ratio × business-status code ×
+  establishment count) is conservative to avoid over-correction.
+- **K-Means on sparse employment matrices**: The clustering uses log1p-
+  transformed sparse COO matrices as input so that large employment counts in
+  a single NAICS class do not dominate the distance metric.  Only hexagons
+  with non-zero freight-intensive NAICS employment (excluding special
+  categories like truck stops) are clustered; others receive rule-based labels.
+- **Neighbor embedding**: Each hexagon's feature vector is augmented with the
+  summed employment of its six H3 ring-1 neighbors to capture the local
+  land-use context, which improves cluster coherence at the cluster-boundary
+  hexagons.
+
+References
+----------
+Passow, F., & Rajagopal, R. (2026). Identifying indicators to inform proactive
+substation upgrades for charging electric heavy-duty trucks. *Applied Energy*.
+
+Uber Technologies. H3: Hierarchical Hexagonal Geospatial Indexing System.
+https://h3geo.org/
+
+Data Axle USA. Business listings database.
+U.S. DOT FHWA. Jason's Law Truck Parking Survey.
+Homeland Infrastructure Foundation-Level Data (HIFLD). Electric substations.
+USGS National Land Cover Database (NLCD).
 """
 
 import logging
@@ -34,7 +137,27 @@ METERS_PER_MILE = 1609.344
 def format_substation_boundaries_pg_and_e(
     infra: gpd.GeoDataFrame, params: dict
 ) -> gpd.GeoDataFrame:
-    """Add up substation capacities from the capacities of transformer banks."""
+    """Aggregate transformer bank ratings to substation level for PG&E ICA data.
+
+    The PG&E ICA dataset provides one polygon per transformer bank; this
+    function dissolves them to one polygon per substation, summing the MW
+    ratings, and adds source and state metadata columns.
+
+    Args:
+        infra: Raw PG&E ICA GeoDataFrame with one row per transformer bank.
+        params: Pipeline parameters dict with keys:
+
+            - ``col_renamer`` (dict[str, str]): mapping from raw to internal
+              column names (e.g., renaming the capacity and ID columns).
+            - ``add_state_col`` (dict): ``name`` and ``value`` for a static
+              state-name column to add.
+            - ``add_source_col`` (dict): ``name`` and ``value`` for a static
+              data-source column to add.
+
+    Returns:
+        A ``gpd.GeoDataFrame`` indexed by ``substation_id`` with dissolved
+        territory polygons, summed ratings, and metadata columns.
+    """
     infra = infra.rename(columns={v: k for k, v in params["col_renamer"].items()})
     infra["substation_id"] = infra["substation_id"].astype(int)
 
@@ -51,7 +174,29 @@ def format_substation_boundaries_pg_and_e(
 
 
 def format_substation_profiles(profs: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Collapse profiles from hour-month combinations to a single characteristic day."""
+    """Collapse hourly-by-month PG&E baseload profiles to a characteristic 24-hour day.
+
+    The raw PG&E ICA data encodes load as a ``month_hour`` string (e.g.,
+    ``"1_14"`` for January hour 14).  This function splits the combined column,
+    aggregates to the maximum baseload for each (substation, hour) combination
+    across all months, and derives the substation's peak baseload across all
+    hours.
+
+    Args:
+        profs: Raw PG&E ICA baseload profile DataFrame with a combined
+            ``month_hour`` string column.
+        params: Pipeline parameters dict with keys:
+
+            - ``col_renamer`` (dict[str, str]): mapping from raw to internal
+              column names.
+            - ``columns`` (dict): sub-keys ``month_hour``, ``month``, ``hour``,
+              ``substation_id``, ``baseload`` (kW column name).
+
+    Returns:
+        A ``pd.DataFrame`` indexed by ``substation_id`` with columns
+        ``hour``, ``max_base_by_hour_mw`` (max baseload for that hour, in MW),
+        and ``max_base_mw`` (peak baseload across all hours, in MW).
+    """
     pcols = params["columns"]
     profs = profs.rename(columns={v: k for k, v in params["col_renamer"].items()})
 
@@ -76,7 +221,26 @@ def format_substation_profiles(profs: pd.DataFrame, params: dict) -> pd.DataFram
 def describe_substation_usage(
     profs: pd.DataFrame, subs: gpd.GeoDataFrame, params: dict
 ) -> pd.DataFrame:
-    """Combine baseload profiles and capacities to describe substation usage."""
+    """Join baseload profiles and rated capacities to compute hourly available headroom.
+
+    Merges the characteristic-day profile onto the substation capacity table
+    and computes ``cap_avail_mw = rating_mw - baseload_mw`` for each hour.
+
+    Args:
+        profs: Characteristic-day baseload profiles (output of
+            ``format_substation_profiles``).
+        subs: Substation GeoDataFrame with rated capacity.
+        params: Pipeline parameters dict with keys:
+
+            - ``drop_substation_cols`` (list[str]): columns to drop from
+              ``subs`` before merging.
+            - ``columns`` (dict): sub-keys ``substation_id``, ``hour``,
+              ``rating_mw``, ``baseload_mw``, ``cap_avail_mw``.
+
+    Returns:
+        A ``pd.DataFrame`` indexed by ``substation_id``, sorted by hour,
+        with columns for baseload, capacity, and available headroom (all MW).
+    """
     pcols = params["columns"]
     subs = subs.drop(columns=params["drop_substation_cols"])
     subs = profs.merge(subs, how="inner", on=pcols["substation_id"])
@@ -88,7 +252,22 @@ def describe_substation_usage(
 
 
 def format_substations_contin(subs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
-    """Get substation polygons from points and state boundaries."""
+    """Standardise the HIFLD continental substation GeoDataFrame for territory construction.
+
+    Args:
+        subs: Raw HIFLD substation point GeoDataFrame.
+        params: Pipeline parameters dict with keys:
+
+            - ``col_renamer`` (dict[str, str]): mapping from raw to internal
+              column names.
+            - ``add_source_col`` (dict): ``name`` and ``value`` for a static
+              data-source column.
+            - ``keep_cols`` (list[str]): columns to retain.
+
+    Returns:
+        A standardised ``gpd.GeoDataFrame`` with integer ``substation_id``,
+        a source label, and only the required columns retained.
+    """
     subs = subs.rename(columns={v: k for k, v in params["col_renamer"].items()})
     subs["substation_id"] = subs["substation_id"].astype(int)
     subs[params["add_source_col"]["name"]] = params["add_source_col"]["value"]
@@ -99,6 +278,29 @@ def format_substations_contin(subs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDa
 def fill_out_substations(
     poly_subs: gpd.GeoDataFrame, point_subs: gpd.GeoDataFrame, params: dict
 ) -> gpd.GeoDataFrame:
+    """Build complete substation territory coverage by supplementing ICA polygons with Voronoi polygons.
+
+    Calls ``build_remainder_polys`` to create Voronoi-based territory polygons
+    for HIFLD point substations that fall outside the PG&E ICA polygon
+    coverage area, then concatenates both polygon sets into a single unified
+    GeoDataFrame.
+
+    Args:
+        poly_subs: ICA polygon substations (output of
+            ``format_substation_boundaries_pg_and_e``).
+        point_subs: HIFLD point substations (output of
+            ``format_substations_contin``).
+        params: Pipeline parameters dict with keys:
+
+            - ``columns`` (dict): sub-keys ``substation_id`` and ``source``.
+            - ``proj_crs`` (str | CRS): projected CRS for distance operations.
+            - ``buff_dist_meters`` (float): buffer distance used to compact
+              disconnected Voronoi shards.
+
+    Returns:
+        A ``gpd.GeoDataFrame`` covering all substation territories, with a
+        composite ``{substation_id}_{source}`` column indexing each territory.
+    """
     pcols = params["columns"]
     sub_id_col = pcols["substation_id"]
     source_col = pcols["source"]
@@ -126,9 +328,41 @@ def fill_out_substations(
 def build_remainder_polys(  # noqa: PLR0915
     points: gpd.GeoDataFrame, poly_mask: gpd.GeoSeries, buff_dist: float, id_col: str
 ) -> gpd.GeoDataFrame:
-    """Build substation territories to cover the whole analysis area using point-based
-    substation data to fill in the remainder of what is left after polygon-based substation
-    data is used.
+    """Construct Voronoi-based territory polygons for point substations outside the ICA coverage area.
+
+    This function fills in the substation territory map for all point
+    substations that are not already covered by a polygon from ``poly_mask``.
+    The algorithm proceeds in seven stages:
+
+    1. **Filter**: Retain only point substations whose location does not
+       intersect the union of ``poly_mask`` polygons.
+    2. **Voronoi**: Compute Voronoi polygons for the remaining point locations.
+    3. **Difference**: Subtract the ``poly_mask`` union from each Voronoi
+       polygon so that known ICA territories take precedence.
+    4. **Explode**: Split multi-part polygons into individual shards and flag
+       shards that do not contain their originating substation point as
+       "disconnected" (these are Voronoi islands).
+    5. **Compact donors**: Buffer disconnected shards by ``buff_dist`` and
+       dissolve nearby ones together to reduce the number of donor groups.
+    6. **Find acceptors**: For each compacted donor group, find the nearest
+       connected ("acceptor") territory by spatial join and centroid proximity.
+    7. **Dissolve**: Merge each donor shard into its chosen acceptor territory.
+
+    Args:
+        points: GeoDataFrame of point-substation locations; must be in the
+            same CRS as ``poly_mask``.
+        poly_mask: GeoSeries of existing territory polygons to subtract from
+            the Voronoi result.
+        buff_dist: Buffer distance (in the projected CRS units, typically
+            metres) used to compact nearby disconnected shards.
+        id_col: Column name in ``points`` containing the unique substation ID.
+
+    Returns:
+        A ``gpd.GeoDataFrame`` with one row per substation territory, matching
+        the column schema of ``points``.
+
+    Raises:
+        ValueError: If ``points.crs`` does not match ``poly_mask.crs``.
     """
     if points.crs != poly_mask.crs:
         raise ValueError("Coordinate reference systems must be the same.")
@@ -277,19 +511,61 @@ def build_remainder_polys(  # noqa: PLR0915
 
 
 def format_states(states: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
-    """Format the states dataset."""
+    """Rename columns in the U.S. state polygons layer to internal names.
+
+    Args:
+        states: Raw state-boundary GeoDataFrame.
+        params: Pipeline parameters dict with keys:
+
+            - ``col_renamer`` (dict[str, str]): mapping from raw to internal
+              column names.
+
+    Returns:
+        The GeoDataFrame with columns renamed.
+    """
     states = states.rename(columns={v: k for k, v in params["col_renamer"].items()})
     return states
 
 
 def format_urban(urban: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
-    """Format the urban areas dataset."""
+    """Rename columns in the urban-areas polygons layer to internal names.
+
+    Args:
+        urban: Raw Census urban-area GeoDataFrame.
+        params: Pipeline parameters dict with keys:
+
+            - ``col_renamer`` (dict[str, str]): mapping from raw to internal
+              column names.
+
+    Returns:
+        The GeoDataFrame with columns renamed.
+    """
     urban = urban.rename(columns={v: k for k, v in params["col_renamer"].items()})
     return urban
 
 
 def format_highways(highways: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
-    """Format the highways dataset."""
+    """Dissolve and buffer highway polylines into corridor polygons.
+
+    Dissolves all highway segments sharing the same ``dissolve_cols`` values
+    into a single geometry, reprojects to a projected CRS for accurate
+    buffering, applies a mile-radius buffer, then reprojects back to the
+    original CRS.
+
+    Args:
+        highways: Raw highway polyline GeoDataFrame.
+        params: Pipeline parameters dict with keys:
+
+            - ``col_renamer`` (dict[str, str]): mapping from raw to internal
+              column names.
+            - ``dissolve_cols`` (list[str]): columns to dissolve on.
+            - ``highway_buffer_miles`` (float): buffer radius in miles.
+            - ``buff_crs`` (str | CRS): projected CRS for buffering.
+
+    Returns:
+        A ``gpd.GeoDataFrame`` of highway-corridor polygons in the original
+        CRS.
+    """
     highways = highways.rename(columns={v: k for k, v in params["col_renamer"].items()})
 
     logger.info("Dissolving highways")
@@ -311,7 +587,31 @@ def build_land_use_areas(
     urban: gpd.GeoDataFrame,
     params: dict,
 ) -> gpd.GeoDataFrame:
-    """Build the urban, rural highway, and rural non-highway spatial divisions."""
+    """Construct three mutually exclusive land-use area polygons: urban, highway, and rural.
+
+    The three areas are:
+
+    - **urban**: the union of all Census urban-area polygons.
+    - **highway**: the highway-corridor polygon union, minus the urban areas.
+    - **rural**: the full state extent minus both urban and highway areas.
+
+    Args:
+        govt: State boundary GeoDataFrame used to define the full analysis
+            extent.
+        highways: Highway-corridor polygons (output of ``format_highways``).
+        urban: Urban-area polygons (output of ``format_urban``).
+        params: Pipeline parameters dict with keys:
+
+            - ``crs`` (str | CRS): common CRS for all overlay operations.
+            - ``highway_buffer_miles`` (float): additional buffer applied to
+              the already-buffered highway polygons (set to 0 if not needed).
+            - ``land_use_col`` (str): name of the land-use category column in
+              the output.
+
+    Returns:
+        A ``gpd.GeoDataFrame`` with three rows (urban, highway, rural) and a
+        ``land_use_col`` column, in ``params["crs"]``.
+    """
     govt = govt.to_crs(params["crs"])
     highways = highways.to_crs(params["crs"])
     urban = urban.to_crs(params["crs"])
@@ -341,7 +641,24 @@ def build_land_use_areas(
 def clip_to_extent(
     gdf: gpd.GeoDataFrame, extent: gpd.GeoDataFrame, params: dict
 ) -> pd.DataFrame:
-    """Clip a geometry layer to an extent layer."""
+    """Clip a geometry layer to the extent of a reference layer via polygon intersection.
+
+    Reprojects both layers to ``params["crs"]``, performs an overlay
+    intersection, drops empty or null geometries, and dissolves on all
+    non-geometry attribute columns to merge adjacent fragments that share the
+    same attributes.
+
+    Args:
+        gdf: Input GeoDataFrame to clip.
+        extent: Reference GeoDataFrame whose union defines the clip boundary.
+        params: Pipeline parameters dict with keys:
+
+            - ``crs`` (str | CRS): CRS for the overlay operation.
+
+    Returns:
+        A ``pd.DataFrame`` (GeoDataFrame) clipped to the extent and dissolved
+        on all attribute columns.
+    """
     extent_proj = extent.loc[:, [extent.geometry.name]].to_crs(params["crs"])
     gdf_proj = gdf.to_crs(params["crs"])
     geo_clip = gdf_proj.overlay(extent_proj, how="intersection", make_valid=True)
@@ -355,7 +672,27 @@ def clip_to_extent(
 
 
 def hexify_polygons(gdf: gpd.GeoDataFrame, params: dict) -> pd.DataFrame:
-    """Hexify the polygons in a GeoDataFrame."""
+    """Convert polygon geometries to an H3 hexagon index by assigning hex IDs to overlapping hexes.
+
+    For each polygon in ``gdf``, all H3 resolution-8 hexagons that overlap
+    the polygon are identified and assigned the polygon's attribute values.
+    When ``n_partitions > 1``, the operation is parallelised via Dask
+    GeoDataFrame; otherwise it runs in-process.
+
+    Args:
+        gdf: GeoDataFrame of polygons, each with attribute columns to carry
+            forward to the hex index.
+        params: Pipeline parameters dict with keys:
+
+            - ``hex_col`` (str): name of the H3 hex-ID output column.
+            - ``n_partitions`` (int): number of Dask partitions (1 = no Dask).
+
+    Returns:
+        A ``pd.DataFrame`` indexed by H3 hex ID (``uint64``), with one row
+        per unique hexagon and the polygon attribute columns attached.
+        Duplicate hexagons (where a hexagon intersects multiple polygons) are
+        dropped, keeping the first occurrence.
+    """
 
     hex_col = params["hex_col"]
     kws = {
@@ -385,13 +722,42 @@ def hexify_polygons(gdf: gpd.GeoDataFrame, params: dict) -> pd.DataFrame:
 
 
 def concat_columns(*args: list[pd.DataFrame]) -> pd.DataFrame:
-    """Concatenate columns by their shared index."""
+    """Outer-join multiple per-hexagon DataFrames on their shared hex index.
+
+    Args:
+        *args: Two or more ``pd.DataFrame`` objects sharing the same hex-ID
+            index.
+
+    Returns:
+        A single ``pd.DataFrame`` with all columns from all inputs, joined
+        on the shared index with ``join="outer"`` (hexagons present in any
+        input are retained).
+    """
     cat = pd.concat(args, axis=1, join="outer")
     return cat
 
 
 def fill_missingness(df: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Fill in missingness using the parameters."""
+    """Drop rows with required missing values and fill optional missing values.
+
+    Applies two sequential operations: first drops all rows with NaN in
+    ``drop_na_cols`` (required columns); then fills NaN in ``fill_na_vals``
+    columns with configured constants.  Handles ``CategoricalDtype`` columns
+    correctly by adding the fill value to the category list before filling.
+
+    Args:
+        df: Input DataFrame, typically the concatenated hexagon feature table.
+        params: Pipeline parameters dict with keys:
+
+            - ``drop_na_cols`` (list[str] | None): columns whose NaN rows
+              should be dropped entirely.
+            - ``fill_na_vals`` (dict[str, any] | None): mapping from column
+              name to fill value for optional NaN imputation.
+
+    Returns:
+        A ``pd.DataFrame`` with required NaN rows removed and optional NaN
+        values filled.
+    """
     # For some columns, drop all NA values
     dropna_cols = params.get("drop_na_cols", None)
     if dropna_cols is not None:
@@ -418,7 +784,22 @@ def fill_missingness(df: pd.DataFrame, params: dict) -> pd.DataFrame:
 
 
 def prepare_shared_locations(shared: gpd.GeoDataFrame, params: dict) -> pd.DataFrame:
-    """Prepare the charging locations shared by all vehicles."""
+    """Format shared truck-stop charger locations with a standardised location-type label.
+
+    Args:
+        shared: Raw truck-stop GeoDataFrame (e.g., Jason's Law locations
+            already assigned H3 hex IDs).
+        params: Pipeline parameters dict with keys:
+
+            - ``col_renamer`` (dict[str, str]): mapping from raw to internal
+              column names.
+            - ``loc_col`` (str): output column name for the location type.
+            - ``shared_location_type`` (str): categorical value assigned to
+              all rows (e.g., ``"truck_stop"``).
+
+    Returns:
+        A ``pd.DataFrame`` with a categorical ``loc_col`` column.
+    """
     shared = shared.rename(columns={v: k for k, v in params["col_renamer"].items()})
     shared[params["loc_col"]] = params["shared_location_type"]
     shared[params["loc_col"]] = pd.Categorical(shared[params["loc_col"]])
@@ -431,7 +812,32 @@ def format_estabs(
     estabs_rels: dd.DataFrame,
     params: dict,
 ) -> dgpd.GeoDataFrame:
-    """Format the establishment dataset by merging together disparate raw datasets."""
+    """Merge Data Axle establishment core, geo, and relationship tables into a single GeoDataFrame.
+
+    The three raw Data Axle tables are joined on the establishment ID:
+    ``estabs_core`` contains NAICS codes and employment; ``estabs_geo``
+    contains latitude/longitude; ``estabs_rels`` contains parent-company
+    relationships.  Establishments missing geographic coordinates are dropped.
+    H3 resolution-8 hex IDs are computed from the coordinates.
+
+    Args:
+        estabs_core: Dask DataFrame of establishment business attributes.
+        estabs_geo: Dask DataFrame of establishment geographic coordinates.
+        estabs_rels: Dask DataFrame of parent-company relationship records.
+        params: Pipeline parameters dict with keys:
+
+            - ``col_renamer`` (dict[str, str]): mapping from raw to internal
+              column names, applied to all three tables.
+            - ``default_naics`` (int): fallback NAICS code for establishments
+              with a missing code.
+            - ``calculated_keep_cols`` (list[str]): computed columns to retain
+              (e.g., ``"hex_id"``, ``"geometry"``).
+
+    Returns:
+        A Dask GeoDataFrame with one row per establishment, point geometry,
+        H3 hex-ID column, and the columns specified by ``col_renamer`` plus
+        ``calculated_keep_cols``.
+    """
     rnmr = {v: k for k, v in params["col_renamer"].items()}
     estabs_core = estabs_core.rename(columns=rnmr)
     estabs_geo = estabs_geo.rename(columns=rnmr)
@@ -475,10 +881,39 @@ def format_estabs(
 
 
 def reassign_hqs(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
-    """Re-assign headquarters establishments to a headquarters NAICS code.
+    """Reassign corporate-HQ establishments to a HQ-specific NAICS code to prevent misclassification.
 
-    This allows us to avoid seeing a headquarters for a truck stop company, for instance,
-    as the world's biggest truck stop.
+    A corporate headquarters may be coded with its parent company's primary
+    NAICS (e.g., a trucking-company HQ coded as a freight terminal), which
+    would cause the clustering step to treat the HQ building as a large freight
+    facility.  This function identifies likely HQ records using a combination
+    of employment ratio, business-status code, number of sibling establishments,
+    and NAICS window, then overrides their NAICS code with ``params["hq_naics"]``.
+
+    The heuristic is intentionally conservative (large employee ratio, specific
+    HQ business codes, many sibling establishments) to avoid reassigning
+    genuine large freight terminals.
+
+    Args:
+        estabs: Establishment GeoDataFrame with NAICS, employment, business-
+            status, and parent-ID columns.
+        params: Pipeline parameters dict with keys:
+
+            - ``columns`` (dict): sub-keys ``parent_id``, ``naics``,
+              ``n_employees``, ``buss_status``, ``estab_id``.
+            - ``emp_ratio_min`` (float): minimum ``(establishment_employees /
+              median_sibling_employees)`` ratio for HQ classification.
+            - ``hq_bus_codes`` (list): business-status code values indicating
+              an HQ.
+            - ``n_estabs_big`` (int): minimum number of sibling establishments
+              required.
+            - ``naics_window`` (dict): ``lower`` and ``upper`` NAICS code
+              bounds for the window within which HQ reassignment is applied.
+            - ``hq_naics`` (int): the NAICS code to assign to identified HQ
+              establishments.
+
+    Returns:
+        The establishment GeoDataFrame with HQ NAICS codes overridden.
     """
     pcols = params["columns"]
     parents = estabs.groupby(pcols["parent_id"]).agg(
@@ -513,7 +948,26 @@ def reassign_hqs(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
 def prepare_stop_locations_public(
     parks: gpd.GeoDataFrame, params: dict
 ) -> gpd.GeoDataFrame:
-    """Prepare the stop locations for optional stops."""
+    """Format Jason's Law truck-stop locations as establishment records.
+
+    Assigns the truck-stop NAICS code and renames columns so that these
+    public data records can be concatenated with the Data Axle establishment
+    dataset.
+
+    Args:
+        parks: Jason's Law truck-stop GeoDataFrame.
+        params: Pipeline parameters dict with keys:
+
+            - ``col_renamer`` (dict[str, str]): mapping from raw to internal
+              column names.
+            - ``columns`` (dict): sub-key ``naics`` for the NAICS column name.
+            - ``naics_code`` (int): NAICS code to assign to all records.
+            - ``keep_cols`` (list[str]): columns to retain.
+
+    Returns:
+        A ``gpd.GeoDataFrame`` ready to be concatenated with ``format_estabs``
+        output.
+    """
     pcols = params["columns"]
     parks_fmt = parks.rename(columns={v: k for k, v in params["col_renamer"].items()})
     parks_fmt[pcols["naics"]] = params["naics_code"]
@@ -522,7 +976,29 @@ def prepare_stop_locations_public(
 
 
 def get_osm_estabs_truck_stops(osm_params: dict, params: dict) -> gpd.GeoDataFrame:
-    """Get additional establishments from OpenStreetMap."""
+    """Extract truck-stop fuel stations from an OSM PBF file by name pattern.
+
+    Filters OSM nodes/ways that have a ``name`` tag, are tagged as
+    ``amenity=fuel``, and whose name matches ``params["tag_regex"]`` (e.g.,
+    ``"(?i)truck stop|travel center"``).
+
+    Args:
+        osm_params: OSM server/path configuration dict with keys:
+
+            - ``osm_path`` (str): path to the OSM PBF input file.
+            - ``temp_path`` (str): path for temporary files during OSM parsing.
+        params: Pipeline parameters dict with keys:
+
+            - ``naics_code`` (int): NAICS code to assign to all extracted
+              records.
+            - ``tag_regex`` (str): regular-expression pattern matched against
+              the OSM ``name`` tag.
+            - ``naics_col`` (str): output column name for the NAICS code.
+
+    Returns:
+        A ``gpd.GeoDataFrame`` of matching OSM establishments with a
+        ``naics_col`` column added.
+    """
     naics_code = params["naics_code"]
     filts = [
         KeyFilter("name"),
@@ -541,7 +1017,30 @@ def get_osm_estabs_truck_stops(osm_params: dict, params: dict) -> gpd.GeoDataFra
 
 
 def get_osm_estabs_warehouses(osm_params: dict, params: dict) -> gpd.GeoDataFrame:
-    """Get additional establishments from OpenStreetMap."""
+    """Extract warehouse and distribution-centre candidates from an OSM PBF file by name pattern.
+
+    Filters OSM nodes/ways that have a ``name`` tag and whose name matches
+    ``params["tag_regex"]`` (e.g., ``"(?i)warehouse|distribution"``).
+    Records tagged as ``amenity=social_facility`` are excluded as false
+    positives.
+
+    Args:
+        osm_params: OSM server/path configuration dict with keys:
+
+            - ``osm_path`` (str): path to the OSM PBF input file.
+            - ``temp_path`` (str): path for temporary files during OSM parsing.
+        params: Pipeline parameters dict with keys:
+
+            - ``naics_code`` (int): NAICS code to assign to all extracted
+              records.
+            - ``tag_regex`` (str): regular-expression pattern matched against
+              the OSM ``name`` tag.
+            - ``naics_col`` (str): output column name for the NAICS code.
+
+    Returns:
+        A ``gpd.GeoDataFrame`` of matching OSM establishments (excluding
+        social facilities) with a ``naics_col`` column added.
+    """
     naics_code = params["naics_code"]
     filts = [
         KeyFilter("name"),
@@ -562,11 +1061,41 @@ def get_osm_estabs_warehouses(osm_params: dict, params: dict) -> gpd.GeoDataFram
 
 
 def concat_extra_estabs(*args: list[gpd.GeoDataFrame]) -> gpd.GeoDataFrame:
+    """Concatenate supplementary establishment GeoDataFrames from multiple sources.
+
+    Args:
+        *args: Two or more ``gpd.GeoDataFrame`` objects sharing the same
+            column schema.
+
+    Returns:
+        A single ``gpd.GeoDataFrame`` with all rows concatenated and a fresh
+        integer index.
+    """
     estabs_concat = pd.concat(args, ignore_index=True, axis=0)
     return estabs_concat
 
 
 def format_extra_estabs(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
+    """Reproject, compute H3 hex IDs, and deduplicate supplementary establishment records.
+
+    Converts polygon geometries to centroids in a projected CRS, reprojects
+    to the H3 geographic CRS, computes H3 resolution-8 hex IDs, and drops
+    duplicate (hex, NAICS, name) combinations.
+
+    Args:
+        estabs: Concatenated supplementary establishment GeoDataFrame (output
+            of ``concat_extra_estabs``).
+        params: Pipeline parameters dict with keys:
+
+            - ``proj_crs`` (str | CRS): projected CRS for centroid computation.
+            - ``hex_col`` (str): output H3 hex-ID column name.
+            - ``naics_col`` (str): NAICS column name (used for deduplication).
+            - ``name_col`` (str): name column name (used for deduplication).
+
+    Returns:
+        A ``gpd.GeoDataFrame`` of establishments with ``uint64`` H3 hex IDs
+        and duplicates removed.
+    """
     estabs_centers = estabs.to_crs(params["proj_crs"])
     estabs_centers[estabs_centers.geometry.name] = estabs_centers.geometry.centroid
     estabs_centers = estabs_centers.to_crs(H3_CRS)
@@ -586,7 +1115,28 @@ def format_extra_estabs(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFr
 def collapse_naics_classes(
     estabs: gpd.GeoDataFrame, naics_leaves: pd.DataFrame, params: dict
 ) -> gpd.GeoDataFrame:
-    """Collapse the NAICS classes down to the specific level of detail we need."""
+    """Map 8-digit NAICS codes to the smaller set of leaf classes used for clustering.
+
+    Each raw NAICS code is mapped to the most specific leaf in ``naics_leaves``
+    that is a prefix of the raw code.  Codes with no matching leaf are assigned
+    ``params["fill_leaf"]``.  This reduces the dimensionality of the employment
+    embedding while preserving the distinctions most relevant to freight
+    activity.
+
+    Args:
+        estabs: Establishment GeoDataFrame with an 8-digit NAICS column.
+        naics_leaves: DataFrame of allowed leaf NAICS codes.
+        params: Pipeline parameters dict with keys:
+
+            - ``naics_cols`` (dict): sub-keys ``raw`` (input column) and
+              ``out`` (output column) and ``leaf`` (column in ``naics_leaves``
+              containing the allowed codes).
+            - ``fill_leaf`` (int): leaf code to use when no match is found.
+
+    Returns:
+        The establishment GeoDataFrame with ``params["naics_cols"]["out"]``
+        added as an integer column.
+    """
     ncols = params["naics_cols"]
     estabs[ncols["out"]] = get_naics_leaf_class(
         codes=estabs[ncols["raw"]].values,
@@ -597,7 +1147,34 @@ def collapse_naics_classes(
 
 
 def pivot_hex_estabs(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame:
-    """Create embeddings for each hexagon based on the total employment in each establishment type."""
+    """Build a per-hexagon employment embedding matrix from the establishment dataset.
+
+    For each hexagon, computes the total employment in each NAICS leaf class
+    across all establishments in that hexagon.  Establishments reporting zero
+    employees are filled with the median employment for that NAICS class, then
+    offset by ``params["zero_emp_buff"]`` to avoid log-zero issues downstream.
+
+    Column names for NAICS codes are prefixed with ``params["naics_prefix"]``
+    and sorted lexically to ensure stable column ordering across pipeline runs.
+
+    Args:
+        estabs: Establishment GeoDataFrame with leaf NAICS codes and employment
+            (output of ``collapse_naics_classes``).
+        params: Pipeline parameters dict with keys:
+
+            - ``columns`` (dict): sub-keys ``hex_id``, ``naics``,
+              ``n_employees``, ``geom``.
+            - ``naics_prefix`` (str): string prefix for NAICS column names
+              (e.g., ``"naics_"``).
+            - ``zero_emp_buff`` (float): small constant added to all employee
+              counts after median-fill to prevent exact zeros.
+            - ``keep_metadata_cols`` (list[str]): non-NAICS attribute columns
+              to retain in the output (e.g., substation territory ID).
+
+    Returns:
+        A ``gpd.GeoDataFrame`` indexed by hexagon ID with one column per
+        NAICS leaf class (integer employment totals) plus metadata columns.
+    """
     pcols = params["columns"]
     emp_col = pcols["n_employees"]
 
@@ -634,7 +1211,30 @@ def pivot_hex_estabs(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame
 
 
 def pivot_hex_land_use(land_use: dd.DataFrame, params: dict) -> pd.DataFrame:
-    """Pivot the hexagon land use to wide format and select only groups of interest."""
+    """Pivot the per-hexagon NLCD land-use coverage table from long to wide format.
+
+    Maps fine-grained NLCD category codes to broader land-use groups using
+    ``params["code_group_corresp"]``, then aggregates fractional coverage by
+    (hexagon, group) and unstacks to produce one column per land-use group.
+
+    The hexagon index is cast to ``uint64`` to match the dtype used elsewhere
+    in the pipeline.
+
+    Args:
+        land_use: Dask DataFrame of NLCD coverage fractions in long format,
+            indexed by hexagon ID string.
+        params: Pipeline parameters dict with keys:
+
+            - ``input_cols`` (dict): sub-keys ``categories`` (NLCD code
+              column), ``fractions`` (coverage fraction column), ``hex``
+              (hexagon index name after renaming).
+            - ``code_group_corresp`` (dict[str, str]): mapping from NLCD code
+              to land-use group label.
+
+    Returns:
+        A ``pd.DataFrame`` indexed by hexagon ID (``uint64``) with one column
+        per land-use group, filled with 0.0 for groups with no coverage.
+    """
     ccol = params["input_cols"]["categories"]
     fcol = params["input_cols"]["fractions"]
     hcol = params["input_cols"]["hex"]
@@ -664,7 +1264,55 @@ def pivot_hex_land_use(land_use: dd.DataFrame, params: dict) -> pd.DataFrame:
 def group_hexes(
     land_use: pd.DataFrame, estabs: pd.DataFrame, params: dict
 ) -> pd.DataFrame:
-    """Group hexagons by rules and clustering to create homogeneous classes."""
+    """Assign each hexagon a freight-activity class using development thresholds, rules, and K-Means.
+
+    The assignment algorithm proceeds in five stages:
+
+    1. **Development threshold**: Only hexagons with at least
+       ``params["development"]["frac_thresh"]`` developed land cover are
+       considered "developed" and are eligible for freight-class assignment.
+       All others receive the label ``"undeveloped"``.
+    2. **Neighbor embedding**: Each developed hexagon's employment vector is
+       augmented with the summed employment of its ring-1 H3 neighbors
+       (``include_center=False, distance=1``), capturing the surrounding
+       land-use context.
+    3. **Special establishment detection**: Hexagons containing (or adjacent
+       to) any establishment with a NAICS code listed in
+       ``params["special_naics"]`` are labelled with that special class
+       (e.g., ``"truck_stop"``).  Special labels take precedence over
+       cluster-assigned labels.
+    4. **K-Means clustering**: The remaining developed hexagons with at least
+       one freight-intensive NAICS establishment are clustered using K-Means
+       on the log1p-transformed sparse employment matrix.  Hexagons with no
+       freight-intensive establishments receive the label ``"some_estabs"``
+       or ``"no_estabs"``.
+    5. **Output**: All labels (including ``"undeveloped"``) are consolidated
+       into a single categorical column.
+
+    Args:
+        land_use: Per-hexagon land-use-group fraction matrix (output of
+            ``pivot_hex_land_use``).
+        estabs: Per-hexagon employment embedding matrix (output of
+            ``pivot_hex_estabs``).
+        params: Pipeline parameters dict with keys:
+
+            - ``development`` (dict): ``col`` (developed land-cover column)
+              and ``frac_thresh`` (minimum fraction threshold).
+            - ``naics_prefix`` (str): prefix identifying NAICS columns.
+            - ``default_naics`` (int): NAICS code used as the "no freight
+              industry" category (excluded from freight-intensity tests).
+            - ``special_naics`` (dict[str, int]): mapping from label to
+              NAICS code for special establishment categories.
+            - ``loc_group_col`` (str): output freight-activity-class column
+              name.
+            - ``clusterer_kwargs`` (dict): keyword arguments forwarded to
+              ``sklearn.cluster.KMeans``.
+
+    Returns:
+        A ``pd.DataFrame`` indexed by hexagon ID with a single categorical
+        column ``params["loc_group_col"]`` containing the freight-activity
+        class for each hexagon.
+    """
     # Mark developed hexes
     dpars = params["development"]
     land_use["is_developed"] = land_use[dpars["col"]] >= dpars["frac_thresh"]
@@ -755,7 +1403,24 @@ def group_hexes(
 def apply_groups(
     hexes: pd.DataFrame, groups: pd.DataFrame, params: dict
 ) -> pd.DataFrame:
-    """Apply clusters to locations of observed dwells."""
+    """Merge freight-activity-class labels onto a hexagon feature table.
+
+    Args:
+        hexes: Per-hexagon feature DataFrame indexed by hex ID.
+        groups: Freight-activity-class labels indexed by hex ID (output of
+            ``group_hexes``).
+        params: Pipeline parameters dict with keys:
+
+            - ``hex_col`` (str): name of the shared hexagon index.
+
+    Returns:
+        The ``hexes`` DataFrame with the freight-activity-class column
+        from ``groups`` merged in on the shared hex index.
+
+    Raises:
+        AssertionError: If either ``hexes`` or ``groups`` does not have
+            ``params["hex_col"]`` as its index name.
+    """
     assert hexes.index.name == params["hex_col"]
     assert groups.index.name == params["hex_col"]
     out = hexes.merge(groups, how="left", left_index=True, right_index=True)
