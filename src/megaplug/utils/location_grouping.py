@@ -1,10 +1,41 @@
+"""Evaluator for dwell-count uniformity within location groups (TAZ clusters).
+
+When hexagons are grouped into freight-activity clusters for the K-Means
+classification step, an ideal clustering assigns roughly equal numbers of
+observed dwells to every location within a group.  This module provides
+:class:`LocGroupingUniformityEvaluator`, which computes an ``obs/uniform``
+ratio for each location (how many times more dwells were observed at this
+location than expected under a uniform distribution within the group) and
+exposes summary statistics at multiple levels of aggregation.
+
+This evaluator is used in exploratory notebooks to validate that the K-Means
+clustering produces geographically coherent groups rather than concentrating
+all observed activity in a few locations per cluster.
+"""
+
 from typing import Literal
 
 import pandas as pd
 
 
 class LocGroupingUniformityEvaluator:
-    """Evaluate dwelling uniformity once and serve multiple summaries."""
+    """Evaluate dwell-count uniformity within location groups and serve multiple summaries.
+
+    On construction, computes for every location:
+
+    - ``n_dwells_observed``: actual dwell count at this location.
+    - ``n_dwells_uniform``: expected count if dwells were spread evenly across
+      all locations in the same group.
+    - ``obs_uniform_ratio``: the ratio of the two.
+
+    After setting a cutoff via :meth:`set_cutoff`, the ``summary`` method
+    returns statistics at three granularities: raw boolean mask, scalar
+    overall fraction, or per-group breakdown.
+
+    Args (constructor):
+        dwell_locs: Series of location IDs, one entry per dwell observation.
+        loc_groups: Series indexed by location ID, values are group labels.
+    """
 
     def __init__(self, dwell_locs: pd.Series, loc_groups: pd.Series) -> None:
         self.cutoff = None
@@ -33,6 +64,26 @@ class LocGroupingUniformityEvaluator:
     def summary(
         self, kind: Literal["raw", "overall", "group"] = "overall"
     ) -> float | pd.Series | pd.DataFrame:
+        """Return a uniformity summary at the requested aggregation level.
+
+        Args:
+            kind: One of:
+
+                - ``"raw"`` — boolean Series, one entry per location, indicating
+                  whether its ``obs_uniform_ratio`` exceeds the cutoff.
+                - ``"overall"`` — scalar fraction of locations exceeding the
+                  cutoff across the whole dataset.
+                - ``"group"`` — per-group DataFrame with columns
+                  ``exceeds_cutoff``, ``group_size``, ``uniform_dwell_rate``,
+                  ``group_frac``, and ``exceeds_cutoff_frac``.
+
+        Returns:
+            Summary at the requested level.
+
+        Raises:
+            ValueError: If :meth:`set_cutoff` has not been called yet.
+            NotImplementedError: If ``kind`` is not one of the three supported values.
+        """
         if self.cutoff is None:
             raise ValueError("Cutoff must be set before summaries can be made.")
         if kind == "raw":

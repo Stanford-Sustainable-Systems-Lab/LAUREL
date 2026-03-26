@@ -1,3 +1,34 @@
+"""Time-zone conversion, local-time computation, and circular time statistics.
+
+This module provides utilities for working with timestamped dwell and event
+data across multiple U.S. time zones.  Because vehicle dwells are recorded in
+UTC but load profiles must be expressed in local time, accurate time-zone
+lookup and conversion are central to the pipeline.
+
+Key functions:
+
+- :func:`calc_time_zones_from_hexes` — look up the IANA time-zone string for
+  each row based on its H3 hexagon, using ``tzfpy`` for point-in-polygon
+  queries.
+- :func:`calc_local_time` — group rows by time zone and convert UTC timestamps
+  to timezone-naive local times.
+- :func:`calc_avg_time_of_day` — compute the circular mean of a time-of-day
+  array (Numba JIT), correctly handling the midnight wrap-around.
+
+Key design decisions
+--------------------
+- **Unique-hex caching**: :func:`calc_time_zones_from_hexes` resolves time zones
+  only for the unique set of hexagon IDs before merging back, avoiding redundant
+  ``tzfpy`` calls for the many rows that share the same hex.
+- **Timezone-naive output**: :func:`_get_local_time_by_tz` strips the timezone
+  info after conversion (``dt.tz_localize(None)``), so downstream pandas
+  operations can compare timestamps without mixed-tz errors.
+- **Circular statistics**: :func:`calc_avg_time_of_day` uses the
+  unit-circle projection (cos/sin → arctan2) to compute a mean that wraps
+  correctly at midnight; the same projection yields a meaningful standard
+  deviation via the angular residuals.
+"""
+
 from collections.abc import Callable
 
 import h3.api.basic_str as h3_str
@@ -17,7 +48,23 @@ def calc_time_zones_from_hexes(
     hex_col: str,
     tz_col: str = "tz",
 ) -> pd.DataFrame:
-    """Find the time zone for each row of a dataframe based on an H3 hexagon column."""
+    """Assign an IANA time-zone string to each row based on its H3 hexagon.
+
+    Converts hex IDs to centroid coordinates, queries ``tzfpy`` for the
+    corresponding time zone, then merges the result back onto ``df``.  To
+    minimise expensive point-in-polygon queries, only the *unique* hex values
+    are resolved; rows sharing the same hex reuse the cached result.
+
+    Args:
+        df: DataFrame containing a column of H3 integer cell IDs.
+        hex_col: Name of the column holding H3 integer cell IDs.
+        tz_col: Name of the output column to write the IANA timezone string into.
+            Defaults to ``"tz"``.
+
+    Returns:
+        ``df`` with a new ``tz_col`` column of ``pd.Categorical`` timezone strings
+        and the original index restored.
+    """
     orig_idx = df.index.names
     if orig_idx != [None]:
         df = df.reset_index()
@@ -39,7 +86,17 @@ def calc_time_zones_from_hexes(
 
 
 def get_timezone_from_hex(hex: int | str) -> str:
-    """Get the timezone string fror the h3 hexagon."""
+    """Return the IANA timezone string for the centroid of an H3 hexagon.
+
+    Args:
+        hex: An H3 cell ID as either a ``numpy.uint64`` integer or a hex string.
+
+    Returns:
+        IANA timezone string (e.g. ``"America/Los_Angeles"``).
+
+    Raises:
+        RuntimeError: If ``hex`` is neither an integer nor a string.
+    """
     if isinstance(hex, int):
         lat, lng = h3.cell_to_latlng(hex)
     elif isinstance(hex, str):
@@ -51,7 +108,17 @@ def get_timezone_from_hex(hex: int | str) -> str:
 
 
 def get_timezones(hexes: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Get the timezones based on the hexagons."""
+    """Kedro node wrapper: add a timezone column to a hexagon correspondence table.
+
+    Args:
+        hexes: DataFrame with at least one column of H3 cell IDs.
+        params: Configuration dict with the following key:
+
+            - **hex_col** (``str``): Name of the H3 cell ID column.
+
+    Returns:
+        ``hexes`` with a new ``"tz"`` column of IANA timezone strings.
+    """
     hexes = calc_time_zones_from_hexes(df=hexes, hex_col=params["hex_col"])
     return hexes
 
@@ -64,9 +131,29 @@ def calc_local_time(
     sort_col: str = None,
     grp_cols: str | list[str] = None,
 ) -> pd.DataFrame:
-    """Modifies the passed dataframe to also include local time columns.
+    """Add timezone-naive local-time columns to a DataFrame of UTC timestamps.
 
-    The local columns correspond in order to the time cols.
+    Groups rows by timezone (and optionally by additional group columns), then
+    calls :func:`_get_local_time_by_tz` on each group to convert the UTC
+    ``time_cols`` to their local equivalents.  Optionally re-sorts each group
+    by ``sort_col`` after conversion.
+
+    Args:
+        df: DataFrame containing UTC timestamp columns and a timezone column.
+        time_cols: UTC timestamp column name(s) to convert.
+        local_cols: Output column name(s), in the same order as ``time_cols``.
+        tz_col: Column containing IANA timezone strings (e.g. ``"tz"``).
+        sort_col: If provided, rows within each group are sorted by this column
+            after local-time conversion.
+        grp_cols: Additional column(s) to group by before the timezone grouping.
+            Useful when each vehicle/region should be treated independently.
+
+    Returns:
+        ``df`` with new columns given by ``local_cols`` containing timezone-naive
+        local timestamps.
+
+    Raises:
+        RuntimeError: If ``grp_cols`` is not a string, list, or ``None``.
     """
     if grp_cols is None:
         grouper = [tz_col]
@@ -131,7 +218,20 @@ def _get_local_time_by_tz(
 
 
 def calc_time_attrs(df: pd.DataFrame, time_col: str, attrs: list[str]) -> pd.DataFrame:
-    """Augment the dataframe with time attributes."""
+    """Add datetime accessor attributes as new columns (e.g. ``hour``, ``dayofweek``).
+
+    For each attribute name in ``attrs``, accesses ``df[time_col].dt.<attr>``
+    and writes the result to a new column named ``{time_col}_{attr}``.
+
+    Args:
+        df: DataFrame with a datetime column.
+        time_col: Name of the datetime column to extract attributes from.
+        attrs: List of ``pandas.DatetimeIndex`` accessor attribute names
+            (e.g. ``["hour", "dayofweek", "month"]``).
+
+    Returns:
+        ``df`` with one new column per entry in ``attrs``.
+    """
     if isinstance(attrs, str):
         attrs = [attrs]
 
@@ -142,12 +242,20 @@ def calc_time_attrs(df: pd.DataFrame, time_col: str, attrs: list[str]) -> pd.Dat
 
 
 def total_time_units(s: pd.Series, unit: str) -> pd.Series:
-    """Get the total number of time units from a series of timedeltas."""
+    """Convert a Series of timedeltas to fractional time units.
+
+    Args:
+        s: Series of ``pd.Timedelta`` values.
+        unit: Pandas offset string defining the unit (e.g. ``"1h"``, ``"1min"``).
+
+    Returns:
+        Float Series of total elapsed units.
+    """
     return s.dt.total_seconds() / pd.Timedelta(value=unit).total_seconds()
 
 
 def total_hours(s: pd.Series) -> pd.Series:
-    """Get the total number of hours from a series of timedeltas."""
+    """Convert a Series of timedeltas to fractional hours."""
     return total_time_units(s, unit="1h")
 
 
@@ -157,7 +265,23 @@ def get_total_time_units_filtered(
     unit: str,
     filterer: Callable[["pd.Series[pd.Timestamp]"], "pd.Series[bool]"] | None = None,
 ) -> int:
-    """Compute the rate of dwells by location per unit time."""
+    """Count the number of time-unit boundaries between ``start`` and ``end``, optionally filtered.
+
+    Generates a date range from ``floor(start)`` to ``ceil(end)`` at ``unit``
+    frequency and counts the matching timestamps.  The optional ``filterer``
+    callable allows arbitrary masks (e.g. keep only weekdays) to be applied
+    before counting.
+
+    Args:
+        start: Observation start timestamp.
+        end: Observation end timestamp.
+        unit: Pandas offset string for the time unit (e.g. ``"1h"``, ``"1d"``).
+        filterer: Optional callable that accepts a ``Series[Timestamp]`` and
+            returns a boolean ``Series``.  Only ``True`` timestamps are counted.
+
+    Returns:
+        Integer count of qualifying time-unit boundaries in the window.
+    """
     end_ceil = end.ceil(unit)
     start_floor = start.floor(unit)
     times = pd.date_range(start=start_floor, end=end_ceil, freq=unit).to_series()

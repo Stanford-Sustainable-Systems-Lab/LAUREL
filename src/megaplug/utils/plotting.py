@@ -1,3 +1,15 @@
+"""Plotting utilities for temporal load profiles and quantile bands.
+
+Provides two components for visualising charging load profiles in reporting
+notebooks:
+
+- :class:`ProfileDensifier` — fills missing time-steps in a sparse profile
+  DataFrame so that ``matplotlib``/``seaborn`` plots render without gaps.
+- :func:`plot_quantile_bands` — overlays shaded confidence bands on a
+  ``seaborn.FacetGrid`` for a set of quantile columns symmetric around the
+  median.
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -99,7 +111,22 @@ class ProfileDensifier:
 
 
 def get_band_bounds(qtls: list[float] | pd.Index) -> list[tuple[float, float]]:
-    """Get the error band bounds for plotting profile quantiles."""
+    """Pair quantiles symmetrically around the median for band plotting.
+
+    Given a list of quantile levels that includes 0.5 and is of odd length,
+    returns pairs ``(low, high)`` ordered from the outermost band inward, ready
+    for :func:`plot_quantile_bands`.
+
+    Args:
+        qtls: Sorted list (or ``pd.Index``) of quantile levels.  Must contain
+            the median (0.5) and have an odd number of entries.
+
+    Returns:
+        List of ``(lower_quantile, upper_quantile)`` tuples, outermost first.
+
+    Raises:
+        RuntimeError: If the median is absent or the length is even.
+    """
     if isinstance(qtls, pd.Index):
         qtls = qtls.tolist()
     if MEDIAN not in qtls:
@@ -121,6 +148,26 @@ def get_band_bounds(qtls: list[float] | pd.Index) -> list[tuple[float, float]]:
 def plot_quantile_bands(
     g: sns.FacetGrid, x: str, y_quants: list, palette: str = "mako_r", **kwargs
 ) -> sns.FacetGrid:
+    """Overlay shaded quantile bands on a seaborn FacetGrid.
+
+    For each pair of symmetric quantile columns (e.g. 5th/95th, 25th/75th),
+    draws a ``fill_between`` band using colours drawn from ``palette``.
+    Bands are drawn from outermost to innermost so darker inner bands are
+    rendered on top.
+
+    Args:
+        g: Seaborn ``FacetGrid`` to draw onto.
+        x: Column name for the x-axis (e.g. ``"local_time"``).
+        y_quants: Sorted list of quantile column names corresponding to the
+            quantile levels (must be compatible with :func:`get_band_bounds`).
+        palette: Seaborn palette name for colouring bands.  Defaults to
+            ``"mako_r"``.
+        **kwargs: Additional keyword arguments forwarded to ``plt.fill_between``
+            (e.g. ``alpha``, ``linewidth``).
+
+    Returns:
+        The modified ``FacetGrid``.
+    """
     pal = sns.color_palette(palette)
 
     def _plot_band(x, y_lower, y_upper, **kwargs):

@@ -1,3 +1,29 @@
+"""H3 hexagonal grid utilities: coordinate conversion, geometry construction, and polygon-cell mapping.
+
+This module provides the spatial primitives needed to work with Uber's H3
+hierarchical geospatial index throughout megaPLuG.  All H3 operations use
+resolution 8 (cell diameter ≈ 0.46 km) and the WGS-84 geographic CRS
+(``EPSG:4326``).
+
+Key functions:
+
+- Coordinate conversion: :func:`cells_to_points`, :func:`cells_to_polygons`,
+  :func:`coords_to_cells`.
+- GeoDataFrame construction: :func:`add_geometries` (handles both pandas and
+  Dask inputs).
+- Region operations: :func:`cells_to_poly` (union cells into a region shape),
+  :func:`cells_to_region_polygons`, :func:`region_polygons_to_cells`.
+
+Key design decisions
+--------------------
+- **Dask compatibility**: :func:`add_geometries` converts a Dask DataFrame to
+  ``dask_geopandas`` via ``map_partitions`` so that geometry attachment can be
+  parallelised; the CRS is set on the whole frame after partition mapping.
+- **H3 integer API**: The module primarily uses ``h3.api.numpy_int`` (uint64
+  cell IDs) for Numba/NumPy compatibility; string-based H3 APIs are imported
+  only where needed (e.g. :func:`coords_to_cells` returns uint64).
+"""
+
 from collections.abc import Callable
 
 import dask.dataframe as dd
@@ -13,6 +39,7 @@ H3_DEFAULT_RESOLUTION = 8
 
 
 def str_to_h3(s: pd.Series) -> pd.Series:
+    """Convert a Series of H3 hex-string cell IDs to uint64 integer IDs."""
     return s.transform(h3.str_to_int)
 
 
@@ -37,7 +64,27 @@ def cells_to_polygons(s: pd.Series) -> gpd.GeoSeries:
 def add_geometries(
     data: pd.DataFrame | dd.DataFrame, hex_col: str, geom_type: str = "point"
 ) -> gpd.GeoDataFrame | dgpd.GeoDataFrame:
-    """Convert the underlying dataset into a GeoDataFrame."""
+    """Attach H3 geometries to a DataFrame, returning a GeoDataFrame.
+
+    Converts each H3 cell in ``hex_col`` to either a centroid point or the full
+    hexagon polygon, then attaches the resulting ``GeoSeries`` as the geometry
+    column.  Handles both pandas and Dask DataFrames; for Dask inputs the
+    geometry is attached per-partition via ``map_partitions``.
+
+    Args:
+        data: pandas or Dask DataFrame with an H3 integer cell ID column.
+        hex_col: Name of the column (or index level) holding H3 uint64 cell IDs.
+        geom_type: ``"point"`` for centroid points or ``"polygon"`` for full
+            hexagon polygons.
+
+    Returns:
+        GeoDataFrame (or Dask GeoDataFrame) with CRS ``EPSG:4326`` and a
+        ``geometry`` column of Shapely objects.
+
+    Raises:
+        RuntimeError: If ``geom_type`` is neither ``"point"`` nor ``"polygon"``.
+        RuntimeError: If ``data`` is neither a pandas nor a Dask DataFrame.
+    """
     if geom_type == "point":
         f = cells_to_points
     elif geom_type == "polygon":
@@ -85,7 +132,16 @@ def _cells_to_geom_wrapper(
 
 
 def to_geospatial(df: pd.DataFrame, params: dict) -> gpd.GeoDataFrame:
-    """Augment a pandas DataFrame with an H3 id column with the H3 geometries."""
+    """Kedro node wrapper: attach H3 geometries to a DataFrame.
+
+    Args:
+        df: pandas DataFrame with an H3 cell ID column.
+        params: Keyword arguments forwarded to :func:`add_geometries`
+            (``hex_col``, optionally ``geom_type``).
+
+    Returns:
+        GeoDataFrame with geometry column in ``EPSG:4326``.
+    """
     hexes = add_geometries(df, **params)
     return hexes
 
@@ -103,7 +159,21 @@ def cells_to_poly(hser: pd.Series) -> h3.H3Shape:
 def cells_to_region_polygons(
     corresp: pd.DataFrame, hex_col: str, region_col: str
 ) -> gpd.GeoDataFrame:
-    """Build a set of geometries from a hex-region correspondence."""
+    """Build one (multi-)polygon per region from a hex→region correspondence table.
+
+    Groups ``corresp`` by ``region_col``, unions the H3 cells in each group
+    into a contiguous region shape via :func:`cells_to_poly`, and returns a
+    GeoDataFrame indexed by region.
+
+    Args:
+        corresp: DataFrame with at least ``hex_col`` and ``region_col`` columns.
+        hex_col: Name of the H3 uint64 cell ID column.
+        region_col: Name of the region identifier column to group by.
+
+    Returns:
+        GeoDataFrame with columns ``[region_col, "geometry"]`` and CRS
+        ``EPSG:4326``.
+    """
     regions = corresp.groupby(region_col)[hex_col].agg(cells_to_poly)
     regions = gpd.GeoSeries(regions, name="geometry", crs=H3_CRS)
     regions = regions.reset_index()
@@ -113,7 +183,22 @@ def cells_to_region_polygons(
 def region_polygons_to_cells(
     geos: gpd.GeoDataFrame, grp_cols: str | list[str], hex_col: str
 ) -> pd.DataFrame:
-    """Convert a GeoDataFrame of (multi-)polygons to a longer dataframe of H3 cells."""
+    """Explode a GeoDataFrame of (multi-)polygons to one row per H3 cell they cover.
+
+    For each polygon in ``geos``, enumerates all H3 resolution-8 cells whose
+    centroids fall within the polygon via ``h3.geo_to_cells``, then explodes the
+    result to long form.  Empty or null geometries are silently dropped.
+
+    Args:
+        geos: GeoDataFrame of polygon or multipolygon geometries.
+        grp_cols: Column name(s) identifying each region (carried through to
+            the output).
+        hex_col: Name of the output column for H3 uint64 cell IDs.
+
+    Returns:
+        Long DataFrame with columns ``grp_cols + [hex_col]`` and a default
+        integer index.
+    """
     if isinstance(grp_cols, str):
         grp_cols = [grp_cols]
 
@@ -143,7 +228,16 @@ def region_polygons_to_cells(
 
 
 def coords_to_cells(lat: np.ndarray, lng: np.ndarray, res: int) -> np.ndarray:
-    """Creates a like-indexed GeoSeries of points from a series of h3 cells."""
+    """Convert parallel latitude/longitude arrays to H3 uint64 cell IDs at ``res``.
+
+    Args:
+        lat: 1-D array of latitudes in decimal degrees.
+        lng: 1-D array of longitudes in decimal degrees (same length as ``lat``).
+        res: H3 resolution (0–15).
+
+    Returns:
+        1-D ``uint64`` array of H3 cell IDs, same length as ``lat``.
+    """
     assert lat.shape == lng.shape
     assert lat.ndim == 1
     assert lng.ndim == 1

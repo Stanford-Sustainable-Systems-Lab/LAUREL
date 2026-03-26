@@ -1,3 +1,26 @@
+"""Utilities for setting per-entity parameters and extracting scenario configs.
+
+In megaPLuG, each vehicle (and, in some sub-pipelines, each hexagon) carries
+its own parameter values — battery size, charging power, random seed — stored
+as columns on the entity DataFrame.  This module provides the helpers needed
+to populate those columns from YAML parameter dicts, to extract select
+parameters from nested scenario configs for reporting, and to import classes
+by dotted-path string (used for dynamically loading model components from
+YAML).
+
+Key design decisions
+--------------------
+- **Three param patterns**: :func:`set_entity_params` recognises three shapes
+  of parameter value: (1) a flat scalar/string applied uniformly to all
+  entities, (2) a ``{id_columns, values}`` dict that maps entity-level ids to
+  different values via a left-join, and (3) a special ``random_seed`` pattern
+  that derives a per-entity seed from a master seed plus an entity ID, ensuring
+  reproducible but independent stochasticity per vehicle.
+- **Integrity check on merge-type params**: if any entity fails to match the
+  provided lookup table, :func:`set_entity_params` raises immediately rather
+  than silently propagating NaNs.
+"""
+
 import importlib
 from typing import Any
 
@@ -11,7 +34,40 @@ from megaplug.models.dwell_sets import DwellSet
 def set_entity_params(
     entities: pd.DataFrame | DwellSet, params: dict
 ) -> pd.DataFrame | DwellSet:
-    """Set entity parameters in advance of simulation."""
+    """Attach scenario parameters to an entity DataFrame as new columns.
+
+    Iterates over each key–value pair in ``params`` and adds the corresponding
+    column to ``entities`` according to one of three patterns:
+
+    1. **Merge-type** — if the value is a dict with keys ``id_columns`` and
+       ``values``, builds a lookup table via :func:`build_df_from_dict` and
+       left-joins it onto ``entities``.  Raises if any entity is unmatched.
+    2. **Random seed** — if the key is ``"random_seed"``, computes
+       ``entity[seed_id_col] + master_seed`` so every entity has an
+       independent but deterministic seed.
+    3. **Scalar** — any other value is flattened (nested dicts become
+       ``"parent_child"`` column names) and broadcast uniformly.
+
+    ``DwellSet`` inputs are handled transparently: the underlying DataFrame is
+    modified and wrapped back into the original ``DwellSet``.
+
+    Args:
+        entities: DataFrame or DwellSet of entities to parameterise.
+        params: Mapping of column name to value.  Each value may be:
+
+            - A scalar (int, float, str) applied uniformly to all rows.
+            - A nested dict, which is flattened with ``_`` separators.
+            - A dict ``{"id_columns": [...], "values": {...}}`` for entity-
+              specific lookups (see :func:`build_df_from_dict`).
+            - A dict ``{"seed_id_col": str, "master_seed": int}`` when the key
+              is ``"random_seed"``.
+
+    Returns:
+        ``entities`` with one new column per key in ``params``.
+
+    Raises:
+        RuntimeError: If a merge-type param does not cover all entities.
+    """
     # Seed is based on master seed and entity's id to ensure that entities are
     # individually controllable without impacting all other entities.
     entity_is_dwellset = isinstance(entities, DwellSet)
@@ -61,7 +117,23 @@ def set_entity_params(
 
 
 def build_df_from_dict(d: dict, id_cols: list[str], value_col: str) -> pd.DataFrame:
-    """Build a DataFrame with a multi-index from a multi-level dictionary of uniform depth."""
+    """Build a flat DataFrame from a uniformly-nested dict, with one column per id level.
+
+    Recursively expands nested dicts of uniform depth into a DataFrame whose
+    first columns are the nested keys (matching ``id_cols``) and whose last
+    column is the leaf value (``value_col``).  Leaf values may be scalars or
+    lists (the latter are stored as a single array-valued column).
+
+    Args:
+        d: Nested dict of uniform depth.  Keys at each level become one id
+           column.
+        id_cols: Column names for the key levels, in nesting order.  Must have
+            length equal to the nesting depth of ``d``.
+        value_col: Name for the leaf-value column.
+
+    Returns:
+        Flat DataFrame with columns ``id_cols + [value_col]``.
+    """
 
     def _recurse(d: dict) -> pd.DataFrame:
         vals = list(d.values())
@@ -81,7 +153,19 @@ def build_df_from_dict(d: dict, id_cols: list[str], value_col: str) -> pd.DataFr
     return df
 
 
-def flatten_dict(d: dict, parent_key: str = None, sep: str = "_"):
+def flatten_dict(d: dict, parent_key: str = None, sep: str = "_") -> dict:
+    """Flatten a nested dict to a single level using ``sep``-joined keys.
+
+    Args:
+        d: Arbitrarily nested dictionary.
+        parent_key: Prefix to prepend to all keys at this level (used in
+            recursion; pass ``None`` for the top-level call).
+        sep: Separator inserted between parent and child key names.
+
+    Returns:
+        Single-level dict whose keys are ``sep``-joined paths through the
+        original nesting.
+    """
     items = []
     for k, v in d.items():
         new_key = f"{parent_key}{sep}{k}" if parent_key else k
@@ -140,14 +224,18 @@ def extract_params(params: dict, key_map: dict) -> dict:
 
 
 def import_from_config(import_path: str):
-    """
-    Import a class defined in a YAML configuration file.
+    """Import a Python class (or any object) from a dotted import path string.
+
+    Allows YAML configuration files to specify model components by their fully
+    qualified Python path (e.g. ``"megaplug.models.charging.LinearCharger"``),
+    which is then imported at runtime.
 
     Args:
-        class_path (str): import-able path to the class
+        import_path: Fully qualified dotted path to the object
+            (e.g. ``"package.module.ClassName"``).
 
     Returns:
-        The imported class
+        The imported class or object.
     """
     module_path, obj_name = import_path.rsplit(".", 1)
     module = importlib.import_module(module_path)

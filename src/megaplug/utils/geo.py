@@ -1,3 +1,34 @@
+"""Geometric utilities for vehicle operating-radius and time-weighted center calculations.
+
+This module provides the spatial computation functions needed to characterise
+each vehicle's spatial footprint: where it spends most of its dwell time
+(time-weighted center) and how far it ranges from that center (operating
+radius as half the diameter of the convex hull of its dwell locations).
+
+Key functions:
+
+- :func:`find_time_weighted_centers` — weighted centroid of projected dwell
+  coordinates.
+- :func:`calc_operating_radius` — convex-hull diameter via rotating calipers,
+  using Haversine distances for geographic accuracy.
+- :func:`calc_haversine_dist` and :func:`calc_max_dist_calipers` — Numba JIT
+  inner kernels.
+
+Key design decisions
+--------------------
+- **Projected coordinates required**: :func:`find_time_weighted_centers`
+  requires the GeoDataFrame to be in a projected (metric) CRS so that the
+  weighted mean of easting/northing coordinates is geometrically meaningful.
+  The caller is responsible for reprojection.
+- **Rotating calipers**: The maximum pairwise distance across a convex hull is
+  computed in O(n) using rotating calipers rather than O(n²) brute-force.
+  For degenerate cases (single point or line), the diameter is 0 or the direct
+  Haversine distance respectively.
+- **Numba JIT**: Both :func:`calc_haversine_dist` and
+  :func:`calc_max_dist_calipers` are JIT-compiled for performance when called
+  across thousands of vehicles.
+"""
+
 import geopandas as gpd
 import numpy as np
 from numba import jit
@@ -11,9 +42,30 @@ METERS_PER_MILE = 1609.344
 def find_time_weighted_centers(
     gdf: gpd.GeoDataFrame, grp_col: str, weight_col: str, center_col: str = "centers"
 ) -> gpd.GeoDataFrame:
-    """Find time-weighted center of a set of dwells.
+    """Compute the dwell-time-weighted geographic center for each vehicle.
 
-    WARNING: This function may be very slow in Dask if the gdf is not indexed on grp_col
+    For each group identified by ``grp_col``, computes the weighted mean of the
+    projected easting and northing coordinates, where the weight is
+    ``weight_col`` (typically dwell duration).  Returns a GeoDataFrame of
+    center points, one row per group.
+
+    WARNING: This function may be very slow in Dask if the GeoDataFrame is not
+    indexed on ``grp_col``.
+
+    Args:
+        gdf: Projected GeoDataFrame (metric CRS required) of vehicle dwells,
+            with one row per dwell and a geometry column of point locations.
+        grp_col: Column to group by (typically a vehicle ID).
+        weight_col: Column of dwell durations or other non-negative weights.
+        center_col: Name of the geometry column in the output GeoDataFrame.
+            Defaults to ``"centers"``.
+
+    Returns:
+        GeoDataFrame indexed by ``grp_col`` with a single geometry column
+        (``center_col``) of weighted centroid points in the same projected CRS.
+
+    Raises:
+        RuntimeError: If ``gdf`` has no CRS or its CRS is not projected.
     """
     if not hasattr(gdf, "crs"):
         raise RuntimeError("The DwellSet's underlying dataset is not geographic.")
@@ -44,7 +96,26 @@ def find_time_weighted_centers(
 
 
 def calc_operating_radius(points: gpd.GeoSeries) -> float:
-    """Calculate the maximum pairwise distance using convex hull and rotating calipers."""
+    """Estimate a vehicle's operating radius as half the diameter of its convex hull.
+
+    The diameter is the maximum pairwise distance across the convex hull of all
+    dwell locations, computed using the rotating-calipers algorithm
+    (:func:`calc_max_dist_calipers`) for efficiency.  Haversine distances are
+    used so the result is in miles regardless of the CRS of ``points``.
+
+    Degenerate cases are handled explicitly:
+
+    - A single point → radius 0.
+    - Two points (a line) → half the direct Haversine distance.
+    - A polygon → rotating-calipers diameter / 2.
+
+    Args:
+        points: GeoSeries of Shapely ``Point`` geometries (longitude, latitude)
+            representing the vehicle's dwell locations.
+
+    Returns:
+        Operating radius in miles.
+    """
     # Get convex hull points
     convex_hull = points.union_all().convex_hull
     if isinstance(convex_hull, Point):

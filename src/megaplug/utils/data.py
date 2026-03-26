@@ -1,3 +1,23 @@
+"""General-purpose DataFrame utilities shared across megaPLuG pipelines.
+
+This module provides helpers for merging, filtering, type-casting, and
+column-selecting pandas and Dask DataFrames, as well as a utility class for
+round-tripping a DataFrame through an integer index (needed before Numba JIT
+kernels) and a record-array conversion adapted from the pandas internals.
+
+Key design decisions
+--------------------
+- **Index preservation**: :func:`merge_dataframes_node` resets and restores the
+  original index so that callers never have to worry about index loss after a
+  left-join enrichment step.
+- **Dask compatibility**: every function that accepts a pandas ``DataFrame`` also
+  accepts a Dask ``DataFrame`` where performance constraints require it; the
+  branching is handled internally so call-sites remain uniform.
+- **Integer merge key**: :func:`merge_on_int_cols` uses a Cantor-style encoding
+  (``id0 * max0 + id1``) rather than a multi-column merge to avoid the expensive
+  ``set_index`` that Dask requires for keyed joins on non-index columns.
+"""
+
 import itertools
 import logging
 from typing import Self
@@ -19,7 +39,29 @@ def get_merge_params(
     right_df: pd.DataFrame,
     *args: list[list[str]],
 ) -> dict:
-    """Update the params argument to the merge_datframes_node function."""
+    """Restrict ``merge_params["keep_right_columns"]`` to columns present in ``right_df``.
+
+    Before a merge, the config may list column names that do not exist in the
+    current scenario's right DataFrame (e.g. because a column appears only in
+    some scenarios).  This function intersects the desired columns with those
+    actually available — including the index levels — so that
+    :func:`merge_dataframes_node` never tries to select a non-existent column.
+    Additional column lists passed as positional ``*args`` (e.g. the active
+    ``group_columns`` param sets) are also unioned into the target set.
+
+    Args:
+        merge_params: Mutable config dict with at least a ``keep_right_columns``
+            key listing the desired right-hand columns.
+        right_df: The DataFrame that will be used as the right side of the merge.
+            Its columns *and* index names are treated as available sources.
+        *args: Extra lists of column names (e.g. ``params:substation.group_columns``,
+            ``params:county.group_columns``) whose entries should also be kept if
+            present in ``right_df``.
+
+    Returns:
+        The mutated ``merge_params`` dict with ``keep_right_columns`` narrowed to
+        the intersection of requested and available columns.
+    """
     targets = merge_params["keep_right_columns"] + list(itertools.chain(*args))
     sources = right_df.columns.tolist() + right_df.index.names
     concats = list(set(targets).intersection(sources))
@@ -32,13 +74,36 @@ def merge_dataframes_node(
     right: pd.DataFrame,
     params: dict,
 ) -> pd.DataFrame | dd.DataFrame:
-    """Merge two dataframes together as a Kedro node.
+    """Left-join metadata from ``right`` onto ``left``, preserving ``left``'s index.
 
-    This function assumes that the left dataframe is large, and that the right dataframe
-    is adding some sort of metadata on to it.
+    Designed for the common Kedro pattern where a large fact table (``left``,
+    possibly a Dask DataFrame) is enriched with a smaller lookup table (``right``,
+    always in-memory pandas).  Only the columns listed in
+    ``params["keep_right_columns"]`` are carried across; this avoids pulling
+    unnecessary columns into the Dask graph.
 
-    This function preserves the index of the left dataframe. It also allows you to
-    select only a subset of columns from the right dataframe.
+    For Dask inputs, the join is executed partition-by-partition via
+    ``map_partitions`` to avoid the expensive global ``set_index`` that a
+    standard Dask merge would require.
+
+    Args:
+        left: The large fact DataFrame (pandas or Dask) whose index is preserved.
+        right: The small metadata DataFrame to join onto ``left``.
+        params: Configuration dict with the following keys:
+
+            - **keep_right_columns** (``list[str]``): Columns from ``right`` (plus its
+              index) to include in the output.  Must contain at least one entry.
+            - **merge_kwargs** (``dict``): Keyword arguments forwarded verbatim to
+              ``pandas.DataFrame.merge`` (e.g. ``on``, ``how``).
+
+    Returns:
+        Merged DataFrame with the same type and index as ``left`` and the selected
+        columns from ``right`` appended.
+
+    Raises:
+        RuntimeError: If ``left`` is not a pandas or Dask DataFrame.
+        RuntimeError: If ``right`` is not a pandas DataFrame.
+        RuntimeError: If ``keep_right_columns`` is empty.
     """
     if not isinstance(left, pd.DataFrame | dd.DataFrame):
         raise RuntimeError("'left' must be a Pandas or Dask dataframe.")
@@ -85,7 +150,29 @@ def merge_on_int_cols(
     on: str | list[str],
     **kwargs,
 ) -> dd.DataFrame:
-    """Merges a Pandas DataFrame onto a Dask DataFrame on one or more integer columns."""
+    """Merge a pandas DataFrame onto a Dask DataFrame keyed on integer column(s).
+
+    Dask's native merge on non-index columns requires a global ``set_index``,
+    which is expensive.  This function avoids that cost by encoding up to two
+    integer join columns into a single synthetic key (``id0 * max(id0) + id1``),
+    performing a cheap index-based merge, then dropping the synthetic key.
+
+    If the join column is already the Dask index, it is temporarily materialised
+    as a column, merged, then restored as the index.
+
+    Args:
+        left: Dask DataFrame to enrich (large, partitioned).
+        right: pandas DataFrame to join onto ``left`` (small, in-memory).
+        on: Column name or list of up to two column names to join on.
+        **kwargs: Additional keyword arguments forwarded to ``dd.merge``.
+
+    Returns:
+        Dask DataFrame with the same partitioning and index as ``left`` plus the
+        columns from ``right``.
+
+    Raises:
+        NotImplementedError: If more than two join columns are supplied.
+    """
     # Pull values out of indices
     if isinstance(on, str):
         on = [on]
@@ -151,9 +238,32 @@ def get_multi_col_merger(
 def filter_by_vals_in_cols(
     df: pd.DataFrame | gpd.GeoDataFrame, params: dict
 ) -> pd.DataFrame | gpd.GeoDataFrame:
-    """Filter dataframe so that columns contain only the values listed in values.
+    """Filter a DataFrame to rows where specified columns contain given values.
 
-    The different columns are and'ed or or'ed together based on the params.
+    Applies a sequence of ``isin`` filters, combining them with AND or OR logic
+    as specified per column.  Optionally discards all columns not named in the
+    filter spec.  GeoDataFrames are handled transparently: the geometry column
+    is always retained regardless of ``keep_only_filter_cols``.
+
+    Args:
+        df: DataFrame or GeoDataFrame to filter.
+        params: Configuration dict with the following keys:
+
+            - **filters** (``dict[str, dict]``): Mapping of column name to a
+              per-column filter spec.  Each spec may contain:
+
+              - ``value_isin`` (``list``): Allowed values for this column.
+              - ``invert`` (``bool``, optional): If ``True``, keep rows where the
+                column is *not* in ``value_isin``.
+              - ``joining_bool`` (``str``, optional): ``"AND"`` (default) or
+                ``"OR"``; controls how this column's mask is combined with prior
+                masks.
+
+            - **keep_only_filter_cols** (``bool``): If ``True``, return only the
+              columns named in ``filters`` (plus geometry for GeoDataFrames).
+
+    Returns:
+        Filtered DataFrame or GeoDataFrame.
     """
     df["filt"] = True
     keep_cols = []
@@ -177,6 +287,21 @@ def filter_by_vals_in_cols(
 
 
 def get_basic_dtype_ser(ser: pd.Series) -> pd.Series:
+    """Cast a Series to its equivalent non-nullable NumPy dtype (``int64`` or ``float64``).
+
+    Pandas extension integer/float types (e.g. ``Int64``, ``Float32``) cannot be
+    passed directly to Numba JIT functions.  This helper converts them to the
+    corresponding plain NumPy dtype.
+
+    Args:
+        ser: Series with an integer or float dtype.
+
+    Returns:
+        Series cast to ``np.int64`` or ``np.float64``.
+
+    Raises:
+        RuntimeError: If ``ser`` has neither an integer nor a float dtype.
+    """
     if pd.api.types.is_integer_dtype(ser):
         return ser.astype(np.int64)  # or 'int64' if appropriate
     elif pd.api.types.is_float_dtype(ser):
@@ -186,9 +311,19 @@ def get_basic_dtype_ser(ser: pd.Series) -> pd.Series:
 
 
 class IndexIntegerizer:
-    """Integerize a (multi)index of a Pandas DataFrame and recover back to original.
+    """Round-trip a (multi)index through a dense integer encoding for Numba compatibility.
 
-    This will usually accompany processing by `numba`.
+    Numba JIT functions cannot operate on arbitrary pandas index values (strings,
+    categoricals, MultiIndexes).  This class converts the index to a compact
+    integer sequence via ``pandas.Index.factorize``, allowing the array to be
+    passed to a JIT kernel, then restores the original index values afterwards.
+
+    Typical usage::
+
+        integerizer = IndexIntegerizer(int_col="veh_id_int")
+        df_int = integerizer.integerize(df)
+        result = numba_kernel(df_int)           # operates on integer index
+        df_restored = integerizer.deintegerize(result)
     """
 
     _uniques: np.ndarray = None
@@ -399,7 +534,23 @@ def to_arrays(  # noqa: PLR0912
 
 
 def categorize_columns(df: pd.DataFrame | DwellSet) -> pd.DataFrame | DwellSet:
-    """Categorize object-typed columns to save memory."""
+    """Convert all ``object``-dtype columns to ``pandas.Categorical`` to reduce memory use.
+
+    String columns stored as Python objects consume substantially more RAM than
+    categorical columns with a small cardinality vocabulary (e.g. vehicle class,
+    state code, hex cluster label).  This function is applied after loading or
+    joining any DataFrame that may carry such columns.
+
+    ``DwellSet`` inputs are handled transparently: only the underlying
+    ``DwellSet.data`` DataFrame is modified; the wrapper is reconstructed via
+    ``copy_without_data()`` so metadata is preserved.
+
+    Args:
+        df: DataFrame or DwellSet whose object-typed columns should be converted.
+
+    Returns:
+        Same type as ``df`` with object columns replaced by ``pd.Categorical``.
+    """
     if isinstance(df, DwellSet):
         df_to_cat = df.data
     else:
@@ -420,7 +571,21 @@ def categorize_columns(df: pd.DataFrame | DwellSet) -> pd.DataFrame | DwellSet:
 def select_columns(
     df: pd.DataFrame | gpd.GeoDataFrame, params: dict
 ) -> pd.DataFrame | gpd.GeoDataFrame:
-    """Down-select columns of the DataFrame."""
+    """Return ``df`` restricted to the columns listed in ``params["keep_cols"]``.
+
+    For GeoDataFrames the geometry column is always appended to the selection
+    so that spatial operations remain valid downstream.
+
+    Args:
+        df: DataFrame or GeoDataFrame to column-select.
+        params: Configuration dict with the following key:
+
+            - **keep_cols** (``str | list[str]``): Column name(s) to retain.
+
+    Returns:
+        DataFrame or GeoDataFrame containing only the requested columns (plus
+        geometry for GeoDataFrames).
+    """
     keep_cols = params["keep_cols"]
     if isinstance(keep_cols, str):
         keep_cols = [keep_cols]

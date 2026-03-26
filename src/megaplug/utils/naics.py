@@ -1,3 +1,12 @@
+"""NAICS code matching utilities (Numba JIT-compiled).
+
+Provides :func:`get_naics_leaf_class`, which maps arbitrary-depth NAICS codes
+to a predefined set of "leaf" codes by iteratively truncating the code from the
+right until a match is found.  Used in :mod:`describe_locations` to collapse
+the full 6-to-8-digit Data Axle NAICS codes to the coarser leaf classes needed
+for freight-activity clustering.
+"""
+
 import numpy as np
 from numba import jit
 
@@ -9,7 +18,29 @@ def get_naics_leaf_class(
     src_digits: int = 8,
     fill_leaf: int | None = None,
 ) -> np.ndarray[int]:
-    """Get the NAICS 'leaf' for each NAICS code."""
+    """Map each NAICS code to the most specific matching leaf code.
+
+    Iteratively right-truncates each code (by integer division by 10) and
+    checks it against the leaf set until every code matches a leaf or has been
+    truncated to zero.  This implements a hierarchical NAICS rollup: a code
+    that matches no leaf at 8 digits is tried at 6, then 4, then 2 digits.
+
+    Args:
+        codes: 1-D integer array of NAICS codes to classify.
+        leaves: 1-D integer array of accepted leaf codes.  Each leaf is matched
+            at most once per pass, so the order of ``leaves`` does not matter.
+        src_digits: Not currently used; reserved for future digit-normalisation.
+        fill_leaf: If not ``None``, codes that match no leaf are assigned this
+            value instead of raising.  Useful for catch-all categories.
+
+    Returns:
+        1-D integer array, same shape as ``codes``, containing the matched
+        leaf code for each input.
+
+    Raises:
+        ValueError: If any code remains unmatched after full truncation and
+            ``fill_leaf`` is ``None``.
+    """
     out = np.zeros_like(codes)
     used_leaves = np.zeros_like(leaves)
     while np.any(used_leaves == 0) and np.any(codes > 0):

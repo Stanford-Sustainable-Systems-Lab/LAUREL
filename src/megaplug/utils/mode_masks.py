@@ -1,3 +1,21 @@
+"""Bitmask encoding/decoding for charging-mode availability vectors.
+
+The charging-choice algorithm (see :mod:`megaplug.models.charging_algorithms`)
+needs to know, for each dwell, which of the ``N`` charging modes are available
+(depot, destination, truck stop, etc.).  Storing one boolean column per mode
+would be expensive at scale; instead, the availability of all modes is packed
+into a single ``uint64`` bitmask column, where bit ``j`` is set if mode ``j``
+is available.
+
+This module provides three functions for working with these bitmasks:
+
+- :func:`bool_arr_to_bits` — vectorised encode: boolean array → uint64 bitmask(s).
+- :func:`bits_to_bool_arr` — vectorised decode: uint64 bitmask(s) → 2-D boolean array.
+- :func:`bits_to_bool_vec` — scalar Numba JIT decode: single uint64 → 1-D boolean vector.
+
+The ``MAX_CHARGE_MODES = 64`` limit follows from the uint64 representation.
+"""
+
 import numpy as np
 from numba import jit
 

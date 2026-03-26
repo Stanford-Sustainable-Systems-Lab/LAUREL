@@ -1,7 +1,30 @@
-"""
-Utility functions for events
-by Fletcher Passow
-October 2024
+"""Event detection from periodic observations using Numba JIT acceleration.
+
+An *event* is a semi-contiguous run of observations that satisfy a boolean
+inclusion criterion, where short gaps (up to ``max_time_elapsed``) between
+qualifying observations are bridged into a single event.  This abstraction is
+used in megaPLuG to identify contiguous charging intervals (periods when a
+vehicle is actively charging) from a time-ordered sequence of dwell
+observations.
+
+The implementation follows a three-layer pattern:
+
+1. :func:`get_events` — pandas entry point; adds duration seconds, groups by
+   entity, calls the wrapper.
+2. :func:`get_events_wrapper` — bridges pandas group DataFrames to NumPy arrays
+   for Numba.
+3. :func:`get_events_core` — Numba ``@njit`` kernel; assigns an integer event
+   ID to every observation in a single-entity sequence.
+
+Key design decisions
+--------------------
+- **Zero as no-event sentinel**: Event IDs start at 1; observations not
+  belonging to any event receive ID 0.  Using 0 (rather than NaN) keeps the
+  column as an integer dtype, which simplifies downstream merges.
+- **Interval-beginning timestamps**: The algorithm assumes each observation's
+  timestamp marks the *start* of its duration interval, so elapsed time is
+  accumulated using the current row's ``dur_col`` rather than the gap to the
+  next row.
 """
 
 import logging
@@ -70,7 +93,23 @@ def get_events_wrapper(
     out_col: str,
     max_time_elapsed: pd.Timedelta,
 ) -> pd.DataFrame:
-    """Take the group and convert it into numba-compatible types."""
+    """Convert a group DataFrame into NumPy arrays and delegate to the JIT kernel.
+
+    Extracts boolean and float arrays from the group and calls
+    :func:`get_events_core`, writing the resulting event-ID array back as a
+    column.
+
+    Args:
+        grp: Single-entity sub-DataFrame, time-ordered within the entity.
+        include_col: Boolean column indicating event membership.
+        secs_elapsed_col: Float column of observation durations in seconds.
+        out_col: Column name to write the integer event IDs into.
+        max_time_elapsed: Maximum gap (as ``pd.Timedelta``) to bridge within an
+            event.
+
+    Returns:
+        ``grp`` with ``out_col`` updated to integer event IDs.
+    """
     grp[out_col] = get_events_core(
         include=grp[include_col].values,
         secs_elapsed=grp[secs_elapsed_col].values,
