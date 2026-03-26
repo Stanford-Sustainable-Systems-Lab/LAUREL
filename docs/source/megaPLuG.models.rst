@@ -6,6 +6,14 @@ megaplug.models package
    :undoc-members:
    :show-inheritance:
 
+Subpackages
+-----------
+
+.. toctree::
+   :maxdepth: 4
+
+   megaplug.models.routing
+
 Submodules
 ----------
 
@@ -37,6 +45,22 @@ megaplug.models.manage\_charging module
 ---------------------------------------
 
 .. automodule:: megaplug.models.manage_charging
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+megaplug.models.probability\_localization module
+------------------------------------------------
+
+.. automodule:: megaplug.models.probability_localization
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+megaplug.models.sampling module
+--------------------------------
+
+.. automodule:: megaplug.models.sampling
    :members:
    :undoc-members:
    :show-inheritance:

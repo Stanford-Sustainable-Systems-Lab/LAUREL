@@ -9,6 +9,14 @@ megaplug.datasets package
 Submodules
 ----------
 
+megaplug.datasets.directory\_partitioned module
+------------------------------------------------
+
+.. automodule:: megaplug.datasets.directory_partitioned
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 megaplug.datasets.geodatabase module
 ------------------------------------
 
@@ -21,6 +29,14 @@ megaplug.datasets.geopackage module
 -----------------------------------
 
 .. automodule:: megaplug.datasets.geopackage
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+megaplug.datasets.geoparquet module
+------------------------------------
+
+.. automodule:: megaplug.datasets.geoparquet
    :members:
    :undoc-members:
    :show-inheritance:

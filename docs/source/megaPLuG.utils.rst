@@ -73,6 +73,78 @@ megaplug.utils.plotting module
    :undoc-members:
    :show-inheritance:
 
+megaplug.utils.distributed module
+----------------------------------
+
+.. automodule:: megaplug.utils.distributed
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+megaplug.utils.hex\_neighbors module
+--------------------------------------
+
+.. automodule:: megaplug.utils.hex_neighbors
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+megaplug.utils.location\_grouping module
+-----------------------------------------
+
+.. automodule:: megaplug.utils.location_grouping
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+megaplug.utils.logging module
+------------------------------
+
+.. automodule:: megaplug.utils.logging
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+megaplug.utils.mapping module
+------------------------------
+
+.. automodule:: megaplug.utils.mapping
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+megaplug.utils.mode\_masks module
+----------------------------------
+
+.. automodule:: megaplug.utils.mode_masks
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+megaplug.utils.naics module
+----------------------------
+
+.. automodule:: megaplug.utils.naics
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+megaplug.utils.open\_street\_map module
+----------------------------------------
+
+.. automodule:: megaplug.utils.open_street_map
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+megaplug.utils.sensitivity module
+----------------------------------
+
+.. automodule:: megaplug.utils.sensitivity
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 megaplug.utils.time module
 --------------------------
 
