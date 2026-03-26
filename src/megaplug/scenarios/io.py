@@ -1,3 +1,28 @@
+"""Kedro pipeline node functions for reading and writing scenario-partitioned datasets.
+
+Provides two thin wrapper nodes that bridge the generic Kedro
+``PartitionedDataset`` API and the scenario directory layout defined by
+:class:`~megaplug.scenarios.build.ScenarioBuilder`:
+
+- :func:`write_scenario_partition` — packages an arbitrary object for Kedro to
+  save under the current task's output directory.
+- :func:`read_scenario_partition` — loads a single partition from that
+  directory, enabling within-pipeline re-reads of just-written data.
+
+Key design decisions
+--------------------
+- **Node functions, not methods**: these functions are inserted directly into a
+  Kedro pipeline graph as nodes.  The partition path comes from the runtime
+  ``results_partition`` parameter injected into each task's config by
+  :meth:`~megaplug.scenarios.build.ScenarioBuilder._build_single_partition`,
+  so the nodes need no knowledge of the scenario structure themselves.
+- **Single-partition reads only**: :func:`read_scenario_partition` is designed
+  for the common case of reading back the one partition written by the current
+  task (e.g. to pass its output to a downstream node in the same run).  For
+  multi-scenario aggregation across all States of the World, use
+  :meth:`~megaplug.scenarios.read.ScenarioReader.read_partitions` instead.
+"""
+
 from pathlib import Path
 
 from dask.distributed import Client
@@ -6,17 +31,25 @@ from .read import ScenarioReader
 
 
 def write_scenario_partition(obj: object, params: dict) -> dict[str, object]:
-    """Write out the partition for this scenario and dataset.
+    """Package an object for Kedro to save to the current scenario's output directory.
 
-    Insert this into a kedro pipeline to enable saving out of data files to different
-    partitions based on scenario.
+    Wraps ``obj`` in a single-entry partition dict keyed by the task directory
+    path.  Kedro's ``PartitionedDataset`` machinery uses this dict to determine
+    where and how to serialise the object (format is controlled by
+    ``catalog.yml``).
 
     Args:
-        params: the "results_partition" element in the configuration dictionary, passed
-        straight from the kedro pipeline
+        obj: The dataset to save (e.g. a ``pd.DataFrame``, ``dict``, or any
+            object supported by the catalog entry).
+        params: The ``"results_partition"`` sub-dict from the task's Kedro
+            parameter config.  Must contain:
 
-    Returns: A kedro partition dictionary, with the directory as the key and the object
-    to save as the value. The mode of saving should be managed from the catalog.yml
+            - ``"dir"`` *(str)*: the task output directory path.
+            - ``"level_names"`` *(list[str])*: partition level name metadata
+              (not used by this function but present in the dict).
+
+    Returns:
+        Single-entry dict ``{params["dir"]: obj}`` ready for Kedro to persist.
     """
     return {params["dir"]: obj}
 
@@ -24,13 +57,29 @@ def write_scenario_partition(obj: object, params: dict) -> dict[str, object]:
 def read_scenario_partition(
     partitions: dict, params: dict, client: Client = None
 ) -> object:
-    """Read in a single partition for this scenario and dataset.
+    """Load a single partition from the current scenario's output directory.
 
-    Insert this into a kedro pipeline to enable loading in of a file from a partition
-    which you're also saving from.
+    Filters the full ``PartitionedDataset`` dict to the one entry whose path
+    matches ``params["dir"]``, calls its loader function, and returns the
+    result.  Raises if zero or more than one matching partition is found.
 
-    If you want to load in from multiple partitions at once and collate the results,
-    then use `ScenarioReader.read_partitions()` instead.
+    For reading multiple partitions across scenarios, use
+    :meth:`~megaplug.scenarios.read.ScenarioReader.read_partitions` instead.
+
+    Args:
+        partitions: Full Kedro ``PartitionedDataset`` dict mapping partition
+            path strings to zero-argument loader callables.
+        params: The ``"results_partition"`` sub-dict from the task's Kedro
+            parameter config.  Must contain ``"dir"`` *(str)* — the path of
+            the partition to load.
+        client: Unused Dask ``Client`` argument retained for pipeline
+            compatibility (ensures Dask is started before this node runs).
+
+    Returns:
+        The loaded dataset object returned by the partition's loader callable.
+
+    Raises:
+        RuntimeError: If more than one partition matches ``params["dir"]``.
     """
     dir = [Path(params["dir"])]
     selected = ScenarioReader.select_partitions_static(partitions=partitions, dirs=dir)
