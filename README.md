@@ -126,11 +126,13 @@ The model requires several external datasets, placed under `data/01_raw/`. The d
 | HIFLD Electrical Substations | [gem.anl.gov](https://gem.anl.gov) | `evaluate_impacts` |
 | PG&E ICA maps | [grip.pge.com](https://grip.pge.com) | `evaluate_impacts` (PG&E territory only) |
 | NLCD 2023 (National Land Cover Database) | [USGS](https://doi.org/10.5066/P94UXNTS) | `describe_locations` |
-| Data Axle business establishments | [Stanford GSB Redivis](https://stanfordgsb.redivis.com/datasets/fgqh-dzp0f32n0) | `describe_locations` |
+| Data Axle business establishments | Proprietary (contact Data Axle, Inc.) | `describe_locations` |
 | Jason's Law truck parking | [BTS geodata](https://geodata.bts.gov/datasets/fff36e0c37c748a5a1773b5784d4d9a5_0) | `describe_locations`, `compute_routes` |
 | OpenStreetMap (continental U.S.) | [Geofabrik](https://download.geofabrik.de) | `compute_routes`, `describe_locations` |
 
 > **Note on telematics data:** The International, Inc. dataset is proprietary and cannot be redistributed. Researchers wishing to replicate this work should contact International, Inc. to request access, or adapt the pipeline to use a comparable telematics dataset with the same schema (vehicle ID, dwell TAZ, dwell start/end times, trip distance).
+
+> **Note on business establishments data:** The Data Axle, Inc. dataset is proprietary and cannot be redistributed. Researchers wishing to replicate this work should contact Data Axle, Inc. to request access, or adapt the pipeline to use a comparable business establishment dataset with the same schema. The pipeline expects three tables joined on a shared establishment ID: a core table (`ESTAB_ID`, `COMPANY`, `PRIMARY_NAICS_CODE`, `EMPLOYEE_SIZE__5____LOCATION`, `BUSINESS_STATUS_CODE`, `STATE`), a geo table (`ESTAB_ID`, `LATITUDE`, `LONGITUDE`), and a relationships table (`ESTAB_ID`, `PARENT_NUMBER`).
 
 ---
 
@@ -239,12 +241,6 @@ Scenario definitions live in `conf/scenarios/`. Each scenario directory contains
 | Scenario | Description |
 | --------- | ------------- |
 | `sense_512` | Main paper scenario: 512 SoWs, adoption from NREL Beta+copula |
-| `sense_512_acf` | As above, with California Advanced Clean Fleets mandate schedules |
-| `sense_delay` | Sensitivity run focusing on delay accumulation |
-| `ca_eight` | California-only run with 8 geographic regions |
-| `ca_eight_adopt` | California run with explicit adoption curves |
-| `batt_man` | Battery management sensitivity |
-| `batt_pow` | Battery power sensitivity |
 | `validate` | Validation run matching Broga et al. (2025) assumptions |
 | `test` | Fast smoke-test scenario |
 
@@ -328,6 +324,22 @@ This writes SLURM batch scripts to `src/runners/`. The generated scripts submit 
 sbatch src/runners/sense_512.sh
 ```
 
+### GraphHopper on Sherlock (Apptainer)
+
+HPC environments like Sherlock do not support Docker; use [Apptainer](https://apptainer.org/) instead. Loading the GraphHopper container requires a few manual steps:
+
+1. **Pull the container in sandbox mode:**
+
+   ```bash
+   apptainer pull --sandbox docker://israelhikingmap/graphhopper:10.2
+   ```
+
+2. **Edit the container's runscript** to add `cd /graphhopper` at the very beginning. This works around Apptainer's lack of support for Docker's `WORKDIR` directive.
+
+3. **Edit `/graphhopper/graphhopper.sh`** (inside the container) to restrict the `.jar` file search to the `/graphhopper` directory. The relevant line is near the bottom of the file where the `JAR` environment variable is set.
+
+Once patched, point `conf/base/parameters_compute_routes.yml` at the Apptainer sandbox path instead of a Docker image name.
+
 ### Port forwarding for JupyterLab on Sherlock
 
 ```bash
@@ -381,21 +393,6 @@ cd docs
 make html
 open build/html/index.html
 ```
-
-### Key source files
-
-| File | Description |
-|------|-------------|
-| [src/megaplug/models/charging_algorithms.py](src/megaplug/models/charging_algorithms.py) | Core utility-maximization charging choice (Numba JIT) |
-| [src/megaplug/models/dwell_sets.py](src/megaplug/models/dwell_sets.py) | `DwellSet` class managing vehicle dwell histories |
-| [src/megaplug/models/sampling.py](src/megaplug/models/sampling.py) | Inverse propensity score weighting, bootstrap sampling |
-| [src/megaplug/models/summarize.py](src/megaplug/models/summarize.py) | Bootstrap load profile assembly and quantile compression |
-| [src/megaplug/models/manage_charging.py](src/megaplug/models/manage_charging.py) | Charging event creation and power profile scaling |
-| [src/megaplug/pipelines/describe_locations/nodes.py](src/megaplug/pipelines/describe_locations/nodes.py) | TAZ hexification and freight activity classification |
-| [src/megaplug/pipelines/evaluate_impacts/nodes.py](src/megaplug/pipelines/evaluate_impacts/nodes.py) | Load profile assembly per substation/county |
-| [conf/base/catalog.yml](conf/base/catalog.yml) | All dataset definitions |
-
----
 
 ## Citation
 
