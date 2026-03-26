@@ -21,6 +21,29 @@ import re
 
 from megaplug import __version__ as release
 
+# Mock heavy native dependencies so autodoc can import megaplug modules
+# without requiring compiled extensions (used in CI / GitHub Actions).
+autodoc_mock_imports = [
+    "numba",
+    "dask",
+    "dask_geopandas",
+    "geopandas",
+    "h3",
+    "openturns",
+    "pyogrio",
+    "rasterio",
+    "exactextract",
+    "osmium",
+    "routingpy",
+    "docker",
+    "tzfpy",
+    "statsmodels",
+    "scikit_fda",
+    "skfda",
+    "prim",
+    "aiohttp",
+]
+
 # -- Project information -----------------------------------------------------
 
 project = "megaplug"
