@@ -1,6 +1,93 @@
-"""
-This is a boilerplate pipeline 'evaluate_impacts'
-generated using Kedro 0.19.1
+"""Kedro pipeline nodes for the ``evaluate_impacts`` pipeline (Model Modules 5 & 6).
+
+This module implements the final two model modules described in Passow & Rajagopal
+(2026): estimating *expected* electrified dwell counts per location and assembling
+per-substation/county charging load profiles across a fleet scaled to a target
+adoption level.
+
+Pipeline overview
+-----------------
+**Module 5 — Estimate expected electrified dwells:**
+
+1.  **summarize_vehicles** — compute per-vehicle performance metrics (range
+    deaths, charging delays) and flag vehicles whose simulation results are
+    implausible for inclusion in load profiles.
+2.  **apply_delays** — shift dwell start/end timestamps and update dwell
+    durations to account for charging-induced delays.
+3.  **filter_dwells_pre_prob** — retain only weekday dwells; keep zero-charge
+    and non-electrified-vehicle dwells (needed for probability estimation).
+4.  **filter_locs_pre_prob** — drop locations with missing required fields.
+5.  **build_class_frame** — enumerate the full cross-product of vehicle and
+    location class combinations.
+6.  **compute_class_dwell_counts** — count observed dwells per
+    (vehicle class × location class × electrification status).
+7.  **compute_adoption_totals** — derive electrified-vehicle counts per vehicle
+    class from scenario adoption forecasts; optionally override with scenario
+    parameters.
+8.  **compute_dwell_rate_vclass** — compute dwell rate (dwells/day) per vehicle
+    class from observed data.
+9.  **compute_class_probs** — fuse observed dwell location distributions with
+    adoption forecasts to estimate P(electrified | location class, vehicle class)
+    and expected dwell counts per class via logistic regression + correction term
+    (``ElectProbLocalizer``).
+
+**Module 6 — Assemble load profiles:**
+
+10. **filter_dwells_post_prob** — drop dwells from non-electrified vehicles.
+11. **add_dwell_id** — assign a sequential integer ID to each dwell row for
+    joining with charging events.
+12. **get_dwells_nonzero** — drop zero-charge dwells (creates a new DwellSet
+    view, not in-place).
+13. **manage_charging** — convert dwell records to charging event records using
+    the configured charging manager.
+14. **slice_events** — partition charging events into time-of-day windows and
+    synthesise initialisation events for carry-over charging.
+15. **build_time_ordered_slice** — sort and difference profile columns within
+    each dwell to produce per-time-step power increments.
+16. **sample_profiles_node** — core bootstrap sampling: build sparse
+    correspondence matrices, compute inverse propensity weights, draw
+    ``n_bootstraps`` samples, and return per-region load profiles and summaries.
+17. **build_eval_columns** — inject ``group_cols`` into the shared ``pcols``
+    parameter dictionary.
+18. **add_region_geoms** — dissolve H3 hexagon correspondences into region
+    polygons and join geometries to results.
+19. **localize_time_from_hexes** — look up time zones from H3 hex centroids
+    and convert UTC timestamps to local time.
+20. **calc_utilization** — compute charging utilisation (energy / peak × window
+    duration) for each profile type.
+21. **compress_bootstrap_profiles** — discretise time and quantile-compress
+    bootstrap profile draws into a compact representation.
+22. **compress_bootstrap_summaries** — quantile-compress and mean-aggregate
+    bootstrap scalar summaries.
+
+Key design decisions
+--------------------
+- **Critical-day / zero-charge retention through Module 5**: Zero-charge dwells
+  and dwells from non-electrified vehicles are retained through the probability
+  estimation step because they contribute to observed dwell distributions that
+  inform the logistic regression.  They are dropped only after class
+  probabilities have been computed.
+- **Inverse propensity score weighting**: Observed dwells are re-weighted by the
+  reciprocal of P(observed & electrified | location, vehicle class) so that
+  locations with low observation propensity are up-weighted when constructing
+  load profiles.  This corrects for sampling bias in the telematics data.
+- **Two-stage bootstrap sampling**: Each bootstrap draw first allocates expected
+  dwell counts to hexagons (stage 1), then samples charging-event profiles from
+  the pool of observed events at that hex or its freight-activity class (stage
+  2).  The ``sample_self`` / ``sample_class`` flags control whether a hex can
+  donate from its own observations, from class-level observations, or both.
+- **Dask for bootstrap parallelism**: When ``n_bootstraps > 1``, individual
+  draws are distributed across Dask workers via ``client.submit``; large numpy
+  arrays are scattered with ``broadcast=True`` to avoid repeated serialisation.
+- **Timedelta columns**: Several delay columns are stored as floats (hours) in
+  the dwell data.  ``apply_delays`` converts them to ``timedelta`` for
+  arithmetic and drops the temporary columns afterwards.
+
+References
+----------
+Passow, F., & Rajagopal, R. (2026). Identifying indicators to inform
+proactive substation upgrades for charging electric heavy-duty trucks.
+*Applied Energy* (submitted March 2026).
 """
 
 import gc
@@ -42,7 +129,75 @@ logger = logging.getLogger(__name__)
 
 # ruff: noqa: PLR0915
 def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Summarize the results for each vehicle."""
+    """Compute per-vehicle performance metrics and flag implausible simulation results.
+
+    Evaluates whether each vehicle's simulated electrification is operationally
+    plausible by measuring two failure modes:
+
+    1. **Range deaths** — trips where the vehicle ran out of charge
+       (``dead_energy_col < 0``).  Circle trips (where the origin and
+       destination hexagon are identical) are separated as non-addressable
+       deaths that do not indicate a range design problem.
+    2. **Charging delays** — extra time accumulated because the vehicle had to
+       wait for charging.  Shift-level delay is computed as the cumulative delay
+       at the end of the shift minus the delay at the start, plus any delay
+       added at the preceding refresh stop.  Vehicle-days where simulation
+       artefacts caused delay to drop (e.g. after a death event) are clipped to
+       zero.
+
+    Metrics are first aggregated by shift, then summarised to the vehicle level
+    as point statistics (counts, percentages) and distributional statistics
+    (quantiles across shifts).
+
+    Vehicles that exceed any of the three thresholds — death rate, relative
+    delay fraction, or absolute maximum delay — are flagged for exclusion from
+    load-profile assembly.
+
+    Args:
+        dw: Post-simulation dwell dataset.  Must contain energy, delay, dwell
+            duration, and refresh columns specified in ``params``.
+        vehs: Vehicle-level table to augment with summary statistics and
+            inclusion flags.  Returned with new columns appended.
+        params: Pipeline parameters. Expected keys:
+
+            - ``dead_energy_col`` (str): Column holding remaining energy after
+              each trip; negative values indicate a death event.
+            - ``charge_energy_col`` (str): Column holding energy charged at
+              each dwell; non-NaN values indicate resuscitation after a death.
+            - ``dwell_dur_col`` (str): Column holding dwell duration (hours).
+            - ``refresh_col`` (str): Boolean column marking refresh dwells
+              (used to delineate shift boundaries).
+            - ``delay_inc_hrs_col`` (str): Column holding the delay increment
+              added at each dwell.
+            - ``delay_hrs_col`` (str): Column holding cumulative delay (hours).
+            - ``summary_cols`` (dict): Mapping from logical names to output
+              column names for shift-level metrics (e.g. ``max_delay``,
+              ``shift_delay``, ``shift_dur``, ``shift_dur_delayed``,
+              ``shift_dur_delayed_thresh``, ``delay_frac``).
+            - ``shift_max_dur_hrs`` (float): Threshold shift duration (hours)
+              above which a delayed shift is considered to violate operational
+              constraints.
+            - ``quantiles`` (list[float]): Quantile levels for distributional
+              summaries.
+            - ``delay_frac_thresh_quantile`` (float): Quantile of the delay
+              fraction distribution to report and use for thresholding.
+            - ``max_delay_thresh_quantile`` (float): Quantile of the max-delay
+              distribution to report and use for thresholding.
+            - ``thresholds`` (dict): Exclusion thresholds with sub-keys
+              ``pct_shifts_w_deaths_max`` (float), ``delay_frac_max`` (float),
+              and ``delay_hrs_max`` (float).
+            - ``death_rate_col`` (str): Column name for the death-rate statistic
+              used in the threshold check.
+            - ``drop_events_col`` (str): Output boolean column marking vehicles
+              to exclude from load profiles.
+            - ``electrified_col`` (str): Output boolean column (inverse of
+              ``drop_events_col``).
+
+    Returns:
+        The ``vehs`` DataFrame with per-vehicle summary statistics, quantile
+        distribution columns, and two boolean flag columns (``drop_events_col``
+        and ``electrified_col``) appended.
+    """
     # Set up arguments for describe calls
     qtls_descr = sorted(list(set(params["quantiles"]).difference([0.0, 1.0])))
 
@@ -221,12 +376,40 @@ def summarize_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> pd.Dat
 
 
 def apply_delays(dw: DwellSet, params: dict) -> DwellSet:
-    """Apply the delays found in charging choice to dwell duration, start time, and end
-    time.
+    """Apply charging-induced delays to dwell timestamps and durations.
 
-    We apply the cumulative delay up to the present time to the beginning and end times
-    of each dwell. Then we additionally reduce the dwell period by the delay reduction
-    and increase the end time by the new delay added at this dwell.
+    The charging-choice simulation records delays as floating-point hours.
+    This node converts those columns to ``timedelta`` objects, then applies
+    them to the dwell table so that downstream time-of-day analysis uses
+    realised (delayed) times rather than originally scheduled times.
+
+    Three adjustments are made to each dwell:
+
+    1. ``dw.start`` is shifted forward by the cumulative delay accumulated up
+       to the start of this dwell.
+    2. Net dwell duration is updated as:
+       ``original_duration − delay_decrease + delay_increase``.
+    3. ``dw.end`` is shifted forward by the cumulative delay *plus* any new
+       delay added at this dwell (``delay_increase``).
+
+    Temporary ``timedelta`` columns are dropped before returning.
+
+    Args:
+        dw: Dwell dataset with float delay columns (hours). Modified in-place
+            and returned.
+        params: Pipeline parameters. Expected keys:
+
+            - ``delay_columns`` (dict): Maps logical delay-role keys to column
+              names in ``dw.data``.  Required keys: ``cumul_hrs`` (cumulative
+              delay at dwell start), ``dwell_hrs`` (original dwell duration),
+              ``decrease_hrs`` (delay reduction at this dwell), and
+              ``increase_hrs`` (new delay added at this dwell).
+            - ``delay_unit`` (str): Time unit of the float delay columns (e.g.
+              ``"h"`` for hours), passed to ``pd.to_timedelta``.
+
+    Returns:
+        The updated ``DwellSet`` with adjusted ``dw.start``, ``dw.end``, and
+        dwell duration column; temporary timedelta columns removed.
     """
     dly_cols = params["delay_columns"]
     tdelt_cols = {}
@@ -252,18 +435,37 @@ def apply_delays(dw: DwellSet, params: dict) -> DwellSet:
 
 
 def filter_dwells_pre_prob(dw: DwellSet, params: dict, pcols: dict) -> DwellSet:
-    """Filter dwells down to only include the ones we want to summarize for probabilities.
+    """Filter dwells to the subset used for probability estimation.
 
-    That is, we want the dwells which occur within:
-        - The location target pool OR the location donor pool
-        - The time spans expected (e.g. weekdays)
+    Retains dwells that fall within the desired time spans (optionally
+    weekdays only) and drops rows with missing values in required columns.
 
-    DO NOT drop the zero-charge dwells. They're critical to the dwell-based sampling.
-    Furthermore, I'll need to consider keeping the non-critical days around to retain
-    these dwells.
+    Critically, this filter does **not** drop:
 
-    DO NOT drop the dwells from non-electrified vehicles. These will be essential for
-    probability of electrification calculations.
+    - Zero-charge dwells — they contribute to the observed dwell location
+      distribution used by the logistic regression in ``compute_class_probs``.
+    - Dwells from non-electrified vehicles — they are needed to estimate
+      P(electrified | location class, vehicle class).
+
+    These rows are only removed in the later ``filter_dwells_post_prob`` step,
+    after class probabilities have been computed.
+
+    Args:
+        dw: Dwell dataset to filter. Modified in-place and returned.
+        params: Pipeline parameters. Expected keys:
+
+            - ``filter_out_weekends`` (bool): If ``True``, drop dwells whose
+              start *and* end both fall on Saturday or Sunday.
+            - ``drop_na_cols`` (list[str] | None): Column names for which rows
+              with NaN values should be dropped. Pass ``None`` to skip.
+
+        pcols: Shared pipeline column-name dictionary (not used directly in
+            this node but required by the Kedro pipeline signature for
+            consistency with sibling nodes).
+
+    Returns:
+        The filtered ``DwellSet`` with out-of-scope and missing-value rows
+        removed.
     """
     if not dw.is_dask:
         old_len = len(dw.data)
@@ -287,20 +489,45 @@ def filter_dwells_pre_prob(dw: DwellSet, params: dict, pcols: dict) -> DwellSet:
 
 
 def _is_weekday(tser: "pd.Series[pd.Timestamp]") -> "pd.Series[bool]":
-    """Masks the weekdays in a timestamp pandas Series."""
+    """Return a boolean mask that is ``True`` for weekday (Mon–Fri) timestamps."""
     FIRST_DAY_OF_WEEKEND = 5
     is_weekday = tser.dt.weekday < FIRST_DAY_OF_WEEKEND
     return is_weekday
 
 
 def filter_locs_pre_prob(locs: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Filter locations to report upon."""
+    """Drop locations that are missing required fields before probability estimation.
+
+    Args:
+        locs: Locations table (one row per H3 hexagon or reporting unit).
+        params: Pipeline parameters. Expected keys:
+
+            - ``drop_na_cols`` (list[str]): Column names for which rows with
+              NaN values should be dropped (e.g. missing freight-activity
+              class assignment).
+
+    Returns:
+        The filtered locations table.
+    """
     locs_report = locs.dropna(subset=params["drop_na_cols"])
     return locs_report
 
 
 def get_unique_series(df: pd.DataFrame, col: str, dropna: bool = True) -> pd.Series:
-    """Get the series from the df with the given name, and return only the unique values."""
+    """Extract the unique sorted values of a column or index level from a DataFrame.
+
+    Args:
+        df: Source DataFrame to query.
+        col: Name of a column or index level whose unique values to extract.
+        dropna: If ``True`` (default), remove NaN values from the result.
+
+    Returns:
+        A sorted ``pd.Series`` of unique values with ``name`` set to ``col``.
+
+    Raises:
+        RuntimeError: If ``col`` is not found in ``df.columns`` or
+            ``df.index.names``.
+    """
     if col in df.columns:
         ser = df[col].sort_values()
     elif col in df.index.names:
@@ -318,7 +545,27 @@ def get_unique_series(df: pd.DataFrame, col: str, dropna: bool = True) -> pd.Ser
 def build_class_frame(
     locs: pd.DataFrame, vehs: pd.DataFrame, params: dict
 ) -> pd.DataFrame:
-    """Build the frame for all combinations of location and vehicle classes."""
+    """Build a complete cross-product of vehicle and location class combinations.
+
+    Creates a DataFrame with one row for every (vehicle class × location class)
+    pair, regardless of whether any observed dwells exist for that combination.
+    This ensures that downstream probability and count computations include
+    unobserved class pairs as explicit zeros rather than missing rows.
+
+    Args:
+        locs: Locations table containing location-class columns.
+        vehs: Vehicle table containing vehicle-class columns.
+        params: Pipeline parameters. Expected keys:
+
+            - ``veh_class_cols`` (list[str]): Column names in ``vehs`` that
+              define vehicle classes (e.g. primary operating distance class).
+            - ``loc_class_cols`` (list[str]): Column names in ``locs`` that
+              define location classes (e.g. freight-activity cluster).
+
+    Returns:
+        A DataFrame with one row per class combination and one column per
+        class dimension.
+    """
     components = []
     for col in params["veh_class_cols"]:
         components.append(get_unique_series(vehs, col))
@@ -334,7 +581,32 @@ def compute_class_dwell_counts(
     dw: DwellSet,
     params: dict,
 ) -> pd.DataFrame:
-    """Compute dwell counts for combinations of vehicle and location classes."""
+    """Count observed dwells per (vehicle class × location class × electrification).
+
+    Groups dwell rows by all class columns plus the electrification flag, counts
+    rows in each group, and pivots electrification into two columns
+    (``n_dwells_electrified``, ``n_dwells_obs``).  The counts are left-joined
+    onto the full class cross-product so that unobserved combinations appear
+    as zeros.
+
+    Args:
+        classes: Full class cross-product DataFrame produced by
+            ``build_class_frame``.
+        dw: Dwell dataset that includes vehicle-class, location-class, and
+            electrification columns.
+        params: Pipeline parameters. Expected keys:
+
+            - ``veh_class_cols`` (list[str]): Vehicle-class column names.
+            - ``loc_class_cols`` (list[str]): Location-class column names.
+            - ``electrified_col`` (str): Boolean column in ``dw.data``
+              indicating whether the vehicle is electrified.
+
+    Returns:
+        The ``classes`` DataFrame with two new integer columns:
+        ``n_dwells_obs`` (total observed dwells) and
+        ``n_dwells_electrified`` (observed dwells from electrified vehicles).
+        Unobserved combinations are filled with 0.
+    """
     cls_cols = params["veh_class_cols"] + params["loc_class_cols"]
     n_obs_grper = cls_cols + [params["electrified_col"]]
     n_obs = dw.data.groupby(n_obs_grper, observed=True).size().sort_index()
@@ -356,7 +628,42 @@ def compute_adoption_totals(
     params: dict,
     pcols: dict,
 ) -> pd.DataFrame:
-    """Compute known adoption totals from forecasts."""
+    """Derive the number of electrified vehicles per class from adoption forecasts.
+
+    Filters the adoption dataset to the rows of interest, groups by vehicle
+    class, and sums electrified and total vehicle counts.  If
+    ``override_with_params`` is enabled, the adoption fractions from the
+    scenario parameter file replace those derived from the forecast data (while
+    the total fleet size is preserved), allowing sensitivity analysis without
+    re-running the full forecast pipeline.
+
+    Args:
+        adopts: Adoption forecast DataFrame with vehicle counts by fuel type
+            and vehicle class.
+        params: Pipeline parameters. Expected keys:
+
+            - ``filter_totals`` (dict): Column-value pairs used to subset
+              ``adopts`` before aggregation (e.g. year, region).
+            - ``totals_column`` (str): Column holding vehicle counts.
+            - ``fuel_type_col`` (str): Column identifying fuel type.
+            - ``electrified_fuel_types`` (list[str]): Fuel type values
+              considered electrified (e.g. ``["BEV"]``).
+            - ``override_with_params`` (bool): If ``True``, replace observed
+              adoption fractions with those in ``adoption_fracs``.
+            - ``adoption_fracs`` (dict): Scenario-specific adoption fractions
+              by vehicle class, used when ``override_with_params`` is ``True``.
+
+        pcols: Shared column-name dictionary. Expected keys:
+
+            - ``veh_class_cols`` (list[str]): Vehicle-class column names used
+              for grouping.
+            - ``electrified_col`` (str): Name for the electrification boolean
+              column.
+
+    Returns:
+        A DataFrame indexed by vehicle class with columns for total fleet size
+        and number of electrified vehicles.
+    """
     adopts_sel = filter_by_vals_in_cols(adopts, params["filter_totals"])
 
     tot_col = params["totals_column"]
@@ -395,7 +702,43 @@ def compute_dwell_rate_vclass(
     params: dict,
     pcols: dict,
 ) -> pd.DataFrame:
-    """Compute the rate of dwells by vehicle class per unit time."""
+    """Compute the observed dwell rate (dwells per unit time) by vehicle class.
+
+    Counts the total number of dwells per vehicle, divides by each vehicle's
+    observation window length (in the configured time unit, optionally
+    excluding weekends), aggregates to the vehicle-class level, and joins the
+    resulting rate back onto the vehicle-class cross-product frame.
+
+    The rate is used by ``compute_class_probs`` to scale expected dwell counts
+    from per-vehicle-per-time-unit rates to absolute expected dwell counts
+    across the target fleet.
+
+    Args:
+        veh_classes: Vehicle-class cross-product frame to augment.
+        dw: Dwell dataset (only dwell counts per vehicle are needed).
+        vehs: Vehicle table containing observation start/end timestamps and
+            vehicle-class columns.
+        params: Pipeline parameters. Expected keys:
+
+            - ``dwell_count_col`` (str): Temporary column name for per-vehicle
+              dwell counts.
+            - ``obs_dur_cols`` (dict): Maps ``"start"`` and ``"end"`` to the
+              column names in ``vehs`` holding observation window timestamps.
+            - ``time_unit`` (str): Time unit for the observation window
+              (e.g. ``"day"``).
+            - ``filter_out_weekends`` (bool): If ``True``, exclude weekend
+              days from each vehicle's observation window length.
+            - ``dwell_rate_col`` (str): Output column name for the dwell rate
+              (dwells per time unit).
+
+        pcols: Shared column-name dictionary. Expected key:
+
+            - ``veh_class_cols`` (list[str]): Vehicle-class column names.
+
+    Returns:
+        The ``veh_classes`` DataFrame with new columns for total dwell count,
+        total observation time, vehicle count, and dwell rate appended.
+    """
     dw_count_col = params["dwell_count_col"]
     vclass_cols = pcols["veh_class_cols"]
     odur_cols = params["obs_dur_cols"]
@@ -443,11 +786,55 @@ def compute_class_probs(
     cls: pd.DataFrame,
     params: dict,
 ) -> pd.DataFrame:
-    """Compute probabilities associated with location and vehicle cls.
+    """Estimate electrification probability and expected dwell counts per class.
 
-    We compute:
-        - P(L,V): the probability of a dwell falling into location class l and vehicle class v
-        - P(L|V): the probability of a dwell falling into location class l given it is in vehicle class v
+    This is the core data-fusion step of Module 5.  It combines observed dwell
+    location distributions from the telematics dataset with electrification
+    adoption forecasts to produce, for every (location class, vehicle class)
+    combination:
+
+    1. **P(L|V)** — probability of a dwell falling in location class *L* given
+       vehicle class *V*, estimated from observed dwell counts.
+    2. **P(L,V)** — joint probability of a dwell falling in class pair (L, V),
+       estimated from observed dwell counts.
+    3. **P(E|V)** — probability of a vehicle being electrified given vehicle
+       class *V*, derived from the adoption forecast.
+    4. **P(E|L,V)** — probability of electrification given both location and
+       vehicle class, estimated by ``ElectProbLocalizer`` (logistic regression
+       + correction term that reconciles the class-level P(E|V) with location-
+       specific dwell observations).
+    5. **Expected electrified dwells** — ``P(L|V) × dwell_rate × n_vehs_in_class
+       × P(E|L,V)``, representing the expected number of electrified dwells per
+       time unit at each class combination.
+    6. **P(observed & electrified | L,V)** — inverse propensity weight
+       numerator used downstream to correct for observation bias.
+
+    Args:
+        cls: Class-level DataFrame containing dwell counts (from
+            ``compute_class_dwell_counts``), fleet totals (from
+            ``compute_adoption_totals``), and dwell rates (from
+            ``compute_dwell_rate_vclass``), joined together.
+        params: Pipeline parameters. Expected keys:
+
+            - ``loc_class_cols`` (list[str]): Must contain exactly one element
+              (multi-column location classes are not yet supported).
+            - ``veh_class_cols`` (list[str]): Must contain exactly one element.
+            - ``columns`` (dict): Maps logical names to column names in
+              ``cls``, including ``n_dwells_obs``, ``n_dwells_obs_elect``,
+              ``n_vehs_in_class``, ``n_vehs_electrified_in_class``, and
+              ``dwell_rate``.
+            - ``out_columns`` (dict): Output column name mapping with keys
+              ``prob_obs_elect`` and ``n_elect_dwells_expected``.
+
+    Returns:
+        A DataFrame indexed by (location class, vehicle class) with columns
+        for ``prob_obs_elect`` (inverse propensity weight numerator) and
+        ``n_elect_dwells_expected`` (expected electrified dwell count per
+        class per unit time).
+
+    Raises:
+        ValueError: If ``loc_class_cols`` or ``veh_class_cols`` contains more
+            than one element.
     """
     if len(params["loc_class_cols"]) > 1:
         raise ValueError(
@@ -518,16 +905,31 @@ def compute_class_probs(
 
 
 def filter_dwells_post_prob(dw: DwellSet, pcols: dict) -> DwellSet:
-    """Filter dwells down to only include the ones we want to sample.
+    """Retain only dwells from vehicles flagged as electrified.
 
-    That is, we want the dwells which occur within:
-        - The location target pool OR the location donor pool
-        - The time spans expected (e.g. weekdays)
-        - AND is electrified
+    Applied after class probabilities have been computed.  Non-electrified
+    vehicle dwells — which were retained through ``filter_dwells_pre_prob``
+    to inform probability estimation — are now dropped because they should
+    not contribute to load profiles.
 
-    DO NOT drop the zero-charge dwells. They're critical to the dwell-based sampling.
-    Furthermore, I'll need to consider keeping the non-critical days around to retain
-    these dwells.
+    Zero-charge dwells from electrified vehicles are still retained here;
+    they are needed for the dwell-based sampling in ``sample_profiles_node``
+    (a zero-charge dwell at a location still informs that location's dwell
+    count) and are only removed in ``get_dwells_nonzero``.
+
+    Note: This function returns a *new* ``DwellSet`` (``copy_without_data``),
+    not an in-place modification of ``dw``.
+
+    Args:
+        dw: Full dwell dataset including non-electrified vehicle rows.
+        pcols: Shared column-name dictionary. Expected key:
+
+            - ``electrified_col`` (str): Boolean column marking electrified
+              vehicles (produced by ``summarize_vehicles``).
+
+    Returns:
+        A new ``DwellSet`` containing only rows from electrified vehicles,
+        with the ``electrified_col`` column dropped.
     """
     if not dw.is_dask:
         old_len = len(dw.data)
@@ -550,16 +952,47 @@ def filter_dwells_post_prob(dw: DwellSet, pcols: dict) -> DwellSet:
 
 
 def add_dwell_id(dw: DwellSet, params: dict) -> DwellSet:
-    """Add a dwell id column."""
+    """Assign a sequential integer dwell ID to each row.
+
+    The ID is used as a join key between the dwell table and the charging
+    events table produced by ``manage_charging``.
+
+    Args:
+        dw: Dwell dataset. Modified in-place and returned.
+        params: Pipeline parameters. Expected key:
+
+            - ``dw_col`` (str): Name for the new integer ID column.
+
+    Returns:
+        The updated ``DwellSet`` with a new sequential integer ID column.
+    """
     dw.data[params["dw_col"]] = np.arange(len(dw.data))
     return dw
 
 
 def get_dwells_nonzero(dw: DwellSet, pcols: dict) -> DwellSet:
-    """Get dwells down to only include the ones with nonzero charging.
+    """Return a new DwellSet containing only dwells with nonzero charging.
 
-    We finally drop the zero-charge dwells here, because we don't need to add them to
-    the load profiles EVEN IF they are sampled.
+    Zero-charge dwells were retained through the probability-estimation steps
+    because they contribute to observed dwell location distributions.  They
+    are dropped here because a sampled dwell with zero charge does not
+    contribute energy to a load profile even if it is selected during
+    bootstrap sampling.
+
+    This function creates a *new* ``DwellSet`` view rather than modifying
+    ``dw`` in-place, so the original (with zero-charge rows) remains available
+    if needed.
+
+    Args:
+        dw: Dwell dataset containing both zero-charge and nonzero-charge rows.
+        pcols: Shared column-name dictionary. Expected key:
+
+            - ``charge_col`` (str): Column holding simulated charge amount
+              (kWh); rows where this is ``<= 0`` are excluded.
+
+    Returns:
+        A new ``DwellSet`` containing only rows where charge amount is
+        positive.
     """
     if not dw.is_dask:
         old_len = len(dw.data)
@@ -581,7 +1014,29 @@ def get_dwells_nonzero(dw: DwellSet, pcols: dict) -> DwellSet:
 
 
 def manage_charging(dw: DwellSet, params: dict) -> pd.DataFrame:
-    """Manage the charging of vehicles within each dwell to create charging events."""
+    """Convert dwell records into time-resolved charging event records.
+
+    Instantiates the configured charging manager (selected from ``_MANAGER_MAP``
+    by ``params["charging_manager"]``) and calls ``get_events()`` to expand
+    each dwell into one or more charging events with start time, duration, and
+    power columns.  Power values are rounded to reduce output file size.
+
+    Args:
+        dw: Dwell dataset with charge amounts, dwell timings, and vehicle
+            parameters required by the charging manager.
+        params: Pipeline parameters. Expected keys:
+
+            - ``charging_manager`` (str): Key into ``_MANAGER_MAP`` selecting
+              the charging manager class (e.g. ``"constant_power"``).
+            - ``input_cols`` (dict): Column-name mappings forwarded to the
+              charging manager constructor.
+            - ``round_decimals`` (int): Number of decimal places to which
+              power values are rounded.
+
+    Returns:
+        A DataFrame of charging events, with one row per time step per dwell,
+        containing start time, duration, and power columns.
+    """
     manager_cls = _MANAGER_MAP[params["charging_manager"]]
     manager = manager_cls(
         dw=dw, **params["input_cols"], prof_type=ProfileType.OBSERVATIONS
@@ -593,12 +1048,56 @@ def manage_charging(dw: DwellSet, params: dict) -> pd.DataFrame:
 
 
 def slice_events(events: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFrame:
-    """Slice up an events DataFrame into vehicle-windows.
+    """Partition charging events into time-of-day windows and handle cross-window carry-over.
 
-    This involves setting a frequency-based slicing, and then creating new events to
-    'initialize' each new slice if there was carry-over charging from the slice previous
-    in time.
+    A "slice" is a fixed-frequency time window (e.g. one day) within which
+    charging load profiles are assembled.  Events that begin in one window
+    may extend into the next; this function handles that carry-over by
+    synthesising initialisation events at the start of each new window.
 
+    The algorithm:
+
+    1. Optionally clip event durations to the window frequency to preserve
+       the characteristic shape of a charging session without allowing a
+       single event to dominate multiple windows.
+    2. Use ``IntervalBeginSpreader`` to detect all events that cross a window
+       boundary and generate initialisation rows at each affected window
+       start.
+    3. Concatenate original events with initialisation rows, assign each row
+       to its window (``slice_id_col``), and compute each event's
+       within-window start time (``slice_time_col``) as a timezone-naive
+       offset from midnight.
+
+    Args:
+        events: Charging events DataFrame from ``manage_charging``.
+        params: Pipeline parameters. Expected keys:
+
+            - ``slice_id_col`` (str): Output column for the window identifier
+              (floored timestamp of the window start).
+            - ``slice_time_col`` (str): Output column for within-window
+              offset (timezone-naive ``Timestamp`` relative to epoch).
+            - ``source_time_col`` (str): Existing column holding each event's
+              absolute start timestamp (must be timezone-naïve).
+            - ``slice_freq`` (str): Pandas frequency string defining the
+              window size (e.g. ``"1D"`` for one day).
+            - ``clip_dur_to_slice_freq`` (bool): Whether to clip event
+              durations to the window frequency before spreading.
+
+        pcols: Shared column-name dictionary. Expected keys:
+
+            - ``dw_col`` (str): Dwell ID column used as grouping key.
+            - ``duration_col`` (str): Event duration column.
+            - ``profile_cols`` (dict): Profile value columns to carry over
+              into initialisation rows.
+
+    Returns:
+        A DataFrame of events (original + initialisation rows) with
+        ``slice_time_col`` added and ``source_time_col`` /
+        ``slice_id_col`` dropped.
+
+    Raises:
+        RuntimeError: If ``source_time_col`` contains timezone-aware
+            timestamps.
     """
     dur_col = pcols["duration_col"]
     slice_begin_col = params["slice_id_col"]
@@ -655,7 +1154,44 @@ def slice_events(events: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFram
 def build_time_ordered_slice(
     events: pd.DataFrame, params: dict, pcols: dict
 ) -> pd.DataFrame:
-    """Build the time-ordered slice of differences use for sampling from."""
+    """Convert cumulative profile columns into per-time-step power increments.
+
+    ``manage_charging`` produces cumulative profile values (e.g. cumulative
+    kWh delivered since the start of the charging session).  The bootstrap
+    sampler in ``sample_profiles_node`` needs *differences* — the incremental
+    kWh delivered in each time step — to correctly aggregate contributions
+    from multiple dwells.
+
+    Sorts events by dwell ID and within-window time, computes first-order
+    differences of each profile column within each dwell group (using the
+    first row's absolute value for the initial diff), and drops the original
+    cumulative columns.  The result is then sorted by within-window time to
+    facilitate time-aligned aggregation during sampling.
+
+    Args:
+        events: Sliced events DataFrame from ``slice_events``.
+        params: Pipeline parameters. Expected key:
+
+            - ``slice_time_col`` (str): Column holding within-window time
+              offset, used as the secondary sort key.
+
+        pcols: Shared column-name dictionary. Expected keys:
+
+            - ``dw_col`` (str): Dwell ID column used for grouping.
+            - ``profile_cols`` (dict): Maps logical profile keys to cumulative
+              column names (input).
+            - ``diff_cols`` (dict): Maps the same logical keys to output
+              difference column names; must be paired 1-to-1 with
+              ``profile_cols``.
+
+    Returns:
+        A DataFrame sorted by ``slice_time_col`` with cumulative profile
+        columns replaced by per-time-step difference columns.
+
+    Raises:
+        ValueError: If ``profile_cols`` and ``diff_cols`` do not have the
+            same key set.
+    """
     events_sort = events.sort_values(
         [pcols["dw_col"], params["slice_time_col"]], ascending=[True, True]
     )
@@ -687,7 +1223,99 @@ def sample_profiles_node(
     pcols: dict,
     client: Client,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Sample load profiles using self and class dwells."""
+    """Assemble per-region load profiles via inverse-propensity-weighted bootstrap sampling.
+
+    This is the core computational node of Module 6.  For each bootstrap draw
+    it:
+
+    1. Builds four sparse correspondence matrices:
+
+       - **Ga** (Dwells × Hexagons): indicates which hex each observed dwell
+         occurred in.
+       - **Cy** (Hexagons × Freight-activity classes): maps each hex to its
+         freight-activity class.
+       - **Be** (Events × Dwells): maps each charging event to its parent
+         dwell.
+       - **Rho** (Regions × Hexagons): maps each hex to its reporting region
+         (substation or county).
+
+    2. Computes inverse propensity weights **Ω** for each dwell using
+       ``P(observed & electrified | location, vehicle class)`` from
+       ``compute_class_probs``, normalised column-wise so that each hex (or
+       class) receives unit total weight.
+
+    3. Computes expected dwell counts per hex (``m_hex_expected``) by
+       distributing class-level expected counts uniformly across hexes within
+       each class.
+
+    4. Calls ``sample_profiles`` for each bootstrap draw.  When
+       ``n_bootstraps > 1``, draws are distributed across Dask workers; large
+       arrays are scattered with ``broadcast=True`` to avoid redundant
+       serialisation.
+
+    5. Concatenates bootstrap results, restores original region names, and
+       returns confidence diagnostics (observed vs. expected hex dwell counts).
+
+    Args:
+        dw: Electrified, nonzero-charge dwell dataset with dwell IDs and hex
+            columns.
+        events: Time-ordered per-time-step charging event increments from
+            ``build_time_ordered_slice``.
+        locs: Locations table with hex IDs, region assignments, and
+            freight-activity class codes.
+        classes: Class-level probability and expected-count table from
+            ``compute_class_probs``.
+        params: Pipeline parameters. Expected keys:
+
+            - ``sample_self`` (bool): Allow a hex to sample from its own
+              observed dwells in stage 2 of the bootstrap.
+            - ``sample_class`` (bool): Allow a hex to sample from class-level
+              pooled dwells in stage 2.
+            - ``n_bootstraps`` (int): Number of bootstrap draws (≥ 1).
+            - ``loc_group_col`` (str): Column in ``locs`` holding the
+              freight-activity class (categorical dtype required).
+            - ``dwell_prob_obs_elect_col`` (str): Column in dwell data holding
+              the inverse propensity weight numerator P(obs & elect | L, V).
+            - ``n_dwells_expected_elect_col`` (str): Column in ``classes``
+              holding expected electrified dwell counts per class.
+            - ``max_first_stage_options`` (int): Maximum number of candidate
+              dwell indices considered in stage 1 of sampling (caps memory use).
+            - ``time_col`` (str): Within-window time column in ``events``.
+            - ``slice_freq`` (str): Window frequency string (e.g. ``"1D"``).
+            - ``discrete_freq`` (str): Discretisation frequency for profile
+              compression.
+            - ``summary_suffixes`` (dict): Suffix strings for cumulative and
+              peak summary columns.
+            - ``bootstrap_id_col`` (str): Column name for bootstrap draw ID
+              in output.
+            - ``master_seed`` (int | None): Random seed base; draw *i* uses
+              ``master_seed + i`` if set.
+
+        pcols: Shared column-name dictionary. Expected keys:
+
+            - ``hex_col``, ``group_cols``, ``dw_col``, ``duration_col``,
+              ``profile_cols``, ``diff_cols``, ``cum_cols``, ``peak_cols``.
+
+        client: Dask distributed ``Client`` used to scatter data and submit
+            bootstrap draws when ``n_bootstraps > 1``.
+
+    Returns:
+        A three-tuple of:
+
+        - **boot_profs** (``pd.DataFrame``): Per-bootstrap, per-region,
+          per-time-step load profile profiles.
+        - **boot_summs** (``pd.DataFrame``): Per-bootstrap, per-region
+          scalar summaries (cumulative energy, peak power).
+        - **hex_confidence** (``pd.DataFrame``): Per-hexagon observed and
+          expected dwell counts for diagnostic use.
+
+    Raises:
+        ValueError: If ``pcols["group_cols"]`` has more than one element, or
+            if a profile column name conflicts with an argument of
+            ``sample_profiles``, or if ``n_bootstraps < 1``.
+        NotImplementedError: If ``locs[loc_group_col]`` is not a categorical
+            dtype.
+    """
     sample_self = params["sample_self"]
     sample_class = params["sample_class"]
     n_boots = params["n_bootstraps"]
@@ -872,7 +1500,22 @@ def sample_profiles_node(
 
 
 def build_eval_columns(pcols: dict, group_cols: list) -> dict:
-    """Build a set of evaluation columns to use throughout the pipeline."""
+    """Inject the reporting group columns into the shared pipeline column dictionary.
+
+    ``group_cols`` specifies the spatial aggregation level for load profiles
+    (e.g. substation ID or county code).  It is passed separately in the Kedro
+    pipeline so that the same node logic can produce substation-level or
+    county-level outputs by swapping the parameter.
+
+    Args:
+        pcols: Shared column-name dictionary to update.
+        group_cols: List of column names that define the reporting grouping
+            (e.g. ``["substation_id"]``).
+
+    Returns:
+        The updated ``pcols`` dictionary with ``"group_cols"`` set to
+        ``group_cols``.
+    """
     pcols.update({"group_cols": group_cols})
     return pcols
 
@@ -882,7 +1525,28 @@ def add_region_geoms(
     hex_regions: pd.DataFrame,
     params: dict,
 ) -> gpd.GeoDataFrame:
-    """Add region geometries to the reporting by region."""
+    """Dissolve H3 hex correspondences into region polygons and join to results.
+
+    Converts a hex→region correspondence table into one polygon per region
+    (by dissolving the H3 cell polygons), joins it to the results DataFrame,
+    and converts any ``timedelta`` columns to float hours for serialisation
+    compatibility.
+
+    Args:
+        results: Per-region summary or profile DataFrame to annotate with
+            geometries.
+        hex_regions: DataFrame mapping H3 hex IDs to region identifiers.
+        params: Pipeline parameters. Expected keys:
+
+            - ``hex_col`` (str): Column in ``hex_regions`` holding H3 hex IDs.
+            - ``region_col`` (str): Column in both ``hex_regions`` and
+              ``results`` holding the region identifier used to join.
+
+    Returns:
+        A ``GeoDataFrame`` with a ``geometry`` column (dissolved region
+        polygons) and ``timedelta`` columns replaced by float-hours
+        equivalents.
+    """
     reg_polys = cells_to_region_polygons(
         corresp=hex_regions.reset_index(),
         hex_col=params["hex_col"],
@@ -905,7 +1569,41 @@ def add_region_geoms(
 def localize_time_from_hexes(
     df: pd.DataFrame, params: dict, pcols: dict
 ) -> pd.DataFrame:
-    """Localize a given time column using the location provided by hexagons."""
+    """Convert UTC timestamps to local time using time zones inferred from H3 hexagons.
+
+    Optionally looks up the IANA time zone for each row from the H3 hex
+    centroid (via ``calc_time_zones_from_hexes``), then converts one or more
+    UTC timestamp columns to local time (via ``calc_local_time``).  Daylight
+    saving time ambiguities are introduced naturally by working with
+    timezone-naïve local times.
+
+    Args:
+        df: DataFrame containing a hex column and UTC timestamp columns.
+            Modified and returned.
+        params: Pipeline parameters. Expected keys:
+
+            - ``get_tz`` (bool): If ``True``, derive time zones from hex
+              centroids and write them to ``pcols["timezone_col"]``.  Set to
+              ``False`` if the time zone column is already present.
+            - ``time_cols_source`` (list[str]): UTC timestamp columns to
+              localise.
+            - ``time_cols_local`` (list[str]): Output column names for the
+              corresponding local-time timestamps.
+            - ``sort_result`` (bool): If ``True``, sort ``df`` by
+              ``sort_cols`` after localisation.
+            - ``sort_cols`` (list[str]): Columns to sort by when
+              ``sort_result`` is ``True``.
+
+        pcols: Shared column-name dictionary. Expected keys:
+
+            - ``hex_col`` (str): Column holding H3 hex IDs.
+            - ``timezone_col`` (str): Column to store or read IANA time zone
+              strings.
+
+    Returns:
+        The updated DataFrame with local-time columns added and, optionally,
+        a time zone column added and rows sorted.
+    """
     if params["get_tz"]:
         df = calc_time_zones_from_hexes(
             df=df,
@@ -924,7 +1622,41 @@ def localize_time_from_hexes(
 
 
 def calc_utilization(summs: pd.DataFrame, params: dict, pcols: dict) -> pd.DataFrame:
-    """Calculate utilization on bootstrap sample summaries."""
+    """Compute charging utilisation for each profile type from bootstrap summaries.
+
+    Utilisation is defined as::
+
+        utilisation = cumulative_energy / (peak_power × window_duration)
+
+    where ``window_duration`` is derived from the slice frequency in the
+    configured time unit.  A utilisation of 1.0 means the charger ran at peak
+    power for the entire window; values below 1.0 reflect partial utilisation.
+
+    Args:
+        summs: Bootstrap summary DataFrame with cumulative-energy and
+            peak-power columns for each profile type.
+        params: Pipeline parameters. Expected keys:
+
+            - ``slice_freq`` (str): Window frequency string used to compute
+              total window duration (e.g. ``"1D"``).
+            - ``dur_unit`` (str): Time unit for window duration conversion
+              (e.g. ``"h"`` for hours).
+
+        pcols: Shared column-name dictionary. Expected keys:
+
+            - ``profile_cols`` (dict): Maps profile-type keys to column names
+              (used to iterate over types).
+            - ``util_cols`` (dict): Maps profile-type keys to output
+              utilisation column names.
+            - ``cum_cols`` (dict): Maps profile-type keys to cumulative-energy
+              column names.
+            - ``peak_cols`` (dict): Maps profile-type keys to peak-power
+              column names.
+
+    Returns:
+        The ``summs`` DataFrame with one new utilisation column per profile
+        type appended.
+    """
     tot_dur = pd.Series([pd.Timedelta(params["slice_freq"])])
     tot_dur = total_time_units(tot_dur, unit=params["dur_unit"])
     tot_dur = tot_dur.values[0]
@@ -940,7 +1672,45 @@ def calc_utilization(summs: pd.DataFrame, params: dict, pcols: dict) -> pd.DataF
 def compress_bootstrap_profiles(
     profs: pd.DataFrame, params: dict, pcols: dict
 ) -> pd.DataFrame:
-    """Compress bootstrap profiles by discretizing time and then quantiling."""
+    """Reduce bootstrap profile draws to quantile envelopes over discretised time.
+
+    Raw bootstrap output contains one row per draw × region × time step,
+    which is large.  This node compresses it by:
+
+    1. Discretising the within-window time axis to a coarser frequency using
+       ``AdaptiveTimeGrouper``, so that all time steps within a discretisation
+       bin are aggregated.
+    2. Computing the ``NonzeroGroupedSummarizer`` quantiles across bootstrap
+       draws for each (region, time-bin) combination, accounting for draws
+       where the region had zero contributing dwells.
+
+    The result is a compact representation of the load profile distribution
+    (e.g. median, 5th, 95th percentile) suitable for storage and plotting.
+
+    Args:
+        profs: Bootstrap profile DataFrame with columns for region, time,
+            bootstrap ID, and profile values.
+        params: Pipeline parameters. Expected keys:
+
+            - ``time_col`` (str): Within-window time column.
+            - ``discrete_freq`` (str): Coarsened time-bin frequency string.
+            - ``slice_freq`` (str): Original window frequency string (defines
+              the time axis bounds).
+            - ``bootstrap_id_col`` (str): Column holding the bootstrap draw ID.
+            - ``quantiles`` (list[float]): Quantile levels to compute.
+
+        pcols: Shared column-name dictionary. Expected keys:
+
+            - ``timezone_col`` (str): Time zone column used by
+              ``AdaptiveTimeGrouper``.
+            - ``group_cols`` (list[str]): Region grouping columns.
+            - ``profile_cols`` (dict): Maps profile-type keys to value column
+              names to quantile.
+
+    Returns:
+        A DataFrame indexed by (region, time-bin) with quantile columns for
+        each profile type.
+    """
     tcol = params["time_col"]
     grouper = AdaptiveTimeGrouper(
         time_col=tcol,
@@ -976,7 +1746,40 @@ def compress_bootstrap_profiles(
 def compress_bootstrap_summaries(
     summs: pd.DataFrame, params: dict, pcols: dict
 ) -> pd.DataFrame:
-    """Compress bootstrap profiles by discretizing time and then quantiling."""
+    """Reduce per-bootstrap scalar summaries to quantiles and means by region.
+
+    Each bootstrap draw produces scalar summary statistics per region (total
+    energy, peak power, utilisation).  This node compresses those draws to a
+    compact set of distributional statistics — quantiles via
+    ``NonzeroGroupedSummarizer`` and means — so that downstream analysis can
+    reason about the uncertainty across bootstrap draws without storing all
+    raw draws.
+
+    Args:
+        summs: Bootstrap summary DataFrame with columns for region, bootstrap
+            ID, and scalar summary values (cumulative energy, peak power,
+            utilisation).
+        params: Pipeline parameters. Expected keys:
+
+            - ``bootstrap_id_col`` (str): Column holding the bootstrap draw
+              ID, used to determine ``n_bootstraps``.
+            - ``quantiles`` (list[float]): Quantile levels to compute.
+
+        pcols: Shared column-name dictionary. Expected keys:
+
+            - ``group_cols`` (list[str]): Region grouping columns.
+            - ``cum_cols`` (dict): Maps profile-type keys to cumulative-energy
+              column names.
+            - ``peak_cols`` (dict): Maps profile-type keys to peak-power
+              column names.
+            - ``util_cols`` (dict): Maps profile-type keys to utilisation
+              column names.
+
+    Returns:
+        A DataFrame indexed by region with quantile columns (from
+        ``NonzeroGroupedSummarizer``) and mean columns (suffixed ``_mean``)
+        for each summary statistic.
+    """
     n_bootstraps = summs[params["bootstrap_id_col"]].nunique()
     summs["possible_count"] = n_bootstraps
 
