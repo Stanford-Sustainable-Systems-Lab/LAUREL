@@ -1,7 +1,7 @@
 """Kedro pipeline nodes for the ``build_runners`` pipeline (scenario configuration generation).
 
 Generates the per-scenario configuration files (YAML partitions) that drive
-HPC batch execution of the 512 States-of-the-World (SoW) array on the
+HPC batch execution of the States-of-the-World (SoW) array on the
 Stanford Sherlock cluster.  Each generated partition encodes the full
 parameter override set for one scenario run of the ``electrify_trips`` and
 ``evaluate_impacts`` pipelines.
