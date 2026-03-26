@@ -1,6 +1,36 @@
-"""
-This is a boilerplate pipeline 'evaluate_impacts'
-generated using Kedro 0.19.1
+"""Kedro pipeline definition for the ``evaluate_impacts`` pipeline.
+
+Wires the nodes from :mod:`.nodes` into a single ``Pipeline`` object.
+For full documentation of each node's inputs, outputs, and algorithm,
+see :mod:`.nodes`.
+
+Sub-pipelines / tags
+--------------------
+- **scenario_run / read** — collates per-scenario partitions and loads
+  the ``DwellSet`` and vehicle table into memory.
+- **report_vehicles** — summarises per-vehicle charging outcomes
+  (delays, failures) and writes results to a scenario partition.
+- **scenario_run** (dwell_pipe_pre_prob) — applies accumulated delays,
+  assigns substation/county region metadata, and filters dwells before
+  probability computation.
+- **scenario_run** (prob_pipe) — estimates expected electrified dwell
+  counts per TAZ by fusing adoption totals with observed dwell rates via
+  logistic-regression-inspired class probabilities.
+- **scenario_run** (dwell_pipe_post_prob) — filters to non-zero-charge
+  dwells and attaches class probabilities.
+- **scenario_run / manage_charging** (event_pipe) — converts dwells to
+  charging events, localises timestamps to hex-level time zones, and
+  slices events into a time-ordered profile grid.
+- **report_profiles** — runs two-stage bootstrap sampling per substation
+  (and optionally per county), compresses results to quantiles and scalar
+  summaries, and writes partitioned outputs to ``data/07_model_output/``.
+
+To visualise the node graph interactively, run::
+
+    kedro viz run
+
+then open http://localhost:4141 in a browser and select ``evaluate_impacts``
+from the pipeline dropdown.
 """
 
 from kedro.pipeline import Node, Pipeline

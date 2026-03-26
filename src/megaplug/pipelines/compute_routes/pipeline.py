@@ -1,6 +1,27 @@
-"""
-This is a boilerplate pipeline 'compute_routes'
-generated using Kedro 0.19.3
+"""Kedro pipeline definition for the ``compute_routes`` pipeline.
+
+Wires the nodes from :mod:`.nodes` into a single ``Pipeline`` object.
+For full documentation of each node's inputs, outputs, and algorithm,
+see :mod:`.nodes`.
+
+Sub-pipelines / tags
+--------------------
+- **import** — imports the OSM road network into the GraphHopper Docker
+  container (run once; reuses the pre-built graph on subsequent runs).
+- **pre_routing** — filters short trips, converts H3 hex origins/destinations
+  to point geometries, and re-partitions for checkpointing.
+- **routing** — starts a Dask cluster and the GraphHopper server, computes
+  shortest-path routes for all trips, then tears both down.
+- **insert_optional_stops** — spatially joins truck-stop candidates onto
+  routes, projects stop positions along each route, splits trips at stops,
+  and concatenates the result with the original trips.
+
+To visualise the node graph interactively, run::
+
+    kedro viz run
+
+then open http://localhost:4141 in a browser and select ``compute_routes``
+from the pipeline dropdown.
 """
 
 from kedro.pipeline import Node, Pipeline

@@ -1,3 +1,26 @@
+"""Kedro pipeline definition for the ``describe_dwells`` pipeline.
+
+Wires the nodes from :mod:`.nodes` into a single ``Pipeline`` object.
+For full documentation of each node's inputs, outputs, and algorithm,
+see :mod:`.nodes`.
+
+Sub-pipelines / tags
+--------------------
+- **format_trips** — parses timestamps, converts H3 hex strings, and
+  computes derived trip columns from the raw Navistar telematics export.
+- **create_dwells / create_dwells_optional_stops** — converts the trip
+  DataFrame to a ``DwellSet``; coalesces circle-trip interruptions; marks
+  FMCSA driver-shift boundaries; computes rolling dwell ratios; and joins
+  freight-activity-class labels from ``describe_locations``.
+
+To visualise the node graph interactively, run::
+
+    kedro viz run
+
+then open http://localhost:4141 in a browser and select ``describe_dwells``
+from the pipeline dropdown.
+"""
+
 from kedro.pipeline import Node, Pipeline  # noqa
 
 from megaplug.models.dwell_sets import save_dwell_set

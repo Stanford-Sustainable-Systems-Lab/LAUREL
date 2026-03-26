@@ -1,6 +1,20 @@
-"""
-This is a boilerplate pipeline 'build_runners'
-generated using Kedro 0.18.13
+"""Kedro pipeline definition for the ``build_runners`` pipeline.
+
+Wires the nodes from :mod:`.nodes` into a single ``Pipeline`` object.
+For full documentation of each node's inputs, outputs, and algorithm,
+see :mod:`.nodes`.
+
+Sub-pipelines / tags
+--------------------
+- **build_runners** — generates per-scenario YAML configuration
+  partitions and the corresponding SLURM batch script for HPC execution.
+
+To visualise the node graph interactively, run::
+
+    kedro viz run
+
+then open http://localhost:4141 in a browser and select ``build_runners``
+from the pipeline dropdown.
 """
 
 from kedro.pipeline import Node, Pipeline

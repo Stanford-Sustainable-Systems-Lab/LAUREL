@@ -1,6 +1,32 @@
-"""
-This is a boilerplate pipeline 'describe_locations'
-generated using Kedro 0.19.3
+"""Kedro pipeline definition for the ``describe_locations`` pipeline.
+
+Wires the nodes from :mod:`.nodes` into a single ``Pipeline`` object.
+For full documentation of each node's inputs, outputs, and algorithm,
+see :mod:`.nodes`.
+
+Sub-pipelines / tags
+--------------------
+- **california_substations** — aggregates PG&E ICA transformer banks to
+  substation level and builds characteristic baseload profiles.
+- **continental_substations** — formats HIFLD point substations and fills
+  territory gaps with Voronoi polygons.
+- **format_states / format_highways / format_urban_areas** — standardise
+  and buffer the state, highway, and urban-area vector layers.
+- **polys_to_hexes** — hexifies states, highways, urban areas, and
+  substation territories to H3 resolution-8 grids (one namespaced sub-
+  pipeline per layer).
+- **extra_estabs** — extracts supplementary establishment records from
+  Jason's Law data and OpenStreetMap (truck stops, warehouses).
+- **establishments** — merges Data Axle tables, reassigns HQ NAICS codes,
+  collapses to leaf classes, pivots to a per-hexagon employment matrix,
+  and assigns freight-activity classes via K-Means clustering.
+
+To visualise the node graph interactively, run::
+
+    kedro viz run
+
+then open http://localhost:4141 in a browser and select ``describe_locations``
+from the pipeline dropdown.
 """
 
 from kedro.pipeline import Node, Pipeline

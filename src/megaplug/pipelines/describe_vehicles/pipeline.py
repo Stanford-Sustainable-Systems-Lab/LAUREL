@@ -1,6 +1,23 @@
-"""
-This is a boilerplate pipeline 'describe_vehicles'
-generated using Kedro 0.19.3
+"""Kedro pipeline definition for the ``describe_vehicles`` pipeline.
+
+Wires the nodes from :mod:`.nodes` into a single ``Pipeline`` object.
+For full documentation of each node's inputs, outputs, and algorithm,
+see :mod:`.nodes`.
+
+Sub-pipelines / tags
+--------------------
+- **prep_spatial_dwells** — adds H3-centroid geometries to the ``DwellSet``
+  and re-partitions it for on-disk checkpointing.
+- **describe_vehs** — extracts vehicle-level attributes; computes
+  time-weighted geographic centers, operating radii, observation frames,
+  and primary operating-distance class for each vehicle.
+
+To visualise the node graph interactively, run::
+
+    kedro viz run
+
+then open http://localhost:4141 in a browser and select ``describe_vehicles``
+from the pipeline dropdown.
 """
 
 from kedro.pipeline import Node, Pipeline

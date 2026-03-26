@@ -1,6 +1,24 @@
-"""
-This is a boilerplate pipeline 'electrify_trips'
-generated using Kedro 0.19.1
+"""Kedro pipeline definition for the ``electrify_trips`` pipeline.
+
+Wires the nodes from :mod:`.nodes` into a single ``Pipeline`` object.
+For full documentation of each node's inputs, outputs, and algorithm,
+see :mod:`.nodes`.
+
+Sub-pipelines / tags
+--------------------
+- **scenario_run / choose_charging** — the single ``charge_pipe`` that
+  runs the full electrification simulation for one State of the World:
+  filters vehicles, assigns battery ranges, calculates energy requirements,
+  marks critical days, and runs the utility-maximisation charging-choice
+  algorithm.  Outputs are written to a scenario-keyed partition in
+  ``data/07_model_output/``.
+
+To visualise the node graph interactively, run::
+
+    kedro viz run
+
+then open http://localhost:4141 in a browser and select ``electrify_trips``
+from the pipeline dropdown.
 """
 
 from kedro.pipeline import Node, Pipeline

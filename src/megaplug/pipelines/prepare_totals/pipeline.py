@@ -1,6 +1,27 @@
-"""
-This is a boilerplate pipeline 'prepare_totals'
-generated using Kedro 0.19.11
+"""Kedro pipeline definition for the ``prepare_totals`` pipeline.
+
+Wires the nodes from :mod:`.nodes` into a single ``Pipeline`` object.
+For full documentation of each node's inputs, outputs, and algorithm,
+see :mod:`.nodes`.
+
+Sub-pipelines / tags
+--------------------
+- **vius_pipe** — filters and aggregates VIUS microdata into a
+  disaggregation crosswalk ``P(region, op_dist | weight_class)``.
+- **adopt_pipe** — aggregates NREL Ledna adoption forecasts to the
+  required group level.
+- **joint_pipe** — merges the VIUS crosswalk onto the adoption totals
+  to produce stratum-level vehicle counts (``adoption_scenarios_no_mandates``).
+- **mandate_pipe** — expands ACF mandate schedules and appends a
+  mandate-adjusted copy of the adoption projections
+  (``adoption_scenarios``).
+
+To visualise the node graph interactively, run::
+
+    kedro viz run
+
+then open http://localhost:4141 in a browser and select ``prepare_totals``
+from the pipeline dropdown.
 """
 
 from kedro.pipeline import Node, Pipeline

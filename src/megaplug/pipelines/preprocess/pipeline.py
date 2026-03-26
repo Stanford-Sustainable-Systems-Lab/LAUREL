@@ -1,6 +1,20 @@
-"""
-This is a boilerplate pipeline 'preprocess'
-generated using Kedro 0.19.1
+"""Kedro pipeline definition for the ``preprocess`` pipeline.
+
+Wires the nodes from :mod:`.nodes` into a single ``Pipeline`` object.
+For full documentation of each node's inputs, outputs, and algorithm,
+see :mod:`.nodes`.
+
+Sub-pipelines / tags
+--------------------
+- **vius_scaling** — builds survey-weight-adjusted HDT fleet totals from
+  VIUS microdata for use as scaling denominators.
+
+To visualise the node graph interactively, run::
+
+    kedro viz run
+
+then open http://localhost:4141 in a browser and select ``preprocess``
+from the pipeline dropdown.
 """
 
 from kedro.pipeline import Node, Pipeline
