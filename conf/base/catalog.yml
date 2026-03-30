@@ -469,9 +469,7 @@ vehicle_trajectory:
   filepath: data/08_reporting/vehicle_trajectory.gpkg
   save_args:
     index: True
-    layer:
-      dwells: dwells
-      trips: trips
+    layer: trips
     
 navistar_by_state:
   type: megaplug.datasets.geopackage.GeoPackageDataset
@@ -561,109 +559,121 @@ vehicle_peak_load_by_substation_diff:
 
 substation_overcapacity_by_scenario:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/substation_overcapacity_by_scenario.png
+  filepath: data/08_reporting/substation_overcapacity_by_scenario.pdf
   save_args:
     bbox_inches: tight
 
 profiles_by_location_and_segment_no_map:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/profiles_by_location_and_segment_no_map.png
+  filepath: data/08_reporting/profiles_by_location_and_segment_no_map.pdf
   save_args:
     bbox_inches: tight
 
 profile_examples_with_uncertainty:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/profile_examples_with_uncertainty.png
+  filepath: data/08_reporting/profile_examples_with_uncertainty.pdf
   save_args:
     bbox_inches: tight
 
 profile_examples_with_capacity:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/profile_examples_with_capacity.png
+  filepath: data/08_reporting/profile_examples_with_capacity.pdf
   save_args:
     bbox_inches: tight
 
 profiles_by_sensitivity:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/profiles_by_sensitivity.png
+  filepath: data/08_reporting/profiles_by_sensitivity.pdf
   save_args:
     bbox_inches: tight
 
 feasibility_by_range_and_segment:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/feasibility_by_range_and_segment.png
+  filepath: data/08_reporting/feasibility_by_range_and_segment.pdf
   save_args:
     bbox_inches: tight
 
 substation_strategic_uncertainty:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/substation_strategic_uncertainty.png
+  filepath: data/08_reporting/substation_strategic_uncertainty.pdf
   save_args:
     bbox_inches: tight
 
 sensitivity_single_substation:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/sensitivity_single_substation.png
+  filepath: data/08_reporting/sensitivity_single_substation.pdf
   save_args:
     bbox_inches: tight
 
 sensitivity_sum_of_capacity_consumed:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/sensitivity_sum_of_capacity_consumed.png
+  filepath: data/08_reporting/sensitivity_sum_of_capacity_consumed.pdf
   save_args:
     bbox_inches: tight
 
 primary_operating_distance_distribution:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/primary_operating_distance_distribution.png
+  filepath: data/08_reporting/primary_operating_distance_distribution.pdf
   save_args:
     bbox_inches: tight
 
 adoption_observed_figure:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/adoption_observed.png
+  filepath: data/08_reporting/adoption_observed.pdf
   save_args:
     bbox_inches: tight
 
 adoption_copula_figure:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/adoption_copula.png
+  filepath: data/08_reporting/adoption_copula.pdf
   save_args:
     bbox_inches: tight
 
 peak_load_substation_distributions_across_scenarios:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/peak_load_substation_distributions_across_scenarios.png
+  filepath: data/08_reporting/peak_load_substation_distributions_across_scenarios.pdf
   save_args:
     bbox_inches: tight
 
 energy_utilization_substation_distributions_across_scenarios:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/energy_utilization_substation_distributions_across_scenarios.png
+  filepath: data/08_reporting/energy_utilization_substation_distributions_across_scenarios.pdf
   save_args:
     bbox_inches: tight
 
 example_substation_stacked_profiles:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/example_substation_stacked_profiles.png
+  filepath: data/08_reporting/example_substation_stacked_profiles.pdf
+  save_args:
+    bbox_inches: tight
+
+example_substation_charger_profiles:
+  type: matplotlib.MatplotlibDataset
+  filepath: data/08_reporting/example_substation_charger_profiles.pdf
   save_args:
     bbox_inches: tight
 
 factor_prioritization:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/factor_prioritization.png
+  filepath: data/08_reporting/factor_prioritization.pdf
   save_args:
     bbox_inches: tight
 
 single_factor_minimum:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/single_factor_minimum.png
+  filepath: data/08_reporting/single_factor_minimum.pdf
   save_args:
     bbox_inches: tight
 
 robust_upgrade_combos:
   type: matplotlib.MatplotlibDataset
-  filepath: data/08_reporting/robust_upgrade_combos.png
+  filepath: data/08_reporting/robust_upgrade_combos.pdf
+  save_args:
+    bbox_inches: tight
+
+validation_comparable_5pm:
+  type: matplotlib.MatplotlibDataset
+  filepath: data/08_reporting/validation_comparable_5pm.pdf
   save_args:
     bbox_inches: tight
 
