@@ -677,6 +677,18 @@ validation_comparable_5pm:
   save_args:
     bbox_inches: tight
 
+trip_distance_distribution:
+  type: matplotlib.MatplotlibDataset
+  filepath: data/08_reporting/trip_distance_distribution.pdf
+  save_args:
+    bbox_inches: tight
+
+substation_area_distribution:
+  type: matplotlib.MatplotlibDataset
+  filepath: data/08_reporting/substation_area_distribution.pdf
+  save_args:
+    bbox_inches: tight
+
 ### Scenario configurations
 scenario_configs:
   type: partitions.PartitionedDataset
