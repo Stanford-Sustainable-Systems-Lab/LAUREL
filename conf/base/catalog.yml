@@ -135,6 +135,10 @@ establishments_formatted:
   load_args:
     calculate_divisions: True
 
+estabs_pivoted:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/estabs_pivoted.feather
+
 trips_formatted:
   type: dask.ParquetDataset
   filepath: data/02_intermediate/trips_formatted/
