@@ -501,14 +501,14 @@ min_adoption_by_substation_points:
 
 vehicle_peak_load_by_substation_and_scenario_partition:
   type: partitions.PartitionedDataset
-  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/substation_scenario_peaks/"
+  path: "${runtime_params:partition_data_dir, 'data/08_reporting'}/substation_scenario_peaks/"
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
 vehicle_peak_load_by_substation_partition:
   type: partitions.PartitionedDataset
-  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/vehicle_peak_load/substation/"
+  path: "${runtime_params:partition_data_dir, 'data/08_reporting'}/vehicle_peak_load/substation/"
   dataset:
     type: megaplug.datasets.geopackage.GeoPackageDataset
     save_args:
@@ -518,7 +518,7 @@ vehicle_peak_load_by_substation_partition:
 
 vehicle_peak_load_by_substation_points_partition:
   type: partitions.PartitionedDataset
-  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/vehicle_peak_load/substation/"
+  path: "${runtime_params:partition_data_dir, 'data/08_reporting'}/vehicle_peak_load/substation/"
   dataset:
     type: megaplug.datasets.geopackage.GeoPackageDataset
     save_args:
@@ -528,7 +528,7 @@ vehicle_peak_load_by_substation_points_partition:
 
 substation_rating_overload_partition:
   type: partitions.PartitionedDataset
-  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/substation_rating_overload/"
+  path: "${runtime_params:partition_data_dir, 'data/08_reporting'}/substation_rating_overload/"
   dataset:
     type: megaplug.datasets.geopackage.GeoPackageDataset
     save_args:
