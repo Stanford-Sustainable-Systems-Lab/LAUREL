@@ -499,7 +499,9 @@ class NonzeroGroupedSummarizer:
         ]
         results = np.empty((len(group_keys), len(combined_columns)), dtype=np.float64)
 
-        for row_idx, group_key in enumerate(group_keys):
+        for row_idx, group_key in enumerate(
+            tqdm(group_keys, desc="Summarize from accumulator")
+        ):
             col_lists = group_values[group_key]
             q_cursor = 0
             for col_idx in range(len(value_cols)):
