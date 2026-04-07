@@ -33,6 +33,7 @@ dependencies = [
     "osmium<4.1",
     "setuptools<81",
     "prim>=1.0.0",
+    "scikit-fda>=0.10.1",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"

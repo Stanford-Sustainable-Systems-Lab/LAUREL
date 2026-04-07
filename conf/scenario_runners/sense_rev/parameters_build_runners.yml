@@ -1,0 +1,135 @@
+# This is a boilerplate parameters config generated for pipeline 'build_runners'
+# using Kedro 0.19.5.
+#
+# Documentation for this file format can be found in "Parameters"
+# Link: https://docs.kedro.org/en/0.19.5/configuration/parameters.html
+
+slurm_command: sbatch # Valid values are "sbatch" and "salloc"
+
+slurm_resources:
+  partition: serc
+  ntasks: 2 # I believe that this is what we need for SequentialRunner, while ParallelRunner needs n_examples + 1
+  ntasks-per-node: 2 # Keeps all of the tasks and CPUs on the same node
+  cpus-per-task: 2 # Using multiple CPUs takes a lot of effort (e.g. Dask cluster)
+  mem: 64GB
+  gpus: 0
+  time: 0-01:00
+  array: 0-511
+
+cmd_line_calls:
+  prefix: uv run
+  kedro:
+    tags: scenario_run
+    params: partition_data_dir=$SCRATCH/megaplug
+
+scenario_params:
+  builder: SenseScenarioBuilder
+  display_name: sense_rev
+  sample_size: 512 # Sobol sequences work best on powers of 2
+  variables:
+    adopt_0_99_miles:
+      dist: Beta
+      params: # Order matters in parameters, since they are passed as args to the constructor
+       alpha: 0.62385
+       beta: 0.931733
+       a: 0
+       b: 0.286857
+    adopt_100_249_miles:
+      dist: Beta
+      params:
+       alpha: 0.486616
+       beta: 0.956853
+       a: 0
+       b: 0.291189
+    adopt_250_499_miles:
+      dist: Beta
+      params:
+       alpha: 0.541241
+       beta: 1.1166
+       a: 0
+       b: 0.203155
+    adopt_500plus_miles:
+      dist: Beta
+      params:
+       alpha: 0.318571
+       beta: 0.906682
+       a: 0
+       b: 0.118803
+    consump_rate_kwh_per_mi:
+      dist: Uniform
+      params:
+        a: 1.4
+        b: 2.0
+    soc_buffer_low:
+      dist: Uniform
+      params:
+        a: 0.1
+        b: 0.50
+    charge_speed_kw_enroute:
+      dist: Uniform
+      params:
+        a: 40
+        b: 350
+    charge_speed_kw_depot:
+      dist: Uniform
+      params:
+        a: 40
+        b: 350
+    charge_speed_kw_truck_stop:
+      dist: Uniform
+      params:
+        a: 350
+        b: 1500
+  copulas:
+    - NormalCopula:
+        correlation:
+          adopt_0_99_miles:
+          adopt_100_249_miles:
+            adopt_0_99_miles: 0.626298770593886
+          adopt_250_499_miles:
+            adopt_0_99_miles: 0.5482505821167659
+            adopt_100_249_miles: 0.9878290798763232
+          adopt_500plus_miles:
+            adopt_0_99_miles: 0.4964315653220693
+            adopt_100_249_miles: 0.969059375949969
+            adopt_250_499_miles: 0.9916955088479736
+
+  parameter_read_keys:
+    adopt_0_99_miles:
+      - compute_adoption_totals
+      - adoption_fracs
+      - values
+      - 0-99 Miles
+    adopt_100_249_miles:
+      - compute_adoption_totals
+      - adoption_fracs
+      - values
+      - 100-249 Miles
+    adopt_250_499_miles:
+      - compute_adoption_totals
+      - adoption_fracs
+      - values
+      - 250-499 Miles
+    adopt_500plus_miles:
+      - compute_adoption_totals
+      - adoption_fracs
+      - values
+      - 500+ Miles
+    consump_rate_kwh_per_mi:
+      - vehicles
+      - consump_rate_kwh_per_mi
+    soc_buffer_low:
+      - vehicles
+      - soc_buffer_low
+    charge_speed_kw_enroute:
+      - charging_modes
+      - enroute
+      - max_power_kw
+    charge_speed_kw_depot:
+      - charging_modes
+      - depot
+      - max_power_kw
+    charge_speed_kw_truck_stop:
+      - charging_modes
+      - truck_stop
+      - max_power_kw
