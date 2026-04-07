@@ -1,5 +1,6 @@
 import re
 from copy import deepcopy
+from itertools import product
 from pathlib import Path
 from typing import Self
 
@@ -9,9 +10,11 @@ from megaplug.scenarios.build import ScenarioBuilder
 from megaplug.scenarios.read import ScenarioReader
 from megaplug.utils.sensitivity import correl_dict_to_matrix
 
+CATEGORICAL_DIST_NAME = "Categorical"
+
 
 class SenseScenarioBuilder(ScenarioBuilder):
-    """Build scenarios for the sensitivity truck model."""
+    """Build scenarios for the sensitivity truck model with discrete variables."""
 
     partition_level_names = (
         "run_name",
@@ -21,8 +24,22 @@ class SenseScenarioBuilder(ScenarioBuilder):
     def _build_param_dicts(self) -> tuple[list[Path], list[dict]]:
         paths, scens = [], []
 
+        vars = self.scen_params["variables"]
+        params_categ = {
+            k: v for k, v in vars.items() if v["dist"] == CATEGORICAL_DIST_NAME
+        }
+        params_sampl = {k: v for k, v in vars.items() if k not in params_categ}
+
+        # Build categorical enumeration
+        categ_names = list(params_categ.keys())
+        categ_values = [v["params"] for v in params_categ.values()]
+        categ_combos = [
+            dict(zip(categ_names, combo)) for combo in product(*categ_values)
+        ]
+
+        # Build joint sampling distribution
         joint_dist = self.build_input_dist(
-            vars=self.scen_params["variables"],
+            vars=params_sampl,
             copulas=self.scen_params.get("copulas", None),
         )
         sequence = ot.SobolSequence(joint_dist.getDimension())
@@ -31,43 +48,33 @@ class SenseScenarioBuilder(ScenarioBuilder):
         ]  # Sobol' sequences work best on powers of 2
         experiment = ot.LowDiscrepancyExperiment(sequence, joint_dist, sample_size)
         samples = experiment.generate().asDataFrame()
-        samples.columns = list(self.scen_params["variables"].keys())
+        samples.columns = list(params_sampl.keys())
 
-        for _, row in samples.iterrows():
-            pars = row.to_dict()
+        # Get parameter dicts to override (must override from top-level key)
+        if not all("path" in d for d in vars.values()):
+            raise ValueError(
+                f"{str(self.__class__)} must have paths for each variable."
+            )
+        top_keys = set([d["path"][0] for d in vars.values()])
 
-            cur_adopts = deepcopy(self.params["compute_adoption_totals"])
-            cur_adopts["adoption_fracs"]["values"]["0-99 Miles"] = pars[
-                "adopt_0_99_miles"
-            ]
-            cur_adopts["adoption_fracs"]["values"]["100-249 Miles"] = pars[
-                "adopt_100_249_miles"
-            ]
-            cur_adopts["adoption_fracs"]["values"]["250-499 Miles"] = pars[
-                "adopt_250_499_miles"
-            ]
-            cur_adopts["adoption_fracs"]["values"]["500+ Miles"] = pars[
-                "adopt_500plus_miles"
-            ]
+        for pars_categ in categ_combos:
+            for _, row in samples.iterrows():
+                pars_sampl = row.to_dict()
+                pars = pars_categ | pars_sampl
 
-            cur_vehs = deepcopy(self.params["vehicles"])
-            cur_vehs["consump_rate_kwh_per_mi"] = pars["consump_rate_kwh_per_mi"]
-            cur_vehs["soc_buffer_low"] = pars["soc_buffer_low"]
+                scn = {k: deepcopy(self.params[k]) for k in top_keys}
+                for k, v in pars.items():
+                    self._set_param(scn, vars[k]["path"], v)
 
-            cur_modes = deepcopy(self.params["charging_modes"])
-            cur_modes["enroute"]["max_power_kw"] = pars["charge_speed_kw_enroute"]
-            cur_modes["depot"]["max_power_kw"] = pars["charge_speed_kw_depot"]
-            cur_modes["truck_stop"]["max_power_kw"] = pars["charge_speed_kw_truck_stop"]
-
-            scn = {
-                "compute_adoption_totals": cur_adopts,
-                "vehicles": cur_vehs,
-                "charging_modes": cur_modes,
-            }
-
-            paths.append(Path(self.display_name))
-            scens.append(scn)
+                paths.append(Path(self.display_name))
+                scens.append(scn)
         return (paths, scens)
+
+    @staticmethod
+    def _set_param(d: dict, keys: list, v: object) -> None:
+        for key in keys[:-1]:
+            d = d[key]
+        d[keys[-1]] = v
 
     @staticmethod
     def build_input_dist(
@@ -120,7 +127,7 @@ class SenseScenarioBuilder(ScenarioBuilder):
 
 
 class SenseScenarioReader(ScenarioReader):
-    """Read scenarios for the sensitivity truck model."""
+    """Read scenarios for the sensitivity truck model with discrete variables."""
 
     builder = SenseScenarioBuilder
     metadata_level_names = ("task_id",)
