@@ -602,7 +602,7 @@ def sample_profiles(
           :func:`calculate_peak_units`.
     """
     if sample_self or sample_class:
-        np.random.seed(seed=seed)
+        np.random.seed(seed=seed)  # Note: This seed only applies outside of Numba
 
         # Integerize the number of visits expected by sampling from a Bernoulli (E[N] = p)
         m_hex_trunc = np.trunc(m_hex_expected)
