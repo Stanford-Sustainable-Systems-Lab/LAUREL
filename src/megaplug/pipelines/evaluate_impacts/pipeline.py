@@ -403,6 +403,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "bootstrap_profiles",
                     "bootstrap_summaries",
                     "sampling_source",
+                    "bootstrap_profiles_debug_partition",
                 ],
                 name="sample_profiles_node",
             ),

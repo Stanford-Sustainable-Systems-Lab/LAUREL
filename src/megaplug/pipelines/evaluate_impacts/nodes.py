@@ -1222,7 +1222,7 @@ def sample_profiles_node(
     params: dict,
     pcols: dict,
     client: Client,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> tuple[dict, pd.DataFrame, pd.DataFrame, dict]:
     """Assemble per-region load profiles via inverse-propensity-weighted bootstrap sampling.
 
     This is the core computational node of Module 6.  For each bootstrap draw
@@ -1253,7 +1253,8 @@ def sample_profiles_node(
        arrays are scattered with ``broadcast=True`` to avoid redundant
        serialisation.
 
-    5. Concatenates bootstrap results, restores original region names, and
+    5. Reduces each bootstrap profile DataFrame to one scalar per (region,
+       time_bin) on the fly and accumulates into a compact dict, then
        returns confidence diagnostics (observed vs. expected hex dwell counts).
 
     Args:
@@ -1300,14 +1301,23 @@ def sample_profiles_node(
             bootstrap draws when ``n_bootstraps > 1``.
 
     Returns:
-        A three-tuple of:
+        A four-tuple of:
 
-        - **boot_profs** (``pd.DataFrame``): Per-bootstrap, per-region,
-          per-time-step load profile profiles.
+        - **boot_profs_accum** (``dict``): Compact accumulator mapping
+          ``(region, time_bin)`` tuples to a list-of-lists of observed
+          non-zero profile values across bootstrap draws, one inner list
+          per profile column.  Passed directly to
+          :func:`compress_bootstrap_profiles`.
         - **boot_summs** (``pd.DataFrame``): Per-bootstrap, per-region
           scalar summaries (cumulative energy, peak power).
         - **hex_confidence** (``pd.DataFrame``): Per-hexagon observed and
           expected dwell counts for diagnostic use.
+        - **debug_partition** (``dict``): Empty dict when
+          ``params["save_bootstrap_profiles"]`` is ``False`` (production).
+          When ``True``, maps zero-padded bootstrap ID strings to the
+          full per-bootstrap profile DataFrame captured before accumulation,
+          for writing to the ``bootstrap_profiles_debug_partition`` catalog
+          entry.
 
     Raises:
         ValueError: If ``pcols["group_cols"]`` has more than one element, or
@@ -1434,13 +1444,58 @@ def sample_profiles_node(
             )
         kws.update({diff_col: events[diff_col].values})
 
+    # Pre-compute rename lookups so they are available inside _accumulate.
+    # profile_cols renames diff columns (e.g. power_kw_diff → power_kw).
+    loc_counts_names = locs_counts.loc[:, [reg_col_compact, reg_col]].drop_duplicates()
+    reg_name_restorer = loc_counts_names.set_index(reg_col_compact)[reg_col]
+    prof_renamer = {d: pcols["profile_cols"][k] for k, d in pcols["diff_cols"].items()}
+    value_cols = list(pcols["profile_cols"].values())
+    # summ_cols defines the accumulator group key: (region, time_bin).
+    # No AdaptiveTimeGrouper needed — discretize_sparse_profiles already aligns
+    # timestamps to discrete_freq boundaries (one row per group guaranteed).
+    summ_cols = pcols["group_cols"] + [tcol]
+
     logger.info("Perform bootstrap sampling")
     master_seed = params.get("master_seed", None)
-    boot_profs = {}
     boot_summs = {}
+    boot_profs_accum: dict = {}
+    debug_partition: dict = {}
+    save_debug = params.get("save_bootstrap_profiles", False)
+
+    def _accumulate(prof: pd.DataFrame, summ: pd.DataFrame, boot_id: int) -> None:
+        """Rename columns, optionally capture for debug, then reduce to accumulator.
+
+        Applies column renaming and region-label restoration in place, captures
+        the full DataFrame if debug output is enabled, then reduces to the
+        accumulator using ``DataFrame.to_dict("index")``.  This produces a
+        single C-level ``{group_key: {col: val}}`` mapping, avoiding the
+        per-element boxing overhead of pandas Series iteration.
+        ``discretize_sparse_profiles`` guarantees one row per (region,
+        time_bin) per bootstrap, so no further groupby is needed.
+
+        Args:
+            prof: Raw profile DataFrame from ``sample_profiles``, using compact
+                integer region codes and diff column names.
+            summ: Raw summary DataFrame from ``sample_profiles``.
+            boot_id: Zero-based bootstrap draw index, used as the debug
+                partition key.
+        """
+        prof = prof.rename(columns=prof_renamer)
+        prof[reg_col] = prof[reg_col_compact].map(reg_name_restorer)
+        prof = prof.drop(columns=[reg_col_compact])
+        if save_debug:
+            debug_partition[str(boot_id).zfill(4)] = prof.reset_index(drop=True)
+        rows_dict = prof.set_index(summ_cols)[value_cols].to_dict("index")
+        for group_key, col_vals in rows_dict.items():
+            if group_key not in boot_profs_accum:
+                boot_profs_accum[group_key] = [[] for _ in value_cols]
+            for col_idx, col in enumerate(value_cols):
+                boot_profs_accum[group_key][col_idx].append(col_vals[col])
+        boot_summs[boot_id] = summ
 
     if n_boots == 1:
-        boot_profs[0], boot_summs[0] = sample_profiles(**kws, seed=master_seed)
+        prof, summ = sample_profiles(**kws, seed=master_seed)
+        _accumulate(prof, summ, boot_id=0)
     elif n_boots > 1:
 
         def _sample_profiles_distrib(kws: dict, boot_id: int):
@@ -1458,37 +1513,29 @@ def sample_profiles_node(
         for boot_id, (future, result) in tqdm(
             enumerate(as_completed(futures, with_results=True)), total=len(futures)
         ):
-            boot_profs[boot_id], boot_summs[boot_id] = result
+            prof, summ = result
+            _accumulate(prof, summ, boot_id)
+            del result
     else:
         raise ValueError("Number of bootstraps must be >= 1.")
 
     del kws, Om_hex, Om_cls, Be, Rho, Cy, Ga
     gc.collect()
 
-    logger.info("Concatenate bootstrap results")
-    idx_cols = [params["bootstrap_id_col"], "index"]
-    boot_profs = pd.concat(boot_profs, names=idx_cols, copy=False)
-    boot_profs = boot_profs.droplevel("index")
-    boot_profs = boot_profs.reset_index()
-
     boot_summs = pd.concat(boot_summs, names=[params["bootstrap_id_col"]], copy=False)
     boot_summs = boot_summs.reset_index()
 
-    # Reset names to originals
-    loc_counts_names = locs_counts.loc[:, [reg_col_compact, reg_col]].drop_duplicates()
-    reg_name_restorer = loc_counts_names.set_index(reg_col_compact)[reg_col]
-
-    renamer = {d: pcols["profile_cols"][k] for k, d in pcols["diff_cols"].items()}
-    boot_profs = boot_profs.rename(columns=renamer)
-    boot_profs[reg_col] = boot_profs[reg_col_compact].map(reg_name_restorer)
-    boot_profs = boot_profs.drop(columns=[reg_col_compact])
-
-    renamer = {}
+    # Restore region names in summaries
+    summ_renamer = {}
     suffs = params["summary_suffixes"]
     ditems = pcols["diff_cols"].items()
-    renamer.update({f"{d}{suffs["cumul"]}": pcols["cum_cols"][k] for k, d in ditems})
-    renamer.update({f"{d}{suffs["peak"]}": pcols["peak_cols"][k] for k, d in ditems})
-    boot_summs = boot_summs.rename(columns=renamer)
+    summ_renamer.update(
+        {f"{d}{suffs["cumul"]}": pcols["cum_cols"][k] for k, d in ditems}
+    )
+    summ_renamer.update(
+        {f"{d}{suffs["peak"]}": pcols["peak_cols"][k] for k, d in ditems}
+    )
+    boot_summs = boot_summs.rename(columns=summ_renamer)
     boot_summs[reg_col] = boot_summs[reg_col_compact].map(reg_name_restorer)
     boot_summs = boot_summs.drop(columns=[reg_col_compact])
 
@@ -1496,7 +1543,7 @@ def sample_profiles_node(
     conf_cols = [pcols["hex_col"], "m_hex_observed", "m_hex_expected"]
     hex_confidence = locs_counts.loc[:, conf_cols]
 
-    return boot_profs, boot_summs, hex_confidence
+    return boot_profs_accum, boot_summs, hex_confidence, debug_partition
 
 
 def build_eval_columns(pcols: dict, group_cols: list) -> dict:
@@ -1670,39 +1717,52 @@ def calc_utilization(summs: pd.DataFrame, params: dict, pcols: dict) -> pd.DataF
 
 
 def compress_bootstrap_profiles(
-    profs: pd.DataFrame, params: dict, pcols: dict
+    profs: pd.DataFrame | dict, params: dict, pcols: dict
 ) -> pd.DataFrame:
     """Reduce bootstrap profile draws to quantile envelopes over discretised time.
 
-    Raw bootstrap output contains one row per draw × region × time step,
-    which is large.  This node compresses it by:
+    Accepts either a full bootstrap profile DataFrame (legacy path) or a
+    compact accumulator dict produced by the memory-efficient path in
+    :func:`sample_profiles_node`.  The two paths share the same output schema.
 
-    1. Discretising the within-window time axis to a coarser frequency using
-       ``AdaptiveTimeGrouper``, so that all time steps within a discretisation
-       bin are aggregated.
-    2. Computing the ``NonzeroGroupedSummarizer`` quantiles across bootstrap
-       draws for each (region, time-bin) combination, accounting for draws
-       where the region had zero contributing dwells.
+    **Accumulator path** (``profs`` is a ``dict``):
+    The accumulator maps ``(region, time_bin)`` tuples to a list-of-lists of
+    observed non-zero profile values.  Because timestamps are already at
+    ``discrete_freq`` resolution (guaranteed by
+    :func:`~megaplug.models.sampling.discretize_sparse_profiles`), no
+    time-bin re-assignment is needed.  ``n_bootstraps`` is read directly from
+    ``params["n_bootstraps"]`` and used as the uniform possible-observation
+    count for zero-padding.
 
-    The result is a compact representation of the load profile distribution
-    (e.g. median, 5th, 95th percentile) suitable for storage and plotting.
+    **DataFrame path** (``profs`` is a ``pd.DataFrame``):
+    Unchanged from the original implementation — uses ``AdaptiveTimeGrouper``
+    to assign time bins, computes per-bin possible-observation counts, and
+    calls :meth:`NonzeroGroupedSummarizer.summarize`.  Retained for backward
+    compatibility and as the fallback when multi-timezone DST correction is
+    required.
 
     Args:
-        profs: Bootstrap profile DataFrame with columns for region, time,
-            bootstrap ID, and profile values.
+        profs: Either:
+
+            - A ``pd.DataFrame`` with columns for region, time, bootstrap ID,
+              and profile values (legacy path).
+            - A ``dict`` mapping ``(region, time_bin)`` group keys to
+              list-of-lists of observed values (accumulator path).
+
         params: Pipeline parameters. Expected keys:
 
             - ``time_col`` (str): Within-window time column.
             - ``discrete_freq`` (str): Coarsened time-bin frequency string.
-            - ``slice_freq`` (str): Original window frequency string (defines
-              the time axis bounds).
-            - ``bootstrap_id_col`` (str): Column holding the bootstrap draw ID.
+            - ``slice_freq`` (str): Original window frequency string.
+            - ``bootstrap_id_col`` (str): Bootstrap draw ID column
+              (DataFrame path only).
+            - ``n_bootstraps`` (int): Total bootstrap count used for
+              zero-padding (accumulator path only).
             - ``quantiles`` (list[float]): Quantile levels to compute.
 
         pcols: Shared column-name dictionary. Expected keys:
 
-            - ``timezone_col`` (str): Time zone column used by
-              ``AdaptiveTimeGrouper``.
+            - ``timezone_col`` (str): Time zone column (DataFrame path only).
             - ``group_cols`` (list[str]): Region grouping columns.
             - ``profile_cols`` (dict): Maps profile-type keys to value column
               names to quantile.
@@ -1711,6 +1771,27 @@ def compress_bootstrap_profiles(
         A DataFrame indexed by (region, time-bin) with quantile columns for
         each profile type.
     """
+    value_cols = list(pcols["profile_cols"].values())
+
+    if isinstance(profs, dict):
+        # --- Accumulator path (memory-efficient) ---
+        # n_bootstraps comes from params (already present in params:sample_profiles).
+        # For the single-timezone (no_time_zone) case, possible_count is uniform
+        # across all groups and equals n_bootstraps.
+        n_bootstraps = params["n_bootstraps"]
+        summ_cols = pcols["group_cols"] + [params["time_col"]]
+        logger.info("Calculate quantiles (accumulator path)")
+        summer = NonzeroGroupedSummarizer(
+            group_cols=summ_cols,
+            quantiles=np.array(params["quantiles"]),
+        )
+        return summer.summarize_from_accumulator(
+            group_values=profs,
+            n_possible=n_bootstraps,
+            value_cols=value_cols,
+        )
+
+    # --- DataFrame path (original behaviour, unchanged) ---
     tcol = params["time_col"]
     grouper = AdaptiveTimeGrouper(
         time_col=tcol,
@@ -1735,12 +1816,11 @@ def compress_bootstrap_profiles(
         group_cols=summ_cols,
         quantiles=np.array(params["quantiles"]),
     )
-    quantiles = summer.summarize(
+    return summer.summarize(
         events=profs,
-        value_cols=list(pcols["profile_cols"].values()),
+        value_cols=value_cols,
         possible_count_col="possible_count",
     )
-    return quantiles
 
 
 def compress_bootstrap_summaries(

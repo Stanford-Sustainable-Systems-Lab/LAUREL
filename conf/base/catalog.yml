@@ -400,6 +400,13 @@ substation.sampling_source_partition:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
+substation.bootstrap_profiles_debug_partition:
+  type: partitions.PartitionedDataset
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/bootstrap_profiles_debug/substation"
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
+
 county.report_by_region_quantiles_partition:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_quantiles/county"
@@ -417,6 +424,13 @@ county.report_by_region_summaries_partition:
 county.sampling_source_partition:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/sampling_source/county"
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: ".feather"
+
+county.bootstrap_profiles_debug_partition:
+  type: partitions.PartitionedDataset
+  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/bootstrap_profiles_debug/county"
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"

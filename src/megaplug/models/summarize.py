@@ -445,6 +445,85 @@ class NonzeroGroupedSummarizer:
         )
         return quantile_df
 
+    def summarize_from_accumulator(
+        self: Self,
+        group_values: dict,
+        n_possible: int,
+        value_cols: list[str],
+    ) -> pd.DataFrame:
+        """Compute zero-padded quantiles from a pre-built streaming accumulator.
+
+        Memory-efficient alternative to :meth:`summarize` for callers that
+        receive observations in bootstrap-major order and reduce each bootstrap
+        to one scalar per group on the fly.  Instead of requiring a full
+        concatenated DataFrame in memory, callers append one observed value per
+        (group, column) per bootstrap to ``group_values`` as data arrive, then
+        call this method once to compute quantiles.
+
+        The zero-padding is implicit: groups absent from a given bootstrap
+        simply have no entry in their list.  :meth:`_calc_sparse_quantiles_core`
+        fills the remaining ``n_possible - n_observed`` slots with zeros, which
+        correctly places non-charging bootstraps at the low end of the quantile
+        distribution.
+
+        Args:
+            group_values: Mapping from group key (scalar or tuple matching
+                :attr:`group_cols`) to a list-of-lists — one inner list per
+                entry in ``value_cols``, containing the observed non-zero scalar
+                values for that (group, column) pair across all bootstraps.
+                Groups absent from all bootstraps need not have an entry; they
+                would produce all-zero quantiles and are omitted from the output.
+            n_possible: Total number of possible observations per group (i.e.
+                ``n_bootstraps``).  Controls the zero-padding count.
+            value_cols: Column names corresponding to the inner lists in
+                ``group_values``, in the same order.
+
+        Returns:
+            DataFrame indexed by the grouping key(s) with columns named
+            ``"{value_col}_{quantile}"`` for each (value_col, quantile)
+            combination — identical schema to :meth:`summarize`.
+
+        Raises:
+            ValueError: If ``group_values`` is empty, if no group columns are
+                provided, or if any group has more observed values than
+                ``n_possible``.
+        """
+        if not group_values:
+            raise ValueError("Cannot process empty accumulator.")
+        if not self.group_cols:
+            raise ValueError("At least one group column is required.")
+
+        group_keys = list(group_values.keys())
+        combined_columns = [
+            f"{str(col)}_{str(q)}" for col in value_cols for q in self.quantiles
+        ]
+        results = np.empty((len(group_keys), len(combined_columns)), dtype=np.float64)
+
+        for row_idx, group_key in enumerate(group_keys):
+            col_lists = group_values[group_key]
+            q_cursor = 0
+            for col_idx in range(len(value_cols)):
+                observed = np.array(col_lists[col_idx], dtype=np.float64)
+                if observed.size > n_possible:
+                    raise ValueError(
+                        "Number of observations exceeds the number of possible observations."
+                    )
+                qtls = self._calc_sparse_quantiles_core(
+                    n_obs=n_possible,
+                    nonzeros=observed,
+                    quantiles=self.quantiles,
+                )
+                results[row_idx, q_cursor : q_cursor + len(self.quantiles)] = qtls
+                q_cursor += len(self.quantiles)
+
+        if len(self.group_cols) == 1:
+            idx = pd.Index(group_keys, name=self.group_cols[0])
+        else:
+            idx = pd.MultiIndex.from_tuples(group_keys, names=self.group_cols)
+
+        results_df = pd.DataFrame(results, index=idx, columns=combined_columns)
+        return results_df
+
     @staticmethod
     @jit
     def _calc_sparse_quantiles_core(
