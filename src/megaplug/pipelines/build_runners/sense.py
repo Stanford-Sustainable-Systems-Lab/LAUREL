@@ -38,17 +38,21 @@ class SenseScenarioBuilder(ScenarioBuilder):
         ]
 
         # Build joint sampling distribution
-        joint_dist = self.build_input_dist(
-            vars=params_sampl,
-            copulas=self.scen_params.get("copulas", None),
-        )
-        sequence = ot.SobolSequence(joint_dist.getDimension())
-        sample_size = self.scen_params[
-            "sample_size"
-        ]  # Sobol' sequences work best on powers of 2
-        experiment = ot.LowDiscrepancyExperiment(sequence, joint_dist, sample_size)
-        samples = experiment.generate().asDataFrame()
-        samples.columns = list(params_sampl.keys())
+        if params_sampl:
+            joint_dist = self.build_input_dist(
+                vars=params_sampl,
+                copulas=self.scen_params.get("copulas", None),
+            )
+            sequence = ot.SobolSequence(joint_dist.getDimension())
+            sample_size = self.scen_params[
+                "sample_size"
+            ]  # Sobol' sequences work best on powers of 2
+            experiment = ot.LowDiscrepancyExperiment(sequence, joint_dist, sample_size)
+            samples = experiment.generate().asDataFrame()
+            samples.columns = list(params_sampl.keys())
+            samples_list = [row.to_dict() for _, row in samples.iterrows()]
+        else:
+            samples_list = [{}]
 
         # Get parameter dicts to override (must override from top-level key)
         if not all("path" in d for d in vars.values()):
@@ -58,8 +62,7 @@ class SenseScenarioBuilder(ScenarioBuilder):
         top_keys = set([d["path"][0] for d in vars.values()])
 
         for pars_categ in categ_combos:
-            for _, row in samples.iterrows():
-                pars_sampl = row.to_dict()
+            for pars_sampl in samples_list:
                 pars = pars_categ | pars_sampl
 
                 scn = {k: deepcopy(self.params[k]) for k in top_keys}
