@@ -899,3 +899,11 @@ dask_cluster_dwells:
 dask_client_dwells:
   type: MemoryDataset
   copy_mode: assign
+
+substation.bootstrap_profiles:
+  type: MemoryDataset
+  copy_mode: assign
+
+county.bootstrap_profiles:
+  type: MemoryDataset
+  copy_mode: assign
