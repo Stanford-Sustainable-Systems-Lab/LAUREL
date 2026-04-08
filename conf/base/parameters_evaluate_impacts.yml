@@ -248,10 +248,10 @@ slice_events:
 
 dask_eval:
   cluster:
-    n_workers: 4
+    n_workers: 3
     processes: True
     threads_per_worker: 1 # Must stay at 1, since our code is not thread safe
-    memory_limit: 16GiB # TODO: explore if this could be decreased by moving Dask farther along in pipeline (after filtering steps)
+    memory_limit: 20GiB # TODO: explore if this could be decreased by moving Dask farther along in pipeline (after filtering steps)
 
 sample_profiles:
   discrete_freq: 30min
