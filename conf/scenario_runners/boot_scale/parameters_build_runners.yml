@@ -13,7 +13,7 @@ slurm_resources:
   cpus-per-task: 2 # Using multiple CPUs takes a lot of effort (e.g. Dask cluster)
   mem: 64GB
   gpus: 0
-  time: 0-02:00
+  time: 0-04:00
   array: 0-8
 
 cmd_line_calls:
@@ -30,7 +30,7 @@ scenario_params:
       dist: Categorical
       params:
         - 100
-        - 300
+        - 500
         - 1000
       path:
         - sample_profiles
@@ -38,9 +38,9 @@ scenario_params:
     first_stage:
       dist: Categorical
       params:
-        - 2000
-        - 10000
-        - 20000
+        - 1000
+        - 3000
+        - 5000
       path:
         - sample_profiles
         - max_first_stage_options
