@@ -28,31 +28,31 @@ advanced_clean_trucks_states:
   filepath: data/01_raw/ACF/act_states.csv
 
 state_boundaries:
-  type: megaplug.datasets.geodatabase.GeoDataBaseDataset
+  type: laurel.datasets.geodatabase.GeoDataBaseDataset
   filepath: data/01_raw/Census_Geographies/cb_2023_us_all_500k.gdb
   load_args:
     layer: cb_2023_us_state_500k
 
 county_boundaries:
-  type: megaplug.datasets.geodatabase.GeoDataBaseDataset
+  type: laurel.datasets.geodatabase.GeoDataBaseDataset
   filepath: data/01_raw/Census_Geographies/cb_2023_us_all_500k.gdb
   load_args:
     layer: cb_2023_us_county_500k
 
 substations_continent:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/01_raw/HIFLD/electric_substation_hifld_v4/electric_substation_hifld_v4.gpkg
   load_args:
     layer: electric_substation_hifld_v4
 
 substations_pg_and_e:
-  type: megaplug.datasets.geodatabase.GeoDataBaseDataset
+  type: laurel.datasets.geodatabase.GeoDataBaseDataset
   filepath: data/01_raw/ICA_Maps/PGE/GRIP_FGDB/GNA.gdb
   load_args:
     layer: DFSubstationArea___PeakFacilityLoadingPercent
 
 substation_profiles_pg_and_e:
-  type: megaplug.datasets.geodatabase.GeoDataBaseDataset
+  type: laurel.datasets.geodatabase.GeoDataBaseDataset
   filepath: data/01_raw/ICA_Maps/PGE/GRIP_FGDB/ICA.gdb
   load_args:
     layer: SubstationLoadProfile
@@ -64,17 +64,17 @@ substation_profiles_pg_and_e:
       - High
 
 urban_areas:
-  type: megaplug.datasets.shapefile.ShapefileDataset
+  type: laurel.datasets.shapefile.ShapefileDataset
   filepath: data/01_raw/Census_Geographies/tl_2020_us_uac20_corrected/tl_2020_us_uac20_corrected.shp
 
 highways:
-  type: megaplug.datasets.geodatabase.GeoDataBaseDataset
+  type: laurel.datasets.geodatabase.GeoDataBaseDataset
   filepath: data/01_raw/Census_Geographies/north_american_roads_2024.gdb
   load_args:
     layer: North_American_Roads
 
 parking_public:
-  type: megaplug.datasets.shapefile.ShapefileDataset
+  type: laurel.datasets.shapefile.ShapefileDataset
   filepath: data/01_raw/Truck_Parking/jlaw_data_shapefile_2019/Final Public Truck Parking Locations-2019.shp
 
 parking_private:
@@ -97,7 +97,7 @@ establishments_parent_bus_status:
       PARENT_NUMBER: float64
 
 establishments_extra:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/02_intermediate/establishments_extra.gpkg
   save_args:
     index: False
@@ -127,7 +127,7 @@ land_use_groups:
 
 # Preprocessed datasets
 establishments_formatted:
-  type: megaplug.datasets.geoparquet.GeoParquetDataset
+  type: laurel.datasets.geoparquet.GeoParquetDataset
   filepath: data/02_intermediate/establishments_formatted/
   save_args:
     write_index: True
@@ -144,7 +144,7 @@ trips_formatted:
   filepath: data/02_intermediate/trips_formatted/
 
 trips_to_route:
-  type: megaplug.datasets.geoparquet.GeoParquetDataset
+  type: laurel.datasets.geoparquet.GeoParquetDataset
   filepath: "${runtime_params:partition_data_dir, 'data/02_intermediate'}/trips_to_route"
   save_args:
     write_index: False
@@ -152,7 +152,7 @@ trips_to_route:
     split_row_groups: False
 
 trips_routed:
-  type: megaplug.datasets.geoparquet.GeoParquetDataset
+  type: laurel.datasets.geoparquet.GeoParquetDataset
   filepath: "${runtime_params:partition_data_dir, 'data/02_intermediate'}/trips_routed"
   save_args:
     write_index: False
@@ -167,7 +167,7 @@ trips_with_optional:
     calculate_divisions: True
 
 parking_formatted:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/02_intermediate/parking.gpkg
   save_args:
     index: False
@@ -193,7 +193,7 @@ dwells_with_locations_dask:
     calculate_divisions: True
 
 dwells_with_locations_dask_spatial:
-  type: megaplug.datasets.geoparquet.GeoParquetDataset
+  type: laurel.datasets.geoparquet.GeoParquetDataset
   filepath: "${runtime_params:partition_data_dir, 'data/02_intermediate'}/dwells_with_locations_spatial/"
   save_args:
     write_index: True
@@ -222,7 +222,7 @@ vehicle_location_pairs_labelled:
   filepath: data/02_intermediate/vehicle_location_pairs_labelled.feather
 
 states_formatted:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/02_intermediate/states_select.gpkg
   save_args:
     index: False
@@ -231,7 +231,7 @@ states_formatted:
     layer: states
 
 highways_formatted:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/02_intermediate/highways_formatted.gpkg
   save_args:
     index: False
@@ -240,7 +240,7 @@ highways_formatted:
     layer: highways
 
 urban_areas_formatted:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/02_intermediate/urban_areas_formatted.gpkg
   save_args:
     index: False
@@ -249,7 +249,7 @@ urban_areas_formatted:
     layer: urban_areas
 
 substations_formatted:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/02_intermediate/substations_formatted.gpkg
   save_args:
     index: False
@@ -271,7 +271,7 @@ hex_land_use:
     calculate_divisions: True
 
 substations_continent_formatted:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/02_intermediate/substation_geographies/continental.gpkg
   save_args:
     index: True
@@ -280,7 +280,7 @@ substations_continent_formatted:
     layer: substations
 
 substations_standard_pg_and_e:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/02_intermediate/substation_geographies/pg_and_e.gpkg
   save_args:
     index: True
@@ -341,7 +341,7 @@ dwells_with_charging_partition:
   filename_suffix: ".feather"
 
 dwells_with_charging_partition_dask:
-  type: megaplug.datasets.directory_partitioned.DirectoryPartitionedDataset
+  type: laurel.datasets.directory_partitioned.DirectoryPartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/dwells_with_charging"
   dataset:
     type: dask.ParquetDataset
@@ -359,7 +359,7 @@ events_partition:
   filename_suffix: ".feather"
 
 events_partition_dask:
-  type: megaplug.datasets.directory_partitioned.DirectoryPartitionedDataset
+  type: laurel.datasets.directory_partitioned.DirectoryPartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/events"
   dataset:
     type: dask.ParquetDataset
@@ -440,21 +440,21 @@ county.bootstrap_profiles_debug_partition:
   filename_suffix: ".feather"
 
 report_by_region_peaks_with_geoms:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/07_model_output/report_by_region_single_run.gpkg
   save_args:
     layer: peak_kw
 
 # Test datasets
 vehicle_representative_points:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/03_primary/veh_rep_pts.gpkg
   save_args:
     index: True
     layer: vehicle_representative_points
 
 vehicle_dwells:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/03_primary/veh_dwells.gpkg
   save_args:
     index: True
@@ -465,7 +465,7 @@ vehicle_depots:
   filepath: data/03_primary/vehicle_depots.feather
 
 vehicle_depots_geoms:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/03_primary/vehicle_depots.gpkg
   save_args:
     index: True
@@ -483,35 +483,35 @@ canonical_veh_locs:
 
 # Reporting datasets
 vehicle_trajectory:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/08_reporting/vehicle_trajectory.gpkg
   save_args:
     index: True
     layer: trips
     
 navistar_by_state:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/08_reporting/navistar_by_state.gpkg
   save_args:
     index: True
     layer: navistar_by_state
 
 vehicle_peak_load_by_substation:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/08_reporting/vehicle_peak_load_by_substation.gpkg
   save_args:
     index: True
     layer: vehicle_peak_load_by_substation
 
 min_adoption_by_substation:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/08_reporting/min_adoption_by_substation.gpkg
   save_args:
     index: True
     layer: min_adoption_by_substation
 
 min_adoption_by_substation_points:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/08_reporting/min_adoption_by_substation.gpkg
   save_args:
     index: True
@@ -528,7 +528,7 @@ vehicle_peak_load_by_substation_partition:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/08_reporting'}/vehicle_peak_load/substation/"
   dataset:
-    type: megaplug.datasets.geopackage.GeoPackageDataset
+    type: laurel.datasets.geopackage.GeoPackageDataset
     save_args:
       index: True
       layer: vehicle_peak_load_by_substation
@@ -538,7 +538,7 @@ vehicle_peak_load_by_substation_points_partition:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/08_reporting'}/vehicle_peak_load/substation/"
   dataset:
-    type: megaplug.datasets.geopackage.GeoPackageDataset
+    type: laurel.datasets.geopackage.GeoPackageDataset
     save_args:
       index: True
       layer: vehicle_peak_load_by_substation_points
@@ -548,28 +548,28 @@ substation_rating_overload_partition:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/08_reporting'}/substation_rating_overload/"
   dataset:
-    type: megaplug.datasets.geopackage.GeoPackageDataset
+    type: laurel.datasets.geopackage.GeoPackageDataset
     save_args:
       index: True
       layer: substation_rating_overload
   filename_suffix: ".gpkg"
 
 capacity_consumed_percent_by_substation:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/08_reporting/capacity_consumed_percent_by_substation.gpkg
   save_args:
     index: True
     layer: capacity_consumed_percent_by_substation
 
 peak_load_addition_by_substation:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/08_reporting/peak_load_addition_by_substation.gpkg
   save_args:
     index: True
     layer: peak_load_addition_by_substation
 
 vehicle_peak_load_by_substation_diff:
-  type: megaplug.datasets.geopackage.GeoPackageDataset
+  type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/08_reporting/vehicle_peak_load_by_substation_diff.gpkg
   save_args:
     index: True

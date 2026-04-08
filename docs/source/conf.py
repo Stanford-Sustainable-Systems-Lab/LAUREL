@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 
-# megaplug documentation build
+# laurel documentation build
 # configuration file, created by sphinx-quickstart.
 #
 # This file is execfile()d with the current directory set to its
@@ -19,9 +19,9 @@
 #
 import re
 
-from megaplug import __version__ as release
+from laurel import __version__ as release
 
-# Mock heavy native dependencies so autodoc can import megaplug modules
+# Mock heavy native dependencies so autodoc can import laurel modules
 # without requiring compiled extensions (used in CI / GitHub Actions).
 autodoc_mock_imports = [
     "numba",
@@ -46,7 +46,7 @@ autodoc_mock_imports = [
 
 # -- Project information -----------------------------------------------------
 
-project = "megaplug"
+project = "laurel"
 author = "Kedro"
 
 # The short X.Y version.
@@ -143,7 +143,7 @@ html_show_copyright = False
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = "megaplugdoc"
+htmlhelp_basename = "laureldoc"
 
 # -- Options for LaTeX output ------------------------------------------------
 
@@ -171,8 +171,8 @@ latex_elements = {
 latex_documents = [
     (
         master_doc,
-        "megaplug.tex",
-        "megaplug Documentation",
+        "laurel.tex",
+        "laurel Documentation",
         "Kedro",
         "manual",
     )
@@ -185,8 +185,8 @@ latex_documents = [
 man_pages = [
     (
         master_doc,
-        "megaplug",
-        "megaplug Documentation",
+        "laurel",
+        "laurel Documentation",
         [author],
         1,
     )
@@ -200,11 +200,11 @@ man_pages = [
 texinfo_documents = [
     (
         master_doc,
-        "megaplug",
-        "megaplug Documentation",
+        "laurel",
+        "laurel Documentation",
         author,
-        "megaplug",
-        "Project megaplug codebase.",
+        "laurel",
+        "Project laurel codebase.",
         "Data-Science",
     )
 ]

@@ -11,7 +11,7 @@ from kedro.io.core import DatasetError
 from kedro_datasets.partitions import PartitionedDataset
 
 # Import the module under test
-from megaplug.datasets.directory_partitioned import DirectoryPartitionedDataset
+from laurel.datasets.directory_partitioned import DirectoryPartitionedDataset
 
 try:
     import dask.dataframe as dd

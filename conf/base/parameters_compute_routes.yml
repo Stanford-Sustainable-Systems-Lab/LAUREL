@@ -33,7 +33,7 @@ dask_routing:
 
 graphhopper:
     image: containers/graphhopper_10.2.sif
-    container_class: megaplug.models.routing.server.ApptainerContainerRunner
+    container_class: laurel.models.routing.server.ApptainerContainerRunner
     map_path: $SCRATCH/north-america-latest.osm.pbf
     graph_dir: $SCRATCH/graphhopper_cache/north-america/
     config_path: ./conf/base/parameters_graphhopper.yml

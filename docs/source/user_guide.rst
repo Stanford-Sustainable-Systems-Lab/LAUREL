@@ -53,7 +53,7 @@ Repository Structure
 
 .. code-block:: text
 
-   megaPLuG/
+   LAUREL/
    ├── conf/                      # Kedro configuration
    │   ├── base/                  # Shared parameters and data catalog
    │   │   ├── catalog.yml        # ~860 dataset definitions
@@ -68,7 +68,7 @@ Repository Structure
    ├── docs/                      # Sphinx documentation source
    ├── notebooks/                 # Exploratory Jupyter notebooks
    ├── src/
-   │   ├── megaplug/              # Main Python package
+   │   ├── laurel/              # Main Python package
    │   │   ├── datasets/          # Custom Kedro dataset classes (geospatial formats)
    │   │   ├── models/            # Core algorithms (charging, dwell sets, sampling)
    │   │   ├── pipelines/         # Nine Kedro pipelines (one per model module)
@@ -115,7 +115,7 @@ Installation
 
    # Clone the repository
    git clone <repo-url>
-   cd megaPLuG
+   cd LAUREL
 
    # Install dependencies with uv (creates .venv automatically)
    uv sync
@@ -549,7 +549,7 @@ Running tests
 .. code-block:: bash
 
    pytest
-   pytest --cov=megaplug   # with coverage report
+   pytest --cov=laurel   # with coverage report
 
 Linting and formatting
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -578,7 +578,7 @@ If you use this model or code in your research, please cite:
 
 .. code-block:: bibtex
 
-   @article{passow2026megaplug,
+   @article{passow2026laurel,
      title   = {Identifying indicators to inform proactive substation upgrades
                 for charging electric heavy-duty trucks},
      author  = {Passow, Fletcher H. and Rajagopal, Ram},

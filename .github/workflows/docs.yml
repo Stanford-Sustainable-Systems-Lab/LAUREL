@@ -39,7 +39,7 @@ jobs:
             myst-parser \
             kedro
 
-      - name: Install megaplug (no heavy deps)
+      - name: Install laurel (no heavy deps)
         run: uv pip install --system --no-deps -e .
 
       - name: Build docs

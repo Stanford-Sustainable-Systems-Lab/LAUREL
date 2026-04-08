@@ -1,4 +1,4 @@
-"""Unit tests for megaplug.models.summarize module.
+"""Unit tests for laurel.models.summarize module.
 
 This module tests the IntervalBeginSpreader and NonzeroGroupedSummarizer classes using pytest.
 """
@@ -6,7 +6,7 @@ This module tests the IntervalBeginSpreader and NonzeroGroupedSummarizer classes
 import numpy as np
 import pandas as pd
 import pytest
-from megaplug.models.summarize import IntervalBeginSpreader, NonzeroGroupedSummarizer
+from laurel.models.summarize import IntervalBeginSpreader, NonzeroGroupedSummarizer
 
 
 class TestIntervalBeginSpreader:
@@ -501,7 +501,7 @@ class TestIntervalBeginSpreader:
     def test_wrapper_function(self, spreader, mocker):
         """Test the wrapper function with mocked dependencies."""
         # Mock the utility functions
-        mock_get_dtype = mocker.patch("megaplug.models.summarize.get_basic_dtype_ser")
+        mock_get_dtype = mocker.patch("laurel.models.summarize.get_basic_dtype_ser")
         mock_get_dtype.side_effect = lambda x: x  # Return the series as-is
 
         # Create test data that would normally require expansion

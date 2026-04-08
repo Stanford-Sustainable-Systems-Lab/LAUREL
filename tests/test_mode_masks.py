@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from megaplug.utils.mode_masks import (
+from laurel.utils.mode_masks import (
     MAX_CHARGE_MODES,
     bits_to_bool_arr,
     bits_to_bool_vec,

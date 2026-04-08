@@ -1,5 +1,5 @@
 [project]
-name = "megaPLuG"
+name = "LAUREL"
 version = "0.1.0"
 description = "Add your description here"
 authors = [
@@ -39,7 +39,7 @@ readme = "README.md"
 requires-python = ">= 3.12"
 
 [project.scripts]
-megaplug = "megaplug.__main__:main"
+laurel = "laurel.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -70,11 +70,11 @@ dev-dependencies = [
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/megaplug"]
+packages = ["src/laurel"]
 
 [tool.kedro]
-package_name = "megaplug"
-project_name = "megaPLuG"
+package_name = "laurel"
+project_name = "LAUREL"
 kedro_init_version = "1.0.0"
 tools = "['Linting', 'Documentation', 'Data Structure', 'Kedro Viz']"
 
@@ -91,7 +91,7 @@ ignore = ["E501", "PLR0913"]  # Don't report line-too-long
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["PLR2004"]
-"src/megaplug/settings.py" = ["I001", "F401", "E402"]
+"src/laurel/settings.py" = ["I001", "F401", "E402"]
 
 [tool.pytest.ini_options]
 markers = [
