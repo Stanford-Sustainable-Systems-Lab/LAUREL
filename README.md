@@ -1,12 +1,10 @@
-# megaPLuG
+# LAUREL: Location-Attuned Uncertainty-Robust Electric-vehicle Load-simulator
 
-**Modeling e-HDT charging loads at substation resolution across 512 plausible futures**
-
-This repository implements the model described in:
+This repository implements the LAUREL model described in:
 
 > Passow, F. H., & Rajagopal, R. (2026). Identifying indicators to inform proactive substation upgrades for charging electric heavy-duty trucks. *Applied Energy* (submitted March 2026).
 
-The model estimates e-HDT charging load profiles for each of the ~52,000 electrical substations in the continental U.S. across 512 plausible future states of the world (SoWs) representing 2035 conditions. It is used to identify which substations grid operators should consider proactively upgrading for e-HDT charging, and what techno-economic indicators signal when such upgrades may become necessary.
+The specific use of the LAUREL model demonstrated here estimates e-HDT charging load profiles for each of the ~52,000 electrical substations in the continental U.S. across 512 plausible future states of the world (SoWs) representing 2035 conditions. It is used to identify which substations grid operators should consider proactively upgrading for e-HDT charging, and what techno-economic indicators signal when such upgrades may become necessary.
 
 ---
 
@@ -45,7 +43,7 @@ Key findings:
 ## Repository Structure
 
 ```text
-megaPLuG/
+LAUREL/
 ├── conf/                      # Kedro configuration
 │   ├── base/                  # Shared parameters and data catalog
 │   │   ├── catalog.yml        # ~860 dataset definitions
@@ -60,7 +58,7 @@ megaPLuG/
 ├── docs/                      # Sphinx documentation source
 ├── notebooks/                 # Exploratory Jupyter notebooks
 ├── src/
-│   ├── megaplug/              # Main Python package
+│   ├── laurel/              # Main Python package
 │   │   ├── datasets/          # Custom Kedro dataset classes (geospatial formats)
 │   │   ├── models/            # Core algorithms (charging, dwell sets, sampling)
 │   │   ├── pipelines/         # Nine Kedro pipelines (one per model module)
@@ -94,7 +92,7 @@ For large-scale runs across all 512 SoWs, an HPC cluster is strongly recommended
 ```bash
 # Clone the repository
 git clone <repo-url>
-cd megaPLuG
+cd LAUREL
 
 # Install dependencies with uv (creates .venv automatically)
 uv sync
@@ -375,7 +373,7 @@ To compute the 80th/20th percentile ("duty-to-serve-robust" / "used-and-useful-r
 
 ```bash
 pytest
-pytest --cov=megaplug   # with coverage report
+pytest --cov=laurel   # with coverage report
 ```
 
 ### Linting and formatting
@@ -399,7 +397,7 @@ open build/html/index.html
 If you use this model or code in your research, please cite:
 
 ```bibtex
-@article{passow2026megaplug,
+@article{passow2026laurel,
   title   = {Identifying indicators to inform proactive substation upgrades
              for charging electric heavy-duty trucks},
   author  = {Passow, Fletcher H. and Rajagopal, Ram},

@@ -1,1 +1,1 @@
-"""Tests for megaplug dataset implementations."""
+"""Tests for laurel dataset implementations."""

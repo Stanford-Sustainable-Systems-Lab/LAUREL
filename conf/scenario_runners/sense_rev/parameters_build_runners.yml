@@ -20,7 +20,7 @@ cmd_line_calls:
   prefix: uv run
   kedro:
     tags: scenario_run
-    params: partition_data_dir=$SCRATCH/megaplug
+    params: partition_data_dir=$SCRATCH/laurel
 
 scenario_params:
   builder: SenseScenarioBuilder

@@ -19,7 +19,7 @@ cmd_line_calls:
   kedro:
     pipeline: compute_routes
     tags: routing
-    params: partition_data_dir=$SCRATCH/megaplug
+    params: partition_data_dir=$SCRATCH/laurel
 
 scenario_params:
   builder: TestScenarioBuilder
