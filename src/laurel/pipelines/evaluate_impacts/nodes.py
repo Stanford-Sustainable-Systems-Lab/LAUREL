@@ -91,6 +91,7 @@ proactive substation upgrades for charging electric heavy-duty trucks.
 """
 
 import gc
+import itertools
 import logging
 
 import dask.dataframe as dd
@@ -1505,21 +1506,46 @@ def sample_profiles_node(
                 seed = master_seed
             return sample_profiles(**kws, seed=seed)
 
+        # Scatter shared read-only arrays to all workers once, then immediately
+        # drop the main-process copies — workers hold the only live references.
         future_kws = {k: client.scatter(v, broadcast=True) for k, v in kws.items()}
-        futures = [
-            client.submit(_sample_profiles_distrib, kws=future_kws, boot_id=boot_id)
-            for boot_id in range(n_boots)
-        ]
-        for boot_id, (future, result) in tqdm(
-            enumerate(as_completed(futures, with_results=True)), total=len(futures)
-        ):
+        del kws, Om_hex, Om_cls, Be, Rho, Cy, Ga
+        gc.collect()
+
+        # Sliding-window submission: keep exactly one task queued per worker.
+        # This caps the number of completed-but-unconsumed results sitting in
+        # the Dask scheduler at n_window, preventing unbounded memory growth
+        # when workers outpace _accumulate on fast HPC nodes.
+        n_window = len(client.scheduler_info()["workers"])
+
+        def _submit(bid: int):
+            return client.submit(_sample_profiles_distrib, kws=future_kws, boot_id=bid)
+
+        boot_ids = iter(range(n_boots))
+        future_to_boot_id: dict = {}
+
+        # Seed the window: submit the first n_window tasks upfront.
+        for bid in itertools.islice(boot_ids, n_window):
+            f = _submit(bid)
+            future_to_boot_id[f] = bid
+
+        # Consume results as they arrive; submit one new task per result consumed
+        # so the window depth stays constant (one-in, one-out).
+        ac = as_completed(future_to_boot_id, with_results=True)
+        for future, result in tqdm(ac, total=n_boots):
+            boot_id = future_to_boot_id.pop(future)
             prof, summ = result
             _accumulate(prof, summ, boot_id)
             del result
+            future.release()  # release scheduler's copy of the result immediately
+            next_id = next(boot_ids, None)
+            if next_id is not None:
+                new_f = _submit(next_id)
+                future_to_boot_id[new_f] = next_id
+                ac.add(new_f)  # register with the live iterator so it gets yielded
     else:
         raise ValueError("Number of bootstraps must be >= 1.")
 
-    del kws, Om_hex, Om_cls, Be, Rho, Cy, Ga
     gc.collect()
 
     boot_summs = pd.concat(boot_summs, names=[params["bootstrap_id_col"]], copy=False)
