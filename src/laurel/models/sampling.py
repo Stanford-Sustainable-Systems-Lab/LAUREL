@@ -167,6 +167,7 @@ def sample_sparse_multinomial_core(
     indices: NDArray,
     indptr: NDArray,
     loc_grp_arr: NDArray | None = None,
+    force_multinomial: bool = False,
 ) -> tuple[NDArray, NDArray, NDArray]:
     """JIT-compiled inner loop: draw multinomial samples from each column of a CSC array.
 
@@ -181,6 +182,27 @@ def sample_sparse_multinomial_core(
     (class-level pooling).  Locations with zero samples requested are skipped,
     and locations for which the probability column is empty (no eligible
     observations) produce no output entries.
+
+    **Dual sampling paths**: for each location, the algorithm chooses between
+    two statistically identical methods based on the ratio of samples requested
+    (``n``) to column length (``k``):
+
+    - **Categorical path** (``n < k``): compute the cumulative probability
+      vector, draw ``n`` sorted uniform samples, and assign each to a category
+      via a two-pointer merge walk through the CDF.  Cost: O(k) additions +
+      O(n log n) sort + O(k + n) walk.  The merge walk advances both pointers
+      monotonically, exploiting the sorted order for cache-friendly sequential
+      access.  Dramatically faster than the multinomial path when ``n ≪ k``
+      because it avoids O(k) expensive binomial draws.
+    - **Multinomial path** (``n ≥ k``): ``np.random.multinomial`` via the
+      sequential conditional binomial algorithm.  Preferred when ``n`` is
+      large relative to ``k``, where the sort overhead of the categorical path
+      would dominate.
+
+    Both paths produce count vectors ``w`` indexed identically to the input
+    ``probs`` slice: ``w[j]`` is the number of draws assigned to position
+    ``j`` in ``probs``, which corresponds to global row ``inds[j]``.  See the
+    sort-order correctness proof in the plan for a formal justification.
 
     Args:
         n_arr: 1-D integer array of sample counts for each location.
@@ -222,7 +244,24 @@ def sample_sparse_multinomial_core(
             if flat_idx_last > flat_idx_first:  # If any items available to sample
                 probs = data[flat_idx_first:flat_idx_last]
                 inds = indices[flat_idx_first:flat_idx_last]
-                w = np.random.multinomial(n=n, pvals=probs)
+                k = flat_idx_last - flat_idx_first
+
+                if n < k and not force_multinomial:
+                    # Categorical path: O(k) cumsum + O(n log n) sort + O(k+n)
+                    # merge walk. Avoids O(k) binomial draws when n ≪ k.
+                    # w[j] counts draws landing in [cumprobs[j-1], cumprobs[j]),
+                    # which has probability probs[j] — same indexing as multinomial.
+                    cumprobs = np.cumsum(probs)
+                    cumprobs[k - 1] = 1.0  # fix floating-point drift at last entry
+                    draws = np.sort(np.random.random(n))
+                    w = np.zeros(k, dtype=np.int64)
+                    j = 0
+                    for t in range(n):
+                        while j < k - 1 and draws[t] >= cumprobs[j]:
+                            j += 1
+                        w[j] += 1
+                else:
+                    w = np.random.multinomial(n=n, pvals=probs)
 
                 out_sel = np.nonzero(w)[0]
                 w_cursor_next = w_cursor + out_sel.size
@@ -245,6 +284,7 @@ def sample_sparse_multinomial(
     n_arr: NDArray,
     p_arr: sp.sparse.sparray,
     loc_grp_arr: NDArray | None = None,
+    force_multinomial: bool = False,
 ) -> sp.sparse.sparray:
     """Draw multinomial samples from each column of a sparse probability matrix.
 
@@ -261,6 +301,11 @@ def sample_sparse_multinomial(
             each location to a column index in ``p_arr``.  Used for
             class-level pooling where many locations share one probability
             distribution.
+        force_multinomial: If ``True``, always use the sequential conditional
+            binomial algorithm (``np.random.multinomial``) regardless of the
+            ``n``/``k`` ratio.  The default ``False`` enables the categorical
+            fast path for locations where ``n < k``.  Pass ``True`` only for
+            benchmarking or debugging the two paths against each other.
 
     Returns:
         Sparse CSC array of shape ``(n_obs, n_locs)`` with integer sample
@@ -328,6 +373,7 @@ def sample_sparse_multinomial(
         indices=p_arr.indices,
         indptr=p_arr.indptr,
         loc_grp_arr=loc_grp_arr,
+        force_multinomial=force_multinomial,
     )
     out_shape = (p_arr.shape[0], n_arr.shape[0])
     out_sparse = sp.sparse.csc_array(
