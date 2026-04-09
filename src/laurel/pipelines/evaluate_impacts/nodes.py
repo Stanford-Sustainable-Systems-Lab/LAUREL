@@ -1512,11 +1512,13 @@ def sample_profiles_node(
         del kws, Om_hex, Om_cls, Be, Rho, Cy, Ga
         gc.collect()
 
-        # Sliding-window submission: keep exactly one task queued per worker.
-        # This caps the number of completed-but-unconsumed results sitting in
-        # the Dask scheduler at n_window, preventing unbounded memory growth
-        # when workers outpace _accumulate on fast HPC nodes.
-        n_window = len(client.scheduler_info()["workers"])
+        # Sliding-window submission: keep two tasks queued per worker.  A window
+        # of 2× n_workers staggers finish times so the "thundering herd" of all
+        # workers completing simultaneously is broken after the first cycle.
+        # This also ensures workers have queued work available during the
+        # main-thread _accumulate step, preventing idle gaps.  Peak unconsumed
+        # memory is bounded at 2× n_workers results (≈ 6 for 3 workers).
+        n_window = 2 * len(client.scheduler_info()["workers"])
 
         def _submit(bid: int):
             return client.submit(_sample_profiles_distrib, kws=future_kws, boot_id=bid)
