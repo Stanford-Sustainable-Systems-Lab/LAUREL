@@ -1451,10 +1451,13 @@ def sample_profiles_node(
     reg_name_restorer = loc_counts_names.set_index(reg_col_compact)[reg_col]
     prof_renamer = {d: pcols["profile_cols"][k] for k, d in pcols["diff_cols"].items()}
     value_cols = list(pcols["profile_cols"].values())
-    # summ_cols defines the accumulator group key: (region, time_bin).
-    # No AdaptiveTimeGrouper needed — discretize_sparse_profiles already aligns
-    # timestamps to discrete_freq boundaries (one row per group guaranteed).
-    summ_cols = pcols["group_cols"] + [tcol]
+    n_value_cols = len(value_cols)
+    # Build a numpy array for O(1) region-name restoration by integer code,
+    # replacing the per-call Series.map overhead in _accumulate.
+    _max_reg_code = int(reg_name_restorer.index.max())
+    reg_name_arr = np.empty(_max_reg_code + 1, dtype=object)
+    for _code, _name in reg_name_restorer.items():
+        reg_name_arr[_code] = _name
 
     logger.info("Perform bootstrap sampling")
     master_seed = params.get("master_seed", None)
@@ -1464,13 +1467,12 @@ def sample_profiles_node(
     save_debug = params.get("save_bootstrap_profiles", False)
 
     def _accumulate(prof: pd.DataFrame, summ: pd.DataFrame, boot_id: int) -> None:
-        """Rename columns, optionally capture for debug, then reduce to accumulator.
+        """Extract raw arrays from *prof*, then reduce to the accumulator.
 
-        Applies column renaming and region-label restoration in place, captures
-        the full DataFrame if debug output is enabled, then reduces to the
-        accumulator using ``DataFrame.to_dict("index")``.  This produces a
-        single C-level ``{group_key: {col: val}}`` mapping, avoiding the
-        per-element boxing overhead of pandas Series iteration.
+        Bypasses pandas rename / map / set_index / to_dict operations by
+        pulling ``.values`` arrays directly and iterating with integer
+        indexing.  For large profiles (100K+ rows) this avoids the
+        DataFrame-copy and per-cell boxing overhead that dominates at scale.
         ``discretize_sparse_profiles`` guarantees one row per (region,
         time_bin) per bootstrap, so no further groupby is needed.
 
@@ -1481,17 +1483,24 @@ def sample_profiles_node(
             boot_id: Zero-based bootstrap draw index, used as the debug
                 partition key.
         """
-        prof = prof.rename(columns=prof_renamer)
-        prof[reg_col] = prof[reg_col_compact].map(reg_name_restorer)
-        prof = prof.drop(columns=[reg_col_compact])
         if save_debug:
-            debug_partition[str(boot_id).zfill(4)] = prof.reset_index(drop=True)
-        rows_dict = prof.set_index(summ_cols)[value_cols].to_dict("index")
-        for group_key, col_vals in rows_dict.items():
-            if group_key not in boot_profs_accum:
-                boot_profs_accum[group_key] = [[] for _ in value_cols]
-            for col_idx, col in enumerate(value_cols):
-                boot_profs_accum[group_key][col_idx].append(col_vals[col])
+            debug_prof = prof.rename(columns=prof_renamer)
+            debug_prof[reg_col] = debug_prof[reg_col_compact].map(reg_name_restorer)
+            debug_prof = debug_prof.drop(columns=[reg_col_compact])
+            debug_partition[str(boot_id).zfill(4)] = debug_prof.reset_index(drop=True)
+
+        # Extract raw numpy arrays — no DataFrame copies.
+        reg_names = reg_name_arr[prof[reg_col_compact].values]
+        time_vals = prof[tcol].values
+        val_arrays = [prof[dc].values for dc in diff_cols]
+
+        for i in range(len(reg_names)):
+            key = (reg_names[i], time_vals[i])
+            if key not in boot_profs_accum:
+                boot_profs_accum[key] = [[] for _ in value_cols]
+            accum_lists = boot_profs_accum[key]
+            for col_idx in range(n_value_cols):
+                accum_lists[col_idx].append(val_arrays[col_idx][i])
         boot_summs[boot_id] = summ
 
     if n_boots == 1:
