@@ -1535,14 +1535,16 @@ def sample_profiles_node(
         for future, result in tqdm(ac, total=n_boots):
             boot_id = future_to_boot_id.pop(future)
             prof, summ = result
-            _accumulate(prof, summ, boot_id)
-            del result
-            future.release()  # release scheduler's copy of the result immediately
+            # Submit the next task immediately — before _accumulate — so workers
+            # get new work without waiting for the main-thread accumulation step.
             next_id = next(boot_ids, None)
             if next_id is not None:
                 new_f = _submit(next_id)
                 future_to_boot_id[new_f] = next_id
                 ac.add(new_f)  # register with the live iterator so it gets yielded
+            _accumulate(prof, summ, boot_id)
+            del result
+            future.release()  # release scheduler's copy of the result immediately
     else:
         raise ValueError("Number of bootstraps must be >= 1.")
 
