@@ -256,7 +256,7 @@ dask_eval:
 sample_profiles:
   discrete_freq: 30min
   slice_freq: ${slice_events.slice_freq}
-  n_bootstraps: 1000 # Roughly 1-second per bootstrap on Intel i7 2.3GHz
+  n_bootstraps: 1000 # Roughly 10-seconds per bootstrap on HPC for full-size data
   save_bootstrap_profiles: False # Set to true to retain full per-bootstrap DataFrames in bootstrap_profiles_debug_partition (high memory cost)
   master_seed: 42
   bootstrap_id_col: bootstrap_id
