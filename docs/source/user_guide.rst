@@ -58,8 +58,8 @@ Repository Structure
    │   ├── base/                  # Shared parameters and data catalog
    │   │   ├── catalog.yml        # ~860 dataset definitions
    │   │   └── parameters_*.yml   # One parameter file per pipeline
-   │   ├── scenarios/             # Per-scenario parameter overrides (14 sets)
-   │   └── scenario_runners/      # SLURM job configurations
+   │   ├── build_scenarios/       # Hand-written build specs (input to build_scenarios pipeline)
+   │   └── scenarios/             # Generated per-task parameter overrides (gitignored)
    ├── data/                      # Data layers (Kedro convention; not committed)
    │   ├── 01_raw/                # External source datasets
    │   ├── 02_intermediate/       # Processed/formatted datasets
@@ -67,14 +67,16 @@ Repository Structure
    │   └── 08_reporting/          # Final visualizations and summaries
    ├── docs/                      # Sphinx documentation source
    ├── notebooks/                 # Exploratory Jupyter notebooks
+   ├── scripts/                   # Generated SLURM batch scripts (gitignored)
    ├── src/
    │   ├── laurel/              # Main Python package
    │   │   ├── datasets/          # Custom Kedro dataset classes (geospatial formats)
    │   │   ├── models/            # Core algorithms (charging, dwell sets, sampling)
    │   │   ├── pipelines/         # Nine Kedro pipelines (one per model module)
-   │   │   ├── scenarios/         # Scenario management utilities
+   │   │   ├── routing/           # GraphHopper routing client and server management
+   │   │   ├── scenario_builders/ # Concrete ScenarioBuilder subclasses (one per scenario family)
+   │   │   ├── scenario_framework/# Abstract base classes, shell-script generator, I/O helpers
    │   │   └── utils/             # Shared utilities (geo, H3, NAICS, time, ...)
-   │   └── runners/               # Shell scripts for SLURM scenario arrays
    ├── tests/                     # pytest test suite
    ├── pyproject.toml             # Project metadata and dependencies
    └── uv.lock                    # Locked dependency versions
@@ -132,7 +134,7 @@ To verify the installation:
 
 You should see the nine pipelines: ``preprocess``, ``describe_vehicles``,
 ``describe_dwells``, ``compute_routes``, ``describe_locations``,
-``prepare_totals``, ``electrify_trips``, ``evaluate_impacts``, ``build_runners``.
+``prepare_totals``, ``electrify_trips``, ``evaluate_impacts``, ``build_scenarios``.
 
 ----
 
@@ -434,7 +436,7 @@ Each pipeline has a corresponding parameter file in ``conf/base/``:
      - Charging algorithm weights, delay caps
    * - ``parameters_evaluate_impacts.yml``
      - Bootstrap count, percentile, electrifiability criteria
-   * - ``parameters_build_runners.yml``
+   * - ``parameters_build_scenarios.yml``
      - SLURM configuration for HPC job arrays
 
 GraphHopper routing engine
@@ -469,17 +471,17 @@ Generating SLURM scripts
 
 .. code-block:: bash
 
-   kedro run --pipeline=build_runners --params="scenario:sense_512"
+   kedro run --pipeline=build_scenarios --env=build_scenarios/sense_512
 
-This writes SLURM batch scripts to ``src/runners/``. The generated scripts submit
-array jobs where each array index corresponds to one SoW.
+This writes SLURM batch scripts to ``scripts/`` and per-task config files to
+``conf/scenarios/``. Each array index corresponds to one SoW.
 
 Submitting jobs
 ~~~~~~~~~~~~~~~
 
 .. code-block:: bash
 
-   sbatch src/runners/sense_512.sh
+   sbatch scripts/sense_512.sh
 
 GraphHopper on Sherlock (Apptainer)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -510,7 +512,7 @@ Port forwarding for JupyterLab on Sherlock
 
 .. code-block:: bash
 
-   bash src/runners/watch_sherlock_port.sh
+   bash scripts/watch_sherlock_port.sh
 
 ----
 
