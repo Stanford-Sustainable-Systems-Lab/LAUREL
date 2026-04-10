@@ -75,13 +75,13 @@ import pandas as pd
 from dask.diagnostics.progress import ProgressBar
 from routingpy import Graphhopper
 
-from laurel.models.routing.router import (
+from laurel.routing.router import (
     DIST_COL,
     ROUTE_COL,
     TIME_COL,
     get_routes,
 )
-from laurel.models.routing.server import GraphhopperContainerRouter
+from laurel.routing.server import GraphhopperContainerRouter
 from laurel.utils.geo import METERS_PER_MILE
 from laurel.utils.h3 import add_geometries, cells_to_points
 from laurel.utils.time import SECS_PER_HOUR

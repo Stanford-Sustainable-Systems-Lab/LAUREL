@@ -26,7 +26,7 @@ from the pipeline dropdown.
 
 from kedro.pipeline import Node, Pipeline
 
-from laurel.models.routing.nodes import (
+from laurel.routing.nodes import (
     start_routing_server_node,
     stop_routing_server_node,
 )

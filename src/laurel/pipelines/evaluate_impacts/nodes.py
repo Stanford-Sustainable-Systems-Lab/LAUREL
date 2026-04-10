@@ -1759,7 +1759,7 @@ def compress_bootstrap_profiles(
     The accumulator maps ``(region, time_bin)`` tuples to a list-of-lists of
     observed non-zero profile values.  Because timestamps are already at
     ``discrete_freq`` resolution (guaranteed by
-    :func:`~megaplug.models.sampling.discretize_sparse_profiles`), no
+    :func:`~laurel.models.sampling.discretize_sparse_profiles`), no
     time-bin re-assignment is needed.  ``n_bootstraps`` is read directly from
     ``params["n_bootstraps"]`` and used as the uniform possible-observation
     count for zero-padding.

@@ -718,7 +718,7 @@ scenario_configs:
 ### Slurm batch scripts
 scenario_slurm_script:
   type: partitions.PartitionedDataset
-  path: src/runners
+  path: scripts
   dataset:
     type: text.TextDataset
   filename_suffix: ".sh"

@@ -12,7 +12,7 @@ Covers the memory-efficient accumulator pattern introduced in
 import pandas as pd
 import pytest
 
-from megaplug.pipelines.evaluate_impacts.nodes import compress_bootstrap_profiles
+from laurel.pipelines.evaluate_impacts.nodes import compress_bootstrap_profiles
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -8,7 +8,7 @@ laurel is a Kedro 1.x data & simulation project modeling heavy-vehicle trip elec
 ## 2. Architecture & Data Flow
 - Entry point: `kedro run` assembles pipelines via `pipeline_registry.register_pipelines()` (auto-discovers each `pipeline.py`).
 - Typical flow for electrification (`electrify_trips`): load trips → build `DwellSet` → enrich with vehicle/mode parameters → compute dwell durations & energy → mark refresh / critical days → filter dwells (masked accumulation) → compute shift power envelopes → simulate charging decisions → apply charging management.
-- Configuration layering: `conf/base/parameters_*.yml` (shared), `conf/local/` (ignored, developer overrides), scenario definitions in `conf/scenarios/` & scenario runners in `conf/scenario_runners/` (used for batch experimentation).
+- Configuration layering: `conf/base/parameters_*.yml` (shared), `conf/local/` (ignored, developer overrides), scenario definitions in `conf/scenarios/` (generated, gitignored) & build specs in `conf/build_scenarios/` (hand-written, consumed by the `build_scenarios` pipeline to generate them).
 - Data folders follow Kedro convention (`data/01_raw` → `08_reporting`). Never commit large outputs.
 
 ## 3. Key Conventions
