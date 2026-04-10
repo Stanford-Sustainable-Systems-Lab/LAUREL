@@ -172,6 +172,7 @@ logs/*
 !logs/slurm/
 logs/slurm/*
 !logs/slurm/.gitkeep
+!logs/slurm/README.md
 
 # Container files
 containers/*
