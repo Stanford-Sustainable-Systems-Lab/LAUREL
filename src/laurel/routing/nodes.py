@@ -1,4 +1,4 @@
-from laurel.models.routing.server import GraphhopperContainerRouter
+from laurel.routing.server import GraphhopperContainerRouter
 from laurel.utils.params import import_from_config
 
 

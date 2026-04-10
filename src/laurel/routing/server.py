@@ -2,7 +2,7 @@ import logging
 from abc import ABC
 from typing import Self
 
-from laurel.models.routing.containers import (
+from laurel.routing.containers import (
     AbstractContainerRunner,
     ApptainerContainerRunner,
     DockerContainerRunner,
