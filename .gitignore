@@ -166,17 +166,18 @@ conf/scenarios/*
 scripts/*
 !scripts/.gitkeep
 
-# Slurm files
-slurm_logs/*
-!slurm_logs/.gitkeep
+# Slurm logs: tracked because jobs will fail (perhaps silently) if the log directory
+# does not exist. The top-level logs directory will be used by Graphhopper.
+logs/*
+!logs/slurm/
+logs/slurm/*
+!logs/slurm/.gitkeep
+!logs/slurm/README.md
 
 # Container files
 containers/*
 !containers/.gitkeep
 !containers/README.md
-
-# Graphhopper logs
-logs/*
 
 # Claude code files
 CLAUDE.local.md
