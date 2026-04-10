@@ -40,7 +40,7 @@ from laurel.pipelines.electrify_trips.nodes import (
     merge_dataframes_node,
     merge_dwellset_node,
 )
-from laurel.scenarios.io import (
+from laurel.scenario_framework.io import (
     read_scenario_partition,
     write_scenario_partition,
 )

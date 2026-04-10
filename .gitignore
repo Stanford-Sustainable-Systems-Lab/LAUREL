@@ -162,8 +162,9 @@ session_store.db
 # Auto-generated configs and bash scripts
 conf/scenarios/*
 !conf/scenarios/.gitkeep
-src/runners/*
-!src/runners/.gitkeep
+!conf/scenarios/README.md
+scripts/*
+!scripts/.gitkeep
 
 # Slurm files
 slurm_logs/*

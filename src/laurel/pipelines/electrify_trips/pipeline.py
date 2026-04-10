@@ -24,7 +24,7 @@ from the pipeline dropdown.
 from kedro.pipeline import Node, Pipeline
 
 from laurel.models.dwell_sets import load_dwell_set, save_dwell_set
-from laurel.scenarios.io import write_scenario_partition
+from laurel.scenario_framework.io import write_scenario_partition
 from laurel.utils.data import categorize_columns, filter_by_vals_in_cols
 from laurel.utils.distributed import start_dask_node
 from laurel.utils.params import set_entity_params

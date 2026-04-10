@@ -31,7 +31,7 @@ import pandas as pd
 import seaborn as sns
 from openturns import viewer
 
-from laurel.scenarios.build import ScenarioBuilder
+from laurel.scenario_framework.build import ScenarioBuilder
 
 
 class SensitivityAnalysis:
