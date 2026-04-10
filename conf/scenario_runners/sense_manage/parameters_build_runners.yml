@@ -14,7 +14,7 @@ slurm_resources:
   mem: 64GB
   gpus: 0
   time: 0-01:00
-  array: 0-511
+  array: 0-1023
 
 cmd_line_calls:
   prefix: uv run
@@ -25,7 +25,7 @@ cmd_line_calls:
 scenario_params:
   builder: SenseScenarioBuilder
   display_name: sense_manage
-  sample_size: 512 # Sobol sequences work best on powers of 2
+  sample_size: 1024 # Sobol sequences work best on powers of 2
   variables:
     manage_charging:
       dist: Categorical
