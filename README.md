@@ -340,12 +340,6 @@ HPC environments like Sherlock do not support Docker; use [Apptainer](https://ap
 
 Once patched, point `conf/base/parameters_compute_routes.yml` at the Apptainer sandbox path instead of a Docker image name.
 
-### Port forwarding for JupyterLab on Sherlock
-
-```bash
-bash scripts/watch_sherlock_port.sh
-```
-
 ---
 
 ## Output Data

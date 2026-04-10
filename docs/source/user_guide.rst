@@ -507,13 +507,6 @@ requires a few manual steps:
 Once patched, point ``conf/base/parameters_compute_routes.yml`` at the Apptainer
 sandbox path instead of a Docker image name.
 
-Port forwarding for JupyterLab on Sherlock
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
-   bash scripts/watch_sherlock_port.sh
-
 ----
 
 Output Data
