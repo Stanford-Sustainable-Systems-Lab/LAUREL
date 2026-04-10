@@ -11,7 +11,7 @@ slurm_resources:
   ntasks: 2 # I believe that this is what we need for SequentialRunner, while ParallelRunner needs n_examples + 1
   ntasks-per-node: 2 # Keeps all of the tasks and CPUs on the same node
   cpus-per-task: 2 # Using multiple CPUs takes a lot of effort (e.g. Dask cluster)
-  mem: 64GB
+  mem: 48GB
   gpus: 0
   time: 0-01:00
   array: 0-511
