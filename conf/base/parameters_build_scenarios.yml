@@ -7,7 +7,7 @@
 slurm_command: local # Valid values are "sbatch" and "salloc"
 
 slurm_reporting:
-  output: slurm_logs/%x_%A_%a.log
+  output: logs/slurm/%x_%A_%a.log
   mail-user: passow@stanford.edu
   mail-type: ALL
 
