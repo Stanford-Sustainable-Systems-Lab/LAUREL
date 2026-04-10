@@ -13,34 +13,32 @@ slurm_resources:
   cpus-per-task: 2 # Using multiple CPUs takes a lot of effort (e.g. Dask cluster)
   mem: 64GB
   gpus: 0
-  time: 0-04:00
-  array: 0-8
+  time: 0-01:00
+  array: 0-3
 
 cmd_line_calls:
   prefix: uv run
   kedro:
     pipeline: evaluate_impacts
-    params: partition_data_dir=$SCRATCH/megaplug
+    params: partition_data_dir=$SCRATCH/laurel
 
 scenario_params:
   builder: SenseScenarioBuilder
-  display_name: boot_scale
+  display_name: boot_scale_small
   variables:
     boot_scale:
       dist: Categorical
       params:
         - 100
-        - 500
-        - 1000
+        - 200
       path:
         - sample_profiles
         - n_bootstraps
     first_stage:
       dist: Categorical
       params:
-        - 1000
-        - 3000
         - 5000
+        - 10000
       path:
         - sample_profiles
         - max_first_stage_options
