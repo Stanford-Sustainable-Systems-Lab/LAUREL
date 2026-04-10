@@ -19,8 +19,10 @@ slurm_resources:
 cmd_line_calls:
   prefix: uv run
   kedro:
-    tags: scenario_run
-    params: partition_data_dir=$SCRATCH/laurel
+    - pipeline: electrify_trips
+      params: partition_data_dir=$SCRATCH/laurel
+    - pipeline: evaluate_impacts
+      params: partition_data_dir=$SCRATCH/laurel
 
 scenario_params:
   builder: SenseScenarioBuilder
