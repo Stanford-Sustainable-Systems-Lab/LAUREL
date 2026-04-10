@@ -11,14 +11,19 @@ slurm_reporting:
   mail-user: passow@stanford.edu
   mail-type: ALL
 
+# A note on selecting job times:
+# In job arrays, the startup processes for Kedro within each job compete for shared resources.
+# The exact identity of these shared resources is not yet known. However, we have empirically
+# found that it takes about 35 seconds to process through each Kedro job. Therefore,
+# if you are using a job array, increase your estimated time by 35 seconds times the array width.
 slurm_resources:
   partition: serc
-  ntasks: 2 # I believe that this is what we need for SequentialRunner, while ParallelRunner needs n_examples + 1
-  cpus-per-task: 1 # Using multiple CPUs takes a lot of effort (e.g. Dask cluster)
-  mem-per-cpu: 32GB # Increasing memory, since I've had some memory errors
+  ntasks: 2 # Kedro needs this for its SequentialRunner, while ParallelRunner needs n_parallels + 1
+  cpus-per-task: 1
+  mem-per-cpu: 16GB
   gpus: 0
-  time: 0-04:00 # Reducing time requirement, since with more processors we're going faster.
-  array: 1-60%2 # 2 at a time is enforced by Gurobi license
+  time: 0-04:00
+  array: 1-60%2
 
 cmd_line_calls:
   prefix: uv run
