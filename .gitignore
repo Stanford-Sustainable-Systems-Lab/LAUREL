@@ -164,7 +164,11 @@ conf/scenarios/*
 !conf/scenarios/.gitkeep
 !conf/scenarios/README.md
 scripts/*
-!scripts/.gitkeep
+!scripts/setup
+!scripts/setup/**
+!scripts/scenarios/
+scripts/scenarios/*
+!scripts/scenarios/.gitkeep
 
 # Slurm logs: tracked because jobs will fail (perhaps silently) if the log directory
 # does not exist. The top-level logs directory will be used by Graphhopper.
