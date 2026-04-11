@@ -1,0 +1,83 @@
+results_partition:
+  dir: validate/task_0
+  level_names:
+  - run_name
+  - task_id
+
+compute_adoption_totals:
+  adoption_fracs:
+    id_columns:
+    - primary_op_dist
+    values:
+      0-99 Miles: 0.375
+      100-249 Miles: 0.375
+      250-499 Miles: 0.375
+      500+ Miles: 0.375
+  electrified_fuel_types:
+  - electricity
+  filter_totals:
+    filters:
+      gvw_class:
+        value_isin:
+        - '8'
+      is_mandate_active:
+        value_isin:
+        - false
+      scenario:
+        value_isin:
+        - Central
+      year:
+        value_isin:
+        - 2035
+    keep_only_filter_cols: false
+  fuel_type_col: fuel_type
+  override_with_params: true
+  totals_column: n_vehs_target
+
+vehicles:
+  consump_rate_kwh_per_mi: 2.2
+  initial_soc:
+    alpha: 5
+    beta: 5
+  max_delay_recoverable_hrs: 8
+  min_soc_charge: 0.01
+  minimum_times:
+    plug_in_mins: 5
+    plug_io_hrs: 0.1667
+    plug_out_mins: 5
+  random_seed:
+    master_seed: 42
+    seed_id_col: veh_id
+  soc_buffer_high: 0.8
+  soc_buffer_low: 0.2
+
+charging_modes:
+  id_column: charge_mode_id
+  name_column: mode_name
+  none:
+    max_power_kw: 0
+  depot:
+    max_power_kw: 0
+  low:
+    max_power_kw: 245
+  med:
+    max_power_kw: 525
+  high:
+    max_power_kw: 700
+
+assign_modes:
+  mode_col: ${charging_modes.name_column}
+  loc_group_col: loc_group_id
+  loc_based_mode_avail:
+    none: True
+    depot: True
+    low: True
+    med: True
+    high: True
+  veh_based_mode_avail:
+    mode_name: depot
+    ratio_thresh: 0.2
+    ratio_col: max_dwell_hrs_roll_ratio
+  mode_mask_col: avail_modes_bool
+  max_power_col: max_power_kw_avail
+  max_power_source_col: max_power_kw
