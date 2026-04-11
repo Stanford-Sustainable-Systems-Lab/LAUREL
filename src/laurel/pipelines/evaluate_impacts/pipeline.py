@@ -6,19 +6,19 @@ see :mod:`.nodes`.
 
 Sub-pipelines / tags
 --------------------
-- **scenario_run / read** — collates per-scenario partitions and loads
+- **read** — collates per-scenario partitions and loads
   the ``DwellSet`` and vehicle table into memory.
 - **report_vehicles** — summarises per-vehicle charging outcomes
   (delays, failures) and writes results to a scenario partition.
-- **scenario_run** (dwell_pipe_pre_prob) — applies accumulated delays,
+- **dwell_pipe_pre_prob** — applies accumulated delays,
   assigns substation/county region metadata, and filters dwells before
   probability computation.
-- **scenario_run** (prob_pipe) — estimates expected electrified dwell
+- **prob_pipe** — estimates expected electrified dwell
   counts per TAZ by fusing adoption totals with observed dwell rates via
   logistic-regression-inspired class probabilities.
-- **scenario_run** (dwell_pipe_post_prob) — filters to non-zero-charge
+- **dwell_pipe_post_prob** — filters to non-zero-charge
   dwells and attaches class probabilities.
-- **scenario_run / manage_charging** (event_pipe) — converts dwells to
+- **manage_charging** (event_pipe) — converts dwells to
   charging events, localises timestamps to hex-level time zones, and
   slices events into a time-ordered profile grid.
 - **report_profiles** — runs two-stage bootstrap sampling per substation
@@ -85,7 +85,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="start_dask_eval",
             ),
         ],
-        tags="scenario_run",
     )
 
     read_pipe = Pipeline(
@@ -131,7 +130,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="categorize_hex_region_corresp",
             ),
         ],
-        tags="scenario_run",
     )
 
     report_vehicles_pipe = Pipeline(
@@ -153,7 +151,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="write_scenario_partition_vehicles",
             ),
         ],
-        tags=["report_vehicles", "scenario_run"],
+        tags=["report_vehicles"],
     )
 
     dwell_pipe_pre_prob = Pipeline(
@@ -225,7 +223,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="filter_dwells_pre_prob_eval",
             ),
         ],
-        tags=["scenario_run"],
     )
 
     prob_pipe = Pipeline(
@@ -288,7 +285,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="compute_class_probs",
             ),
         ],
-        tags=["scenario_run"],
     )
 
     dwell_pipe_post_prob = Pipeline(
@@ -322,7 +318,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="add_dwell_id",
             ),
         ],
-        tags=["scenario_run"],
     )
 
     event_pipe = Pipeline(
@@ -377,7 +372,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="build_time_ordered_slice",
             ),
         ],
-        tags=["scenario_run", "manage_charging"],
+        tags=["manage_charging"],
     )
 
     report_profiles_scaled_pipe = Pipeline(
@@ -479,14 +474,12 @@ def create_pipeline(**kwargs) -> Pipeline:
             namespace="substation",
             parameters=profile_group_fixed_params,
             inputs=profile_group_fixed_inputs,
-            tags="scenario_run",
         ),
         # Pipeline(
         #     report_profiles_scaled_pipe,
         #     namespace="county",
         #     parameters=profile_group_fixed_params,
         #     inputs=profile_group_fixed_inputs,
-        #     tags="scenario_run",
         # ),
     ]
 

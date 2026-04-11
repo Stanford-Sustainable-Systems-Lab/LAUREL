@@ -1,5 +1,5 @@
 # Raw datasets
-navistar:
+trips_raw:
   type: dask.ParquetDataset
   filepath: data/01_raw/Navistar/stanford_dataset_v2/
 
@@ -482,19 +482,19 @@ canonical_veh_locs:
   filepath: data/03_primary/canonical_veh_locs.csv
 
 # Reporting datasets
-vehicle_trajectory:
+example_vehicle_trajectory:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: data/08_reporting/vehicle_trajectory.gpkg
+  filepath: data/08_reporting/example_vehicle_trajectory.gpkg
   save_args:
     index: True
     layer: trips
     
-navistar_by_state:
+observed_vehicles_by_state:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: data/08_reporting/navistar_by_state.gpkg
+  filepath: data/08_reporting/observed_vehicles_by_state.gpkg
   save_args:
     index: True
-    layer: navistar_by_state
+    layer: observed_vehicles_by_state
 
 vehicle_peak_load_by_substation:
   type: laurel.datasets.geopackage.GeoPackageDataset
@@ -718,7 +718,7 @@ scenario_configs:
 ### Slurm batch scripts
 scenario_slurm_script:
   type: partitions.PartitionedDataset
-  path: scripts
+  path: scripts/scenarios
   dataset:
     type: text.TextDataset
   filename_suffix: ".sh"

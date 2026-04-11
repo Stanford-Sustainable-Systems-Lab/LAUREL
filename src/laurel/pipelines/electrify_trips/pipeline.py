@@ -6,7 +6,7 @@ see :mod:`.nodes`.
 
 Sub-pipelines / tags
 --------------------
-- **scenario_run / choose_charging** — the single ``charge_pipe`` that
+- **choose_charging** — the single ``charge_pipe`` that
   runs the full electrification simulation for one State of the World:
   filters vehicles, assigns battery ranges, calculates energy requirements,
   marks critical days, and runs the utility-maximisation charging-choice
@@ -212,7 +212,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="write_scenario_partition_vehs",
             ),
         ],
-        tags=["scenario_run", "choose_charging"],
+        tags=["choose_charging"],
     )
 
     return charge_pipe

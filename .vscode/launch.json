@@ -13,12 +13,12 @@
             "justMyCode": true
         },
         {
-            "name": "Kedro: Build Runners",
+            "name": "Kedro: Build Scenarios",
             "type": "debugpy",
             "request": "launch",
             "console": "integratedTerminal",
             "module": "kedro",
-            "args": ["run", "--async", "--pipeline=build_runners", "--env=scenario_runners/sense"]
+            "args": ["run", "--async", "--pipeline=build_scenarios", "--env=scenario_builders/sense"]
             // Any other arguments should be passed as a comma-seperated-list
             // e.g "args": ["run", "--pipeline", "pipeline_name"]
         },

@@ -17,6 +17,12 @@ Key design decisions
   generated script uses ``find`` to locate the ``task_$SLURM_ARRAY_TASK_ID``
   directory under ``conf/scenarios/<name>/`` at runtime.  This keeps the
   script independent of the absolute project path on the HPC cluster.
+- **Multiple sequential Kedro calls**: ``cmd_line_calls.kedro`` in the
+  parameters YAML accepts either a single dict or a list of dicts.  Each
+  dict produces one ``kedro run`` line; multiple calls are emitted as
+  consecutive lines so each runs independently.  The config-directory
+  discovery block is emitted once per task regardless of how many
+  ``kedro run`` calls follow.
 - **Option building via string template**: :meth:`ScenarioBashWriter.build_opts`
   uses a simple ``KEY``/``VALUE`` placeholder template rather than a
   CLI-parsing library, keeping the output predictable and easy to inspect.
@@ -94,35 +100,49 @@ class ScenarioBashWriter:
 
     def build_kedro_run(
         self: Self,
-        params: dict,
+        kedro_calls: list[dict] | dict,
         prefix: str = "",
         n_tasks: int = 1,
     ) -> str:
         """Build the shell commands that discover the config dir and invoke Kedro.
 
-        For ``sbatch`` mode, produces two lines: a ``find`` command that sets
-        ``conf_dir`` from ``SLURM_ARRAY_TASK_ID``, then a ``kedro run`` call
-        using ``--env=$conf_dir``.  For ``local`` mode, wraps these lines in a
-        ``for`` loop over ``seq 0 <n_tasks-1>`` that simulates a SLURM array.
+        For ``sbatch`` mode, produces a ``find`` command that sets ``conf_dir``
+        from ``SLURM_ARRAY_TASK_ID``, followed by one ``kedro run`` line per
+        entry in ``kedro_calls``.  For ``local`` mode, wraps the entire block
+        in a ``for`` loop over ``seq 0 <n_tasks-1>`` that simulates a SLURM
+        array, with each line individually indented.
+
+        The config-directory discovery block is emitted exactly once per task
+        regardless of how many ``kedro run`` calls are requested.
 
         Args:
-            params: Dict of Kedro CLI options to pass to ``kedro run`` (e.g.
-                ``{"pipeline": "electrify_trips"}``).  A ``"prefix"`` key is
-                expected at the call site and extracted before this method is
-                called; the remaining keys are forwarded here.  The ``"env"``
-                key is injected automatically and should not be included.
-            prefix: Shell command prefix inserted before ``kedro run`` (e.g.
-                ``"srun"`` for MPI or ``"python -m cProfile"`` for profiling).
-                Defaults to ``""``.
+            kedro_calls: A list of dicts, each mapping Kedro CLI option names
+                to values (e.g. ``[{"pipeline": "electrify_trips"}, {"pipeline":
+                "evaluate_impacts"}]``).  A bare dict is accepted for backward
+                compatibility and is treated as a single-element list.  The
+                ``"env"`` key is injected automatically into each call and
+                should not be included.  At least one entry is required.
+            prefix: Shell command prefix inserted before each ``kedro run``
+                invocation (e.g. ``"uv run"`` or ``"srun"``).  Defaults to
+                ``""``.
             n_tasks: Total number of tasks in the array; used only for
                 ``local`` mode to set the ``for`` loop range.  Defaults to
                 ``1``.
 
         Returns:
-            Multi-line shell string containing the config-discovery and
-            ``kedro run`` invocation(s).
+            Multi-line shell string containing the config-discovery block and
+            one or more ``kedro run`` invocations.
+
+        Raises:
+            ValueError: If ``kedro_calls`` is empty.
         """
-        # If we're doing scenario runs, then find the appropriate config environment
+        # Normalise a bare dict to a single-element list for backward compatibility.
+        if isinstance(kedro_calls, dict):
+            kedro_calls = [kedro_calls]
+        if not kedro_calls:
+            raise ValueError("kedro_calls must contain at least one entry.")
+
+        # Build the conf-dir discovery block (emitted once per task).
         conf_lines = ["cd conf"]
         scen_pth = Path("scenarios") / self.name
         conf_dir_cmd = (
@@ -132,22 +152,22 @@ class ScenarioBashWriter:
         conf_lines.append("cd ..")
         conf_finder = " && ".join(conf_lines)
 
-        if params is None:
-            params = {}
-        params.update({"env": "$conf_dir"})
-
-        # Write kedro call
-        kedro_opts = self.build_opts(d=params, template=" --KEY=VALUE")
-        cmds = f"{prefix} kedro run{kedro_opts}"
+        # Build one kedro run command per entry; inject env without mutating the input.
+        cmd_strs = []
+        for call in kedro_calls:
+            call_with_env = {**call, "env": "$conf_dir"}
+            kedro_opts = self.build_opts(d=call_with_env, template=" --KEY=VALUE")
+            cmd_strs.append(f"{prefix} kedro run{kedro_opts}")
 
         lines = []
         if self.command == "sbatch":
             lines.append(conf_finder)
-            lines.append(cmds)
+            lines.extend(cmd_strs)
         else:
             lines.append(f"for SLURM_ARRAY_TASK_ID in `seq 0 {n_tasks - 1}`; do")
             lines.append(f"\t{conf_finder}")
-            lines.append(f"\t{cmds}")
+            for cmd in cmd_strs:
+                lines.append(f"\t{cmd}")
             lines.append("done")
         kedro_runner = "\n".join(lines)
         return kedro_runner
@@ -193,7 +213,7 @@ class ScenarioBashWriter:
 
         kedro_run = self.build_kedro_run(
             prefix=params["prefix"],
-            params=params["kedro"],
+            kedro_calls=params["kedro"],
             n_tasks=n_tasks,
         )
         lines += [kedro_run]
