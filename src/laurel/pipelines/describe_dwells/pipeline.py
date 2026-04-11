@@ -7,7 +7,7 @@ see :mod:`.nodes`.
 Sub-pipelines / tags
 --------------------
 - **format_trips** — parses timestamps, converts H3 hex strings, and
-  computes derived trip columns from the raw Navistar telematics export.
+  computes derived trip columns from the raw telematics trips.
 - **create_dwells / create_dwells_optional_stops** — converts the trip
   DataFrame to a ``DwellSet``; coalesces circle-trip interruptions; marks
   FMCSA driver-shift boundaries; computes rolling dwell ratios; and joins
@@ -43,7 +43,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             Node(
                 func=format_trips_columns,
-                inputs=["navistar", "params:format_columns"],
+                inputs=["trips_raw", "params:format_columns"],
                 outputs="trips_formatted_no_derived",
                 name="format_trips_columns",
             ),
