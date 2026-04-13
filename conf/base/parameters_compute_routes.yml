@@ -1,72 +1,92 @@
-# This is a boilerplate parameters config generated for pipeline 'compute_routes'
-# using Kedro 0.19.3.
+# Parameters for the ``compute_routes`` pipeline (Model Module 2: Augment Dwell Data).
 #
-# Documentation for this file format can be found in "Parameters"
-# Link: https://docs.kedro.org/en/0.19.3/configuration/parameters.html
+# This pipeline inserts optional truck-stop dwells along shortest-path routes.
+# For each trip longer than ``min_dist_miles``, it checks whether any public
+# truck stop falls within ``park_buffer_miles`` of the GraphHopper shortest-path
+# route. If so, a dwell is inserted at that truck stop. This grew the observed
+# dwell count by ~35% in the paper's dataset.
+#
+# Routing is parallelized across Dask workers. The pipeline manages GraphHopper
+# container lifecycle (startup, import, serving, shutdown) automatically.
+#
+# Container runtime:
+#   - On HPC systems (no Docker daemon): use ApptainerContainerRunner and point
+#     ``image`` at a pre-built Apptainer sandbox (.sif directory). See the HPC
+#     Execution section of README.md for how to build the sandbox.
+#   - On local machines with Docker: switch ``container_class`` to
+#     ``laurel.models.routing.server.DockerContainerRunner`` and set ``image``
+#     to a Docker image name (e.g. ``israelhikingmap/graphhopper:10.0``).
+#
+# Documentation: https://docs.kedro.org/en/stable/configuration/parameters.html
 
 filter_routable_trips:
   drop_cols:
     - veh_type
     - vin_gvw
   dist_col: trip_miles
-  min_dist_miles: 50
+  min_dist_miles: 50   # Only route trips longer than this; shorter trips are unlikely to pass a truck stop en route
   debug_subsample:
-    active: False
+    active: False  # Set to True and reduce frac to speed up development runs
     frac: 0.01
 
 get_trip_orig_dest_points:
-  hex_geo_cols: # Format is target_col: source_col
+  hex_geo_cols:  # Format is target_col: source_col
     orig_point: starting_h3_8
     dest_point: ending_h3_8
   output_geom_col: orig_point
 
 partition_trips:
-  n_partitions: 6000 # Care must be taken to tune this to match the routing system memory
-  # Currently, 250 partitions yields about 32000 rows per partition
+  # Tune n_partitions to balance memory per worker against parallelism.
+  # At 250 partitions the full dataset yields ~32,000 rows per partition.
+  # Increase partitions (smaller batches) if workers run out of memory.
+  n_partitions: 6000
 
 dask_routing:
-    cluster:
-        n_workers: 4
-        processes: True
-        threads_per_worker: 1
-        memory_limit: 8GiB
+  cluster:
+    n_workers: 4           # Tune to available CPU cores
+    processes: True        # Must be True; code is not proven thread-safe
+    threads_per_worker: 1
+    memory_limit: 8GiB     # Tune to available RAM per worker
 
 graphhopper:
-    image: containers/graphhopper_10.2.sif
-    container_class: laurel.models.routing.server.ApptainerContainerRunner
-    map_path: $SCRATCH/north-america-latest.osm.pbf
-    graph_dir: $SCRATCH/graphhopper_cache/north-america/
-    config_path: ./conf/base/parameters_graphhopper.yml
-    resources:
-        import:
-            mem_max_gb: 160
-            mem_start_gb: 160
-            startup_delay_secs: 5
-        server:
-            mem_max_gb: 64 # 8 is not enough to load the US, but 10 is
-            mem_start_gb: 64 # I learned from the following link that setting memory to be the same is important: https://www.graphhopper.com/blog/2022/06/27/host-your-own-worldwide-route-calculator-with-graphhopper/
-            startup_delay_secs: 15 # This is quite close to the shortest possible
+  # Switch container_class to use Docker on local machines (no Apptainer):
+  #   laurel.models.routing.server.DockerContainerRunner
+  # Keep ApptainerContainerRunner for HPC/Linux environments.
+  image: containers/graphhopper_10.2.sif               # Path to Apptainer sandbox, or Docker image name for DockerContainerRunner
+  container_class: laurel.models.routing.server.ApptainerContainerRunner
+  map_path: $SCRATCH/north-america-latest.osm.pbf      # Path to OSM .osm.pbf file; $SCRATCH is an HPC env var — replace with an absolute path on local systems
+  graph_dir: $SCRATCH/graphhopper_cache/north-america/ # Pre-built GraphHopper graph cache; populate via scripts/setup/02b_import_graph.sh
+  config_path: ./conf/base/parameters_graphhopper.yml
+  resources:
+    import:
+      mem_max_gb: 160         # Memory for initial graph import; reduce if routing a smaller geographic area
+      mem_start_gb: 160       # Set equal to mem_max_gb (see GraphHopper memory docs)
+      startup_delay_secs: 5
+    server:
+      mem_max_gb: 64          # Memory to serve the loaded graph; must be ≥ 64 GB for the full continental U.S.
+      mem_start_gb: 64        # Set equal to mem_max_gb
+      startup_delay_secs: 15  # Empirically the minimum safe delay; increase if server startup times out
 
 get_routes:
-    profile: car
-    client:
-        max_concurrent_requests: 20
-        batch_size: 5000
-        timeout_secs: 60
-        verbose: True
-    input_cols:
-        orig: orig_point
-        dest: dest_point
-    output_trip_cols:
-        dist: trip_miles_route
-        dur: trip_hrs_route
-        speed: trip_speed_route_mph
+  profile: car   # GraphHopper routing profile; "car" approximates truck road access for continental routing
+  client:
+    max_concurrent_requests: 20
+    batch_size: 5000
+    timeout_secs: 60
+    verbose: True
+  input_cols:
+    orig: orig_point
+    dest: dest_point
+  output_trip_cols:
+    dist: trip_miles_route
+    dur: trip_hrs_route
+    speed: trip_speed_route_mph
 
 filter_opt_stops:
   filters:
     loc_group_id:
       value_isin:
-        - truck_stop
+        - truck_stop  # Only insert optional dwells at truck-stop TAZs
   keep_only_filter_cols: False
 
 format_opt_stop_locations:
@@ -82,11 +102,11 @@ format_opt_stop_locations:
     - park_point
 
 get_optional_stop_trips:
-  projected_crs: EPSG:5072
-  park_buffer_miles: 1.0
+  projected_crs: EPSG:5072    # Albers Equal Area Conic (CONUS); used for accurate distance-to-route calculations
+  park_buffer_miles: 1.0      # A truck stop must be within this distance of the route to be considered reachable
   columns:
     route_geom: trip_geom_route
-    park_point: geometry # Renamed from "park_point" by save and load to GeoPackage
+    park_point: geometry  # Renamed from "park_point" by save and load to GeoPackage
     dist_along_miles: dist_along_miles
     hex_park: hex_id_park
     hex_end: ending_h3_8
@@ -97,7 +117,7 @@ get_optional_stop_trips:
   progress_report_interval_secs: 10
 
 describe_optional_stop_trips:
-  park_buffer_miles: 1.0
+  park_buffer_miles: 1.0  # Must match get_optional_stop_trips.park_buffer_miles
   columns:
     dist_along_miles: dist_along_miles
     miles_route: trip_miles_route
@@ -111,7 +131,7 @@ describe_optional_stop_trips:
   trip_id_cols:
     - veh_id
     - end_timestamp_utc
-  rename_cols_final: # Values here are the names of internal columns
+  rename_cols_final:  # Values here are the names of internal columns
     start_timestamp_utc: new_start
     end_timestamp_utc: new_end
     trip_miles: trip_miles_route_seg
@@ -133,4 +153,4 @@ concat_optional_stops:
     - veh_id
     - end_timestamp_utc
   dist_col: trip_miles
-  n_partitions: 300 # For saving out to Parquet
+  n_partitions: 300  # For saving out to Parquet

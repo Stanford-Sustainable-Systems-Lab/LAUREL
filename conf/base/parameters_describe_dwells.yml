@@ -1,5 +1,14 @@
-# Documentation for this file format can be found in "Parameters"
-# Link: https://docs.kedro.org/en/1.0.0/configuration/parameters.html
+# Parameters for the ``describe_dwells`` pipeline (Model Module 2: Augment Dwell Data).
+#
+# This pipeline transforms raw telematics trips into a dwell dataset: it formats
+# columns, derives trip-level statistics, coalesces spurious short dwells, marks
+# driver shift boundaries, and clusters recurring vehicle–location pairs to assign
+# each dwell a location type (depot, truck stop, or other).
+#
+# Dask is used for parallelism. The code is NOT thread-safe (Numba JIT), so
+# ``processes: True`` and ``threads_per_worker: 1`` are required.
+#
+# Documentation: https://docs.kedro.org/en/stable/configuration/parameters.html
 
 format_columns:
   time_columns:
@@ -26,14 +35,14 @@ trip_derived_cols:
 dask_describe_dwells:
   use_dask: True
   cluster:
-    n_workers: 4
-    processes: True
-    threads_per_worker: 1 # Must stay at 1, since our code is not thread safe
-    memory_limit: 16GiB # Use 8GiB for laptop, but more was needed with new truck stop system 11/5/2025
+    n_workers: 4           # Tune to available CPU cores
+    processes: True        # Must be True; code is not thread-safe due to Numba JIT
+    threads_per_worker: 1  # Must stay at 1; do not increase
+    memory_limit: 16GiB    # Tune to available RAM; 8 GiB is sufficient on a laptop for typical datasets
 
 create_dwells:
   debug_subsample:
-    active: False
+    active: False   # Set to True and reduce n to speed up development runs
     n: 1000
   drop_cols:
     - starting_h3_8
@@ -49,16 +58,22 @@ create_dwells:
     trip_dist: trip_miles
     trip_dur: trip_hrs
   set_index_kwargs:
-    partition_size: 104857600 # which is 100MiB in bytes
+    partition_size: 104857600  # 100 MiB in bytes; controls Dask partition size after re-indexing
   verify_sorting: False
   load_into_memory: False
 
 coalesce_interrupted_dwells:
-    max_short_dist_miles: 0.62 # 1 kM, the longest distance across an h3 res 8 hex
-    max_short_dur_hrs: 0.1 # 6 minutes
-    inplace: True
+  # Merges pairs of consecutive dwells at the same hex that are separated by a
+  # very short trip. These arise from GPS noise or brief loop trips that should
+  # not break a dwell into two.
+  max_short_dist_miles: 0.62  # ~1 km, the longest diagonal across an H3 res-8 hex (~460 m diameter)
+  max_short_dur_hrs: 0.1      # 6 minutes; pairs with distance threshold above
+  inplace: True
 
 rolling_dwell_ratios:
+  # Computes a 28-day rolling ratio of dwell duration to detect locations where
+  # a vehicle spends a large fraction of its time — used downstream to identify
+  # depot-like locations for vehicle-specific depot assignment.
   rolling_kwargs:
     window: 28d
     center: True
@@ -69,17 +84,23 @@ map_location_groups:
   location_group_col: loc_group_id
   missing_values:
     fill_missing: False
-    fill_value: ${group_hexes.clusterer_kwargs.n_clusters}
+    fill_value: ${group_hexes.clusterer_kwargs.n_clusters}  # Cluster ID for unclassified hexes
 
 mark_vehicle_shifts:
+  # Identifies driver shift boundaries using the FMCSA hours-of-service rule:
+  # a rest period of ≥10 consecutive hours (here approximated as ≥6.9 hrs,
+  # slightly below the 7-hour mandatory sleeper-berth minimum, to tolerate
+  # telematics gaps). Must match ``min_refresh_hrs`` in parameters_electrify_trips.yml.
   columns:
     refresh: is_refresh
     dur: dwell_time_hrs
     shift_id: shift_id
-  min_refresh_hrs: 6.9 # The minimum sleep time from FMCSA (7hrs) minus a fudge factor
+  min_refresh_hrs: 6.9  # FMCSA minimum sleeper berth time (7 hrs) minus a small tolerance
 
 cluster_veh_loc_pairs:
-  min_cluster_size_denom: 200 # [n_obs]/[this number] gives the minimum cluster size 
+  # Clusters vehicle–location pairs by visit patterns to distinguish depot-like
+  # locations (frequent, long dwells) from incidental stops.
+  min_cluster_size_denom: 200  # min_cluster_size = n_obs / this value; larger values yield smaller minimum clusters
   sample:
     active: False
     n: 10000

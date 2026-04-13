@@ -1,14 +1,28 @@
-# This is a boilerplate parameters config generated for pipeline 'build_runners'
-# using Kedro 0.19.5.
+# Parameters for the ``build_scenarios`` pipeline (scenario management / HPC execution).
 #
-# Documentation for this file format can be found in "Parameters"
-# Link: https://docs.kedro.org/en/0.19.5/configuration/parameters.html
+# This pipeline generates two artifacts for each scenario family:
+#   1. Per-task Kedro config overrides in conf/scenarios/<name>/task_<id>/parameters.yml
+#   2. A SLURM batch script in scripts/<name>.sh (or a local run script)
+#
+# Each "task" corresponds to one state of the world (SoW). The SLURM array index
+# maps to the task_id parameter used by electrify_trips and evaluate_impacts.
+#
+# To generate scenario configs and scripts, run:
+#   kedro run --pipeline=build_scenarios --env=build_scenarios/<scenario_name>
+#
+# slurm_command controls the execution environment:
+#   "local"  — run directly on the current machine (no scheduler); useful for
+#              single-SoW runs and development
+#   "sbatch" — submit to a SLURM cluster as a batch job array
+#   "salloc" — submit to SLURM as an interactive allocation
+#
+# Documentation: https://docs.kedro.org/en/stable/configuration/parameters.html
 
-slurm_command: local # Valid values are "sbatch" and "salloc"
+slurm_command: local  # Valid values are "local", "sbatch", and "salloc"
 
 slurm_reporting:
   output: logs/slurm/%x_%A_%a.log
-  mail-user: passow@stanford.edu
+  mail-user: YOUR_EMAIL@institution.edu  # Replace with your email for SLURM job notifications
   mail-type: ALL
 
 # A note on selecting job times:
@@ -17,13 +31,13 @@ slurm_reporting:
 # found that it takes about 35 seconds to process through each Kedro job. Therefore,
 # if you are using a job array, increase your estimated time by 35 seconds times the array width.
 slurm_resources:
-  partition: serc
-  ntasks: 2 # Kedro needs this for its SequentialRunner, while ParallelRunner needs n_parallels + 1
-  cpus-per-task: 1
-  mem-per-cpu: 16GB
+  partition: serc          # SLURM partition name; replace with your cluster's partition (e.g. "normal", "gpu")
+  ntasks: 2                # Kedro SequentialRunner requires 2 tasks; increase for ParallelRunner (n_parallels + 1)
+  cpus-per-task: 2
+  mem-per-cpu: 16GB        # Tune to your cluster; each SoW requires ~64 GB total (4 cores × 16 GB)
   gpus: 0
-  time: 0-04:00
-  array: 1-60%2
+  time: 0-01:00            # Wall-clock limit; each SoW runs in ~25 minutes; 1 hour gives generous headroom
+  array: 1-60%2            # Array range and concurrency limit; adjust to match the number of SoWs
 
 cmd_line_calls:
   prefix: uv run

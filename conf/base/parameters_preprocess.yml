@@ -1,8 +1,12 @@
-# This is a boilerplate parameters config generated for pipeline 'preprocess'
-# using Kedro 0.19.1.
+# Parameters for the ``preprocess`` pipeline (supporting Model Module 1: Select SoWs).
 #
-# Documentation for this file format can be found in "Parameters"
-# Link: https://docs.kedro.org/en/0.19.1/configuration/parameters.html
+# This pipeline reads VIUS (Vehicle Inventory and Use Survey) public-use microdata
+# and aggregates it into state- and weight-class-level summary tables. These totals
+# are used downstream in ``prepare_totals`` to disaggregate NLR Ledna adoption
+# forecasts to the state and operating-distance-class level.
+#
+# See: conf/base/parameters_prepare_totals.yml for the SoW generation step.
+# Documentation: https://docs.kedro.org/en/stable/configuration/parameters.html
 
 get_vius_by_home_base_state:
   col_renamer:
@@ -11,8 +15,8 @@ get_vius_by_home_base_state:
     veh_miles: VMILE
     avg_miles_per_veh: AMILE
   multipliers:
-    n_vehs: 1000
-    veh_miles: 1000000
+    n_vehs: 1000        # VIUS reports vehicle counts in thousands
+    veh_miles: 1000000  # VIUS reports vehicle miles in millions
   index_col: home_base_state
 
 get_vius_by_weight_class:
@@ -22,19 +26,19 @@ get_vius_by_weight_class:
     veh_miles: VMILE
     avg_miles_per_veh: AMILE
   multipliers:
-    n_vehs: 1000
-    veh_miles: 1000000
+    n_vehs: 1000        # VIUS reports vehicle counts in thousands
+    veh_miles: 1000000  # VIUS reports vehicle miles in millions
   index_col: gvw_class
 
 clean_vius_by_home_base_state:
   drop_idx_values:
-    - Any State (including No Home Base and Not Reported)
+    - Any State (including No Home Base and Not Reported)  # Aggregate row; not a state
   replace_values:
-    Massachussetts: Massachusetts # Correcting spelling
+    Massachussetts: Massachusetts  # Correcting spelling error in VIUS source data
 
 clean_vius_by_weight_class:
   drop_idx_values:
-    - Any Gross Vehicle Weight Rating Class
+    - Any Gross Vehicle Weight Rating Class  # Aggregate row; not a weight class
 
 build_vius_scaling_totals:
   col_renamer:
@@ -42,7 +46,7 @@ build_vius_scaling_totals:
     gvw_class: GVWR_CLASS
     reg_state: REGSTATE
     cab_day: CABDAY
-  totals_col: tab_weight
+  totals_col: tab_weight  # TABWEIGHT is the VIUS survey expansion weight (vehicles represented per sampled vehicle)
   home_source_col: HBSTATE
   cab_source_col: cab_day
   id_cols:
@@ -52,7 +56,7 @@ build_vius_scaling_totals:
   home_base_corresp:
     id_columns:
       - ${build_vius_scaling_totals.home_source_col}
-    values:
+    values:  # VIUS HBSTATE codes; see VIUS microdata dictionary
       "61": "Home Base in Register State"
       "62": "Home Base not in Register State"
       "63": "No Home Base"
@@ -61,7 +65,7 @@ build_vius_scaling_totals:
   cab_type_corresp:
     id_columns:
       - ${build_vius_scaling_totals.cab_source_col}
-    values:
+    values:  # VIUS cab type codes; see VIUS microdata dictionary
       "1": "Day Cab"
       "2": "Sleeper Cab"
       "4": "Not Reported"
