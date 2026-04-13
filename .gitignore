@@ -20,6 +20,13 @@ data/**
 # keep also the example dataset
 !data/01_raw/*
 
+# INTERNAL raw datasets — hand-crafted lookup tables committed to the repository
+!data/01_raw/adoption_policies/acf_zev_milestones.csv
+!data/01_raw/adoption_policies/act_states.csv
+!data/01_raw/establishments/naics_tree_focus_leaves.csv
+!data/01_raw/establishments/freight_intensive_naics.csv
+!data/01_raw/land_use/land_use_groups.csv
+
 
 ##########################
 # Common files
