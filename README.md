@@ -397,28 +397,7 @@ To compute the 80th/20th percentile ("duty-to-serve-robust" / "used-and-useful-r
 
 ## Development
 
-### Running tests
-
-```bash
-pytest
-pytest --cov=laurel   # with coverage report
-```
-
-### Linting and formatting
-
-```bash
-ruff check .      # lint
-ruff format .     # format
-pre-commit run --all-files  # all hooks
-```
-
-### Building documentation
-
-```bash
-cd docs
-make html
-open build/html/index.html
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, running tests, linting, documentation builds, docstring standards, and guidance on adapting the pipeline to your own data.
 
 ## Citation
 
