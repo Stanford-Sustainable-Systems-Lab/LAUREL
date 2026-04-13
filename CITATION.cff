@@ -1,0 +1,43 @@
+cff-version: 1.2.0
+title: "LAUREL: Location-Attuned Uncertainty-Robust Electric-vehicle Load-simulator"
+version: "0.1.0"
+date-released: "2026"
+license: MIT
+repository-code: "https://github.com/TODO/LAUREL"  # TODO: fill in after creating GitHub repo
+abstract: >-
+  LAUREL estimates e-HDT charging load profiles for each of the ~52,000
+  electrical substations in the continental U.S. across 512 plausible
+  future states of the world representing 2035 conditions. It fuses
+  continent-scale telematics data with quasi-random scenario sampling to
+  identify which substations grid operators should proactively upgrade for
+  electric heavy-duty truck charging.
+authors:
+  - family-names: Passow
+    given-names: Fletcher H.
+    affiliation: Stanford University
+    email: passow@stanford.edu
+  - family-names: Rajagopal
+    given-names: Ram
+    affiliation: Stanford University
+preferred-citation:
+  type: article
+  authors:
+    - family-names: Passow
+      given-names: Fletcher H.
+      affiliation: Stanford University
+    - family-names: Rajagopal
+      given-names: Ram
+      affiliation: Stanford University
+  title: >-
+    Identifying indicators to inform proactive substation upgrades for
+    charging electric heavy-duty trucks
+  journal: Applied Energy
+  year: 2026
+  notes: Submitted March 2026
+keywords:
+  - electric heavy-duty trucks
+  - charging infrastructure
+  - substation planning
+  - load forecasting
+  - telematics
+  - scenario analysis
