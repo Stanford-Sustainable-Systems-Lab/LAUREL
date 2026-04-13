@@ -33,7 +33,7 @@ Key design decisions
   this path to mutate a deep-copied base parameter dict, ensuring no two
   scenarios share mutable state.
 - **Copula structure**: Correlations among continuous variables (e.g. adoption
-  rates that are jointly drawn from a Gaussian copula fit to NREL scenarios)
+  rates that are jointly drawn from a Gaussian copula fit to NLR scenarios)
   are specified as a separate ``copulas`` block in the scenario config.
   Independent variables are assigned an ``IndependentCopula`` automatically,
   and all copulas are combined into a ``BlockIndependentCopula``.

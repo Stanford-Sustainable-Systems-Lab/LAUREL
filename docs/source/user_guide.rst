@@ -157,7 +157,7 @@ data catalog (``conf/base/catalog.yml``) defines where each dataset is expected.
    * - VIUS (Vehicle Inventory and Use Survey)
      - `BTS <https://www.bts.gov/vius>`_
      - ``preprocess``
-   * - NREL Ledna adoption scenarios
+   * - NLR Ledna adoption scenarios
      - `iScience 27 (2024) 109385 <https://doi.org/10.1016/j.isci.2024.109385>`_
      - ``prepare_totals``
    * - HIFLD Electrical Substations
@@ -221,7 +221,7 @@ Module 1 — Select States of the World (``prepare_totals``)
 
 Generates 512 quasi-random SoWs using Sobol' sequences (via OpenTURNS). Adoption
 rates by vehicle primary operating distance class are drawn from Beta distributions
-fit to NREL scenarios via a Gaussian copula. Other parameters (energy consumption
+fit to NLR scenarios via a Gaussian copula. Other parameters (energy consumption
 rate, charger power at truck stops / depots / destinations, battery reserve) are
 sampled uniformly.
 
@@ -346,7 +346,7 @@ YAML files that override base parameters.
    * - Scenario
      - Description
    * - ``sense_512``
-     - Main paper scenario: 512 SoWs, adoption from NREL Beta+copula
+     - Main paper scenario: 512 SoWs, adoption from NLR Beta+copula
    * - ``validate``
      - Validation run matching Broga et al. (2025) assumptions
    * - ``test``
@@ -388,7 +388,7 @@ SoW parameter ranges (``sense_512``)
      - Uniform
 
 Adoption rates across distance classes are correlated via a Gaussian copula fit to
-NREL scenarios (see Figure A.10 in the paper).
+NLR scenarios (see Figure A.10 in the paper).
 
 ----
 
