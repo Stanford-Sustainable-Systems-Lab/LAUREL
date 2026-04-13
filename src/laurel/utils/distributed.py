@@ -12,6 +12,10 @@ Key design decisions
   returns the string sentinel ``"None"`` (not Python ``None``) so that downstream
   nodes that receive the client still have a truthy value to pass through the
   pipeline graph without triggering Kedro catalog mismatches.
+- **Auto cluster**: If ``params["cluster"]`` is ``None``, :func:`start_dask_node`
+  calls ``Client()`` with no arguments so Dask selects cluster parameters
+  automatically from local resources.  The auto-created cluster is returned via
+  ``client.cluster`` so that :func:`stop_dask_node` can shut it down cleanly.
 - **result dependency**: :func:`stop_dask_node` accepts the final computed
   dataset as a ``result`` argument purely to enforce DAG ordering; Kedro
   executes nodes only once all their inputs are ready, so passing the last
@@ -32,23 +36,34 @@ def start_dask_node(params: dict) -> tuple[LocalCluster, Client]:
     sentinel ``("None", "None")`` instead of a real cluster/client pair so that
     downstream nodes can be written uniformly without ``None``-checks.
 
+    If ``params["cluster"]`` is ``None``, calls ``Client()`` with no arguments
+    so that Dask creates a ``LocalCluster`` automatically using all available
+    local resources.  The auto-created cluster is accessible via
+    ``client.cluster`` and is returned as the first element of the tuple so
+    that :func:`stop_dask_node` can shut it down cleanly.
+
     Args:
         params: Configuration dict with the following keys:
 
             - **use_dask** (``bool``, optional): If ``False``, skip cluster
               creation.  Defaults to ``True`` when absent.
-            - **cluster** (``dict``): Keyword arguments forwarded to
+            - **cluster** (``dict`` or ``None``): Keyword arguments forwarded to
               ``dask.distributed.LocalCluster`` (e.g. ``n_workers``,
-              ``threads_per_worker``, ``memory_limit``).
+              ``threads_per_worker``, ``memory_limit``).  If ``None``, Dask
+              selects sensible defaults for the local machine automatically.
 
     Returns:
         A ``(LocalCluster, Client)`` pair, or ``("None", "None")`` if Dask is
         disabled.
     """
     if ("use_dask" in params and params["use_dask"]) or ("use_dask" not in params):
-        cluster = LocalCluster(**params["cluster"])
-        client = Client(cluster)
-        return cluster, client
+        if params.get("cluster") is None:
+            client = Client()
+            return client.cluster, client
+        else:
+            cluster = LocalCluster(**params["cluster"])
+            client = Client(cluster)
+            return cluster, client
     else:
         return "None", "None"
 
