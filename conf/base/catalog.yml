@@ -19,7 +19,11 @@
 # RAW DATASETS (01_raw/)
 # =============================================================================
 
-# PRIVATE — International, Inc. (Navistar) telematics dataset.
+# -----------------------------------------------------------------------------
+# PRIVATE — proprietary; requires a data-access agreement with the data owner
+# -----------------------------------------------------------------------------
+
+# International, Inc. (Navistar) telematics dataset.
 # ~80,000 Class 7–8 diesel HDTs observed April–November 2023.
 # Contact International, Inc. to request access. Cannot be redistributed.
 # Required columns: vehicle_id, veh_type, vin_gvw, start_timestamp_utc,
@@ -29,7 +33,7 @@ trips_raw:
   type: dask.ParquetDataset
   filepath: data/01_raw/Navistar/stanford_dataset_v2/
 
-# PRIVATE — Data Axle, Inc. business establishment records.
+# Data Axle, Inc. business establishment records.
 # ~28 million U.S. establishments with location, NAICS code, employee count,
 # business status, and parent–subsidiary relationships.
 # Contact Data Axle, Inc. to request access. Cannot be redistributed.
@@ -56,20 +60,24 @@ establishments_parent_bus_status:
     dtype:
       PARENT_NUMBER: float64
 
-# PRIVATE — NAICS code descriptions (used for labeling and debugging). Contact Data 
-# Axle, Inc. to request access. Cannot be redistributed. 
+# NAICS code descriptions (used for labeling and debugging). Contact Data Axle, Inc.
+# to request access. Cannot be redistributed.
 naics_descriptions:
   type: pandas.CSVDataset
   filepath: data/01_raw/Data_Axle_Establishments/metadata/naics_descriptions.csv
 
-# PUBLIC — VIUS 2021 Public Use File.
+# -----------------------------------------------------------------------------
+# PUBLIC — freely available from the cited source; download link in comments
+# -----------------------------------------------------------------------------
+
+# VIUS 2021 Public Use File.
 # Vehicle Inventory and Use Survey microdata.
 # Download: https://www.bts.gov/vius
 vius_public_use:
   type: pandas.CSVDataset
   filepath: data/01_raw/VIUS/vius_2021_puf.csv
 
-# PUBLIC — NLR Ledna (2024) BEV adoption forecasts (vehicle stock).
+# NLR Ledna (2024) BEV adoption forecasts (vehicle stock).
 # Ledna, A. et al. (2024). iScience 27, 109385.
 # https://doi.org/10.1016/j.isci.2024.109385
 # Download the data supplement (https://data.nlr.gov/submissions/227) from the paper's
@@ -80,7 +88,7 @@ ledna_adoption:
   load_args:
     sheet_name: D-VehicleStock
 
-# PUBLIC — NLR Ledna (2024) vehicle design parameters (range, energy consumption).
+# NLR Ledna (2024) vehicle design parameters (range, energy consumption).
 # Same file as ledna_adoption; different sheet.
 ledna_vehicle_params:
   type: pandas.ExcelDataset
@@ -88,7 +96,7 @@ ledna_vehicle_params:
   load_args:
     sheet_name: G-Inputs-Vehicles
 
-# PUBLIC — HIFLD Electrical Substations (v4).
+# HIFLD Electrical Substations (v4).
 # Homeland Infrastructure Foundation-Level Data; ~80,000 U.S. substations.
 # Download: https://gem.anl.gov
 substations_continent:
@@ -97,7 +105,7 @@ substations_continent:
   load_args:
     layer: electric_substation_hifld_v4
 
-# PUBLIC (with account) — PG&E Grid Resource & Infrastructure Planning (GRIP) ICA maps.
+# PG&E Grid Resource & Infrastructure Planning (GRIP) ICA maps (requires PG&E account).
 # Substation areas with peak facility loading percentages (PG&E service territory only).
 # Download requires a PG&E account: https://grip.pge.com
 substations_pg_and_e:
@@ -106,7 +114,7 @@ substations_pg_and_e:
   load_args:
     layer: DFSubstationArea___PeakFacilityLoadingPercent
 
-# PUBLIC (with account) — PG&E ICA substation load profiles.
+# PG&E ICA substation load profiles (requires PG&E account).
 # Hourly baseload by substation and month (PG&E service territory only).
 # Same access path as substations_pg_and_e.
 substation_profiles_pg_and_e:
@@ -121,7 +129,7 @@ substation_profiles_pg_and_e:
       - Low
       - High
 
-# PUBLIC — U.S. Census TIGER/Line state and county boundaries (2023, 1:500k).
+# U.S. Census TIGER/Line state and county boundaries (2023, 1:500k).
 # Download: https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html
 state_boundaries:
   type: laurel.datasets.geodatabase.GeoDataBaseDataset
@@ -135,13 +143,13 @@ county_boundaries:
   load_args:
     layer: cb_2023_us_county_500k
 
-# PUBLIC — U.S. Census 2020 Urban Areas (UAC20), corrected shapefile.
+# U.S. Census 2020 Urban Areas (UAC20), corrected shapefile.
 # Download: https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html
 urban_areas:
   type: laurel.datasets.shapefile.ShapefileDataset
   filepath: data/01_raw/Census_Geographies/tl_2020_us_uac20_corrected/tl_2020_us_uac20_corrected.shp
 
-# PUBLIC — North American Roads 2024 geodatabase (Census/HERE).
+# North American Roads 2024 geodatabase (Census/HERE).
 # Used to identify highway-adjacent hexes for freight activity classification.
 # Download: https://geodata.bts.gov/datasets/usdot::north-american-roads/
 highways:
@@ -150,39 +158,43 @@ highways:
   load_args:
     layer: North_American_Roads
 
-# PUBLIC — Jason's Law Truck Parking Locations (2019).
+# Jason's Law Truck Parking Locations (2019).
 # Publicly available truck stop and rest area locations.
 # Download: https://geodata.bts.gov/datasets/fff36e0c37c748a5a1773b5784d4d9a5_0
 parking_public:
   type: laurel.datasets.shapefile.ShapefileDataset
   filepath: data/01_raw/Truck_Parking/jlaw_data_shapefile_2019/Final Public Truck Parking Locations-2019.shp
 
-# INTERNAL — Advanced Clean Fleets (ACF) ZEV milestone schedule.
+# -----------------------------------------------------------------------------
+# INTERNAL — hand-crafted metadata or lookup tables committed to this repository
+# -----------------------------------------------------------------------------
+
+# Advanced Clean Fleets (ACF) ZEV milestone schedule.
 # Hand-crafted lookup table for the sense_512_acf scenario variant.
 # Based on CARB's ACF regulation milestone groups by GVW class and operating range.
 advanced_clean_fleets_milestones:
  type: pandas.CSVDataset
  filepath: data/01_raw/ACF/zev_milestones.csv
 
-# INTERNAL — List of states that have adopted the Advanced Clean Trucks (ACT) regulation.
+# List of states that have adopted the Advanced Clean Trucks (ACT) regulation.
 advanced_clean_trucks_states:
   type: pandas.CSVDataset
   filepath: data/01_raw/ACF/act_states.csv
 
-# INTERNAL — Hand-crafted list of NAICS "focus" leaf codes used in freight
+# Hand-crafted list of NAICS "focus" leaf codes used in freight
 # activity classification. Determines which NAICS branches are aggregated
 # into freight-relevant categories before K-Means clustering.
 naics_focus_leaves:
   type: pandas.CSVDataset
   filepath: data/01_raw/Data_Axle_Establishments/naics_tree_focus_leaves.csv
 
-# INTERNAL — Hand-crafted list of NAICS codes classified as freight-intensive.
+# Hand-crafted list of NAICS codes classified as freight-intensive.
 # Used to identify hexes with freight-relevant business activity.
 naics_freight_intensive:
   type: pandas.CSVDataset
   filepath: data/01_raw/Data_Axle_Establishments/freight_intensive_naics.csv
 
-# INTERNAL — NLCD land-cover code groupings (wild / developed / cultivated).
+# NLCD land-cover code groupings (wild / developed / cultivated).
 # Maps NLCD 2023 integer codes to the three groups used in hex classification.
 # The NLCD raster itself is accessed directly via exactextract (not via Kedro);
 # this CSV encodes the grouping logic from parameters_describe_locations.yml.
