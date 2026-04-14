@@ -22,6 +22,8 @@ Key design decisions
   dataset here guarantees the cluster outlives all computation.
 """
 
+from __future__ import annotations
+
 import dask.dataframe as dd
 import pandas as pd
 from dask.distributed import Client, LocalCluster

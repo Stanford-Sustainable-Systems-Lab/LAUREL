@@ -90,6 +90,8 @@ proactive substation upgrades for charging electric heavy-duty trucks.
 *Applied Energy* (submitted March 2026).
 """
 
+from __future__ import annotations
+
 import gc
 import itertools
 import logging
@@ -489,7 +491,7 @@ def filter_dwells_pre_prob(dw: DwellSet, params: dict, pcols: dict) -> DwellSet:
     return dw
 
 
-def _is_weekday(tser: "pd.Series[pd.Timestamp]") -> "pd.Series[bool]":
+def _is_weekday(tser: pd.Series[pd.Timestamp]) -> pd.Series[bool]:
     """Return a boolean mask that is ``True`` for weekday (Mon–Fri) timestamps."""
     FIRST_DAY_OF_WEEKEND = 5
     is_weekday = tser.dt.weekday < FIRST_DAY_OF_WEEKEND

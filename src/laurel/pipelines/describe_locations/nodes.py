@@ -120,6 +120,8 @@ Homeland Infrastructure Foundation-Level Data (HIFLD). Electric substations.
 USGS National Land Cover Database (NLCD).
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 
