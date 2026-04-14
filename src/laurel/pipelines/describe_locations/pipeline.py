@@ -17,6 +17,11 @@ Sub-pipelines / tags
   pipeline per layer).
 - **extra_estabs** — extracts supplementary establishment records from
   Jason's Law data and OpenStreetMap (truck stops, warehouses).
+- **read_land_use** — partitions the hexagon base table for Dask and
+  extracts NLCD 2023 land cover fractions for every H3 hexagon from the
+  raw GeoTIFF using ``exactextract``.  This step is I/O-intensive and
+  may take several hours; run it once and rely on the cached output for
+  subsequent runs.
 - **establishments** — merges Data Axle tables, reassigns HQ NAICS codes,
   collapses to leaf classes, pivots to a per-hexagon employment matrix,
   and assigns freight-activity classes via K-Means clustering.
@@ -36,7 +41,11 @@ from laurel.utils.data import (
     filter_by_vals_in_cols,
     select_columns,
 )
-from laurel.utils.distributed import load_in_memory_node
+from laurel.utils.distributed import (
+    load_in_memory_node,
+    start_dask_node,
+    stop_dask_node,
+)
 from laurel.utils.time import get_timezones
 
 from .nodes import (
@@ -60,9 +69,11 @@ from .nodes import (
     get_osm_estabs_warehouses,
     group_hexes,
     hexify_polygons,
+    partition_hex_corresp,
     pivot_hex_estabs,
     pivot_hex_land_use,
     prepare_stop_locations_public,
+    read_land_use,
     reassign_hqs,
 )
 
@@ -410,6 +421,44 @@ def create_pipeline(**kwargs) -> Pipeline:
         ],
     )
 
+    read_land_use_pipe = Pipeline(
+        [
+            Node(
+                func=start_dask_node,
+                inputs=["params:dask_read_land_use"],
+                outputs=["dask_cluster_read_land_use", "dask_client_read_land_use"],
+                name="start_dask_node_read_land_use",
+            ),
+            Node(
+                func=partition_hex_corresp,
+                inputs=[
+                    "hex_base_corresp",
+                    "params:partition_hex_corresp",
+                    "dask_client_read_land_use",
+                ],
+                outputs="hex_base_corresp_dask",
+                name="partition_hex_corresp",
+            ),
+            Node(
+                func=read_land_use,
+                inputs=["hex_base_corresp_dask", "params:read_land_use"],
+                outputs="hex_land_use",
+                name="read_land_use",
+            ),
+            Node(
+                func=stop_dask_node,
+                inputs=[
+                    "dask_cluster_read_land_use",
+                    "dask_client_read_land_use",
+                    "hex_land_use",
+                ],
+                outputs=None,
+                name="stop_dask_node_read_land_use",
+            ),
+        ],
+        tags="read_land_use",
+    )
+
     cluster_pipe = Pipeline(
         [
             Node(
@@ -456,6 +505,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         + tz_pipe
         + urban_areas_pipe
         + highway_pipe
+        + read_land_use_pipe
         + cluster_pipe
         + sum(polys_to_hexes_pipes)
         + concat_pipe

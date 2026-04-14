@@ -262,6 +262,24 @@ pivot_hex_estabs:
   zero_emp_buff: 1  # "Fake" employees added to establishments reporting zero employees; prevents log(0) in clustering
   naics_prefix: naics_
 
+# --- NLCD land use raster extraction ---
+
+dask_read_land_use:
+  cluster: # Defaults to None, allowing Dask cluster to use whatever local resources are available
+
+partition_hex_corresp:
+  n_partitions: 500  # Number of Dask partitions; controls parallelism during raster extraction
+
+read_land_use:
+  # Path to the NLCD 2023 Annual Land Cover GeoTIFF, relative to the Kedro project root.
+  # NOTE: This path is passed as a parameter (not a catalog dataset) because
+  # exactextract reads the raster directly from disk via its own I/O layer.
+  # There is no standard Kedro dataset type that loads a GeoTIFF into memory
+  # in the format exactextract requires.
+  # Download: https://www.usgs.gov/centers/eros/science/annual-national-land-cover-database
+  raster_path: data/01_raw/land_use/Annual_NLCD_LndCov_2023_CU_C1V1.tif
+  hex_col: ${hexify_polygons.hex_col}  # Shared hex column name (= "hex_id")
+
 pivot_hex_land_use:
   input_cols:
     categories: unique

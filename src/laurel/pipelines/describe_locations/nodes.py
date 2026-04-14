@@ -59,14 +59,20 @@ Establishment data preparation:
     of leaf classes used for clustering.
 24. **pivot_hex_estabs** — Pivots the establishment table to a per-hexagon
     employment matrix (one column per NAICS leaf class).
-25. **pivot_hex_land_use** — Pivots the land-use coverage table to a
-    per-hexagon land-use-group fraction matrix.
+
+NLCD land use raster extraction (``read_land_use`` tag):
+25. **partition_hex_corresp** — Converts the pandas ``hex_base_corresp`` feather
+    to a partitioned Dask parquet file for parallel raster extraction.
+26. **read_land_use** — Extracts NLCD 2023 land cover fractions for every H3
+    hexagon using ``exactextract``; writes ``hex_land_use`` in long format.
 
 Freight-activity-class assignment:
-26. **group_hexes** — Assigns each hexagon a freight-activity class using a
+27. **pivot_hex_land_use** — Pivots the land-use coverage table to a
+    per-hexagon land-use-group fraction matrix.
+28. **group_hexes** — Assigns each hexagon a freight-activity class using a
     combination of development threshold, freight-intensity rules, special-
     establishment flags, and K-Means clustering.
-27. **apply_groups** — Merges freight-activity-class labels onto the hexagon
+29. **apply_groups** — Merges freight-activity-class labels onto the hexagon
     feature table.
 
 Key design decisions
@@ -91,6 +97,14 @@ Key design decisions
   summed employment of its six H3 ring-1 neighbors to capture the local
   land-use context, which improves cluster coherence at the cluster-boundary
   hexagons.
+- **Land use raster extraction runtime**: Extracting NLCD fractions for all H3
+  resolution 8 hexagons in the Continental U.S. via ``exactextract`` is I/O-intensive
+  and may take several hours on a single machine.  The step is isolated under
+  the ``read_land_use`` tag so it can be run once and its output
+  (``hex_land_use``) reused for subsequent runs.  The raster path is stored as
+  a parameter rather than a catalog dataset because ``exactextract`` reads the
+  GeoTIFF directly from disk and there is no standard Kedro dataset type that
+  loads it in the required format.
 
 References
 ----------
@@ -107,20 +121,25 @@ USGS National Land Cover Database (NLCD).
 """
 
 import logging
+from pathlib import Path
 
 import dask.dataframe as dd
 import dask_geopandas as dgpd
+import exactextract as ex
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import rasterio
 from dask.dataframe.dispatch import make_meta
 from dask.diagnostics.progress import ProgressBar
+from dask.distributed import Client
 from osmium.filter import KeyFilter, TagFilter
 from sklearn.cluster import KMeans
 
 from laurel.utils.h3 import (
     H3_CRS,
     H3_DEFAULT_RESOLUTION,
+    add_geometries,
     coords_to_cells,
     coords_to_cells_wrapper,
     region_polygons_to_cells,
@@ -1208,6 +1227,146 @@ def pivot_hex_estabs(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame
     )
     estabs_hex = gpd.GeoDataFrame(data=estabs_hex, geometry=pcols["geom"])
     return estabs_hex
+
+
+def partition_hex_corresp(
+    hex_base: pd.DataFrame, params: dict, client: Client | str
+) -> dd.DataFrame:
+    """Split the hexagon base correspondence table into Dask parquet partitions.
+
+    Converts the pandas feather ``hex_base_corresp`` to a Dask DataFrame so that
+    the downstream :func:`read_land_use` node can extract raster values in parallel,
+    one partition per worker.  The index is sorted before partitioning so that
+    each partition covers a contiguous range of uint64 hex IDs.
+
+    Args:
+        hex_base: Pandas DataFrame of hexagon base correspondence data, indexed
+            by uint64 hex ID.
+        params: Pipeline parameters dict with key:
+
+            - ``n_partitions`` (int): number of Dask partitions to create.
+              Controls parallelism during raster extraction.
+        client: Active Dask ``Client`` (or the ``"None"`` sentinel when Dask is
+            disabled).  Not used directly; accepted here solely to enforce DAG
+            ordering so this node does not execute until the Dask cluster is up.
+
+    Returns:
+        Dask DataFrame with the same schema as ``hex_base``, split into
+        ``n_partitions`` partitions and saved as ``hex_base_corresp_dask``.
+    """
+    hex_base = hex_base.sort_index()
+    return dd.from_pandas(hex_base, npartitions=params["n_partitions"])
+
+
+def _extract_land_use_part(
+    part: gpd.GeoDataFrame, raster_path: Path, idx_col: str, **kwargs
+) -> pd.DataFrame:
+    """Extract NLCD land cover fractions for one Dask partition of hex polygons.
+
+    Wraps :func:`exactextract.exact_extract` to compute, for each hexagon polygon
+    in ``part``, the unique NLCD category codes present and their fractional coverage.
+    Returns a long-format DataFrame with one row per (hexagon, category) pair.
+
+    Args:
+        part: GeoDataFrame partition of hexagon polygons.  Must contain a string
+            column named ``idx_col`` that uniquely identifies each hexagon.
+        raster_path: Filesystem path to the NLCD 2023 GeoTIFF.  Passed directly
+            to ``exactextract``; file I/O is handled by the library.
+        idx_col: Name of the string hexagon ID column to use as the output index.
+        **kwargs: Additional keyword arguments forwarded to
+            :func:`exactextract.exact_extract`.
+
+    Returns:
+        DataFrame indexed by ``idx_col`` with columns:
+
+        - ``unique`` (int32): NLCD land cover category code.
+        - ``frac`` (float64): fraction of hexagon area covered by that category.
+    """
+    ops = ["unique", "frac"]
+    extracted: pd.DataFrame = ex.exact_extract(
+        rast=raster_path,
+        vec=part,
+        include_cols=idx_col,
+        output="pandas",
+        ops=ops,
+        **kwargs,
+    )
+    extracted = extracted.set_index(idx_col)
+    extracted = extracted.explode(column=ops)
+    return extracted
+
+
+def read_land_use(hex_base_corresp: dd.DataFrame, params: dict) -> dd.DataFrame:
+    """Extract NLCD 2023 land cover fractions for every H3 hexagon using exactextract.
+
+    Reads the NLCD land cover raster directly via ``exactextract``, computing for
+    each hexagon polygon the fraction of its area covered by each NLCD category code.
+    The result is in long format: one row per (hexagon × category) pair.
+
+    The algorithm proceeds in three steps:
+
+    1. Attach polygon geometries to each partition of ``hex_base_corresp`` using
+       :func:`~laurel.utils.h3.add_geometries`, producing a Dask GeoDataFrame.
+    2. Reproject each partition to the raster's native CRS (read once from the
+       file header) so that fractional areas are computed in the correct coordinate
+       space.
+    3. Call :func:`_extract_land_use_part` via ``map_partitions``, passing the
+       raster path directly so ``exactextract`` handles file I/O per partition.
+
+    .. note::
+        This node is I/O-intensive and may take several hours to complete on a
+        single machine.  Run it once with
+        ``kedro run --pipeline=describe_locations --tags=read_land_use`` and rely
+        on the cached ``hex_land_use`` parquet output for subsequent runs.
+
+    The index of the output is a string representation of the uint64 hex ID
+    (``{hex_col}_str``).  The downstream :func:`pivot_hex_land_use` node casts
+    it back to ``uint64`` and renames it to ``{hex_col}``.
+
+    Args:
+        hex_base_corresp: Dask DataFrame of hexagon correspondence data, indexed
+            by uint64 hex ID.  Loaded from ``hex_base_corresp_dask`` in the catalog.
+        params: Pipeline parameters dict with keys:
+
+            - ``raster_path`` (str): path to the NLCD 2023 GeoTIFF, relative to
+              the Kedro project root.  Passed directly to ``exactextract`` rather
+              than loaded through the Kedro catalog because there is no standard
+              dataset type that reads a GeoTIFF into the format ``exactextract``
+              requires.
+            - ``hex_col`` (str): name of the hex ID column / index; used to derive
+              the string column ``{hex_col}_str`` that becomes the output index.
+
+    Returns:
+        Dask DataFrame indexed by ``{hex_col}_str`` (object dtype) with columns:
+
+        - ``unique`` (int32): NLCD land cover category code.
+        - ``frac`` (float64): fraction of hexagon area covered by that category.
+    """
+    raster_path = Path(params["raster_path"])
+    hex_col = params["hex_col"]
+    idx_col = f"{hex_col}_str"
+
+    hex_base = hex_base_corresp.assign(**{hex_col: lambda ddf: ddf.index})
+    hex_base_geo = add_geometries(hex_base, hex_col=hex_col, geom_type="polygon")
+
+    with rasterio.open(raster_path) as src:
+        raster_crs = src.crs
+
+    hex_base_proj = hex_base_geo.to_crs(raster_crs)
+    hex_base_proj[idx_col] = hex_base_proj[hex_col].astype(str)
+
+    meta_df = pd.DataFrame(
+        {"unique": pd.Series(dtype="int32"), "frac": pd.Series(dtype="float64")}
+    ).set_index(pd.Index([], name=idx_col, dtype="object"))
+
+    hex_extracted = hex_base_proj.map_partitions(
+        _extract_land_use_part,
+        raster_path=raster_path,
+        idx_col=idx_col,
+        meta=meta_df,
+    )
+
+    return hex_extracted
 
 
 def pivot_hex_land_use(land_use: dd.DataFrame, params: dict) -> pd.DataFrame:

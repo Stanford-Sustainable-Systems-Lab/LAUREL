@@ -999,6 +999,14 @@ dask_client_dwells:
   type: MemoryDataset
   copy_mode: assign
 
+dask_cluster_read_land_use:
+  type: MemoryDataset
+  copy_mode: assign
+
+dask_client_read_land_use:
+  type: MemoryDataset
+  copy_mode: assign
+
 substation.bootstrap_profiles:
   type: MemoryDataset
   copy_mode: assign
