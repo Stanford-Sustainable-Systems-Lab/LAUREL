@@ -72,8 +72,7 @@ def prepare_for_merging(vius: pd.DataFrame, params: dict) -> pd.DataFrame:
     value of ``"NA"`` so they can be excluded downstream.
 
     Args:
-        vius: Raw VIUS microdata DataFrame as loaded by the ``preprocess``
-            pipeline.
+        vius: Raw VIUS microdata DataFrame.
         params: Pipeline parameters dict with keys:
 
             - ``col_renamer`` (dict[str, str]): mapping from raw column names

@@ -115,7 +115,7 @@ time_weighted_centers:
 operating_segment:
   # Assigns each vehicle to one of four primary operating distance classes based
   # on the distance between its time-weighted center and its home base hex.
-  # These bins MUST match the VIUS distance bins in parameters_preprocess.yml
+  # These bins MUST match the VIUS distance bins in parameters_prepare_totals.yml
   # and the NLR Ledna scenario bins in parameters_prepare_totals.yml.
   center_col: ${time_weighted_centers.out_col}
   home_base_col: ${mark_vehicle_centers.home_base_col}

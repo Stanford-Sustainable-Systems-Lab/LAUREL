@@ -15,7 +15,6 @@ Subpackages
    laurel.pipelines.electrify_trips
    laurel.pipelines.evaluate_impacts
    laurel.pipelines.prepare_totals
-   laurel.pipelines.preprocess
 
 Module contents
 ---------------
