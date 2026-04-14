@@ -39,6 +39,8 @@ Key design decisions
   pipeline nodes to instantiate managers by name without a static registry.
 """
 
+from __future__ import annotations
+
 import logging
 from abc import ABC, abstractmethod
 from enum import IntEnum, auto

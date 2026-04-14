@@ -47,6 +47,8 @@ Passow, F., & Rajagopal, R. (2026). Identifying indicators to inform proactive
 substation upgrades for charging electric heavy-duty trucks. *Applied Energy*.
 """
 
+from __future__ import annotations
+
 import copy
 import logging
 import re

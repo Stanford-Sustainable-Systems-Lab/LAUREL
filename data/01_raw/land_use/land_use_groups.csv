@@ -1,0 +1,17 @@
+code,land_use_name,land_use_group
+11,open_water,wild
+12,ice_snow,wild
+21,developed_open,developed_open
+22,developed_low,developed_low
+23,developed_med,developed_med
+24,developed_high,developed_high
+31,barren_land,wild
+41,forest_deciduous,wild
+42,forest_evergreen,wild
+43,forest_mixed,wild
+52,shrub_scrub,wild
+71,grassland,wild
+81,pasture_hay,cultivated
+82,cultivated_crops,cultivated
+90,woody_wetlands,wild
+95,emergent_herbaceous_wetlands,wild

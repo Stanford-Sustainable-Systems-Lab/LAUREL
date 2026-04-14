@@ -60,6 +60,8 @@ Liu, Y., et al. (2021). A hierarchical optimization charging strategy for
 plug-in hybrid electric vehicles. *IEEE Transactions on Vehicular Technology*.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 

@@ -65,6 +65,8 @@ GraphHopper. Open Source Routing Engine. https://www.graphhopper.com/
 U.S. DOT Federal Highway Administration. Jason's Law Truck Parking Survey.
 """
 
+from __future__ import annotations
+
 import logging
 
 import dask.dataframe as dd

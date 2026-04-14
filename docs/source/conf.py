@@ -42,6 +42,7 @@ autodoc_mock_imports = [
     "skfda",
     "prim",
     "aiohttp",
+    "cvxpy",
 ]
 
 # -- Project information -----------------------------------------------------

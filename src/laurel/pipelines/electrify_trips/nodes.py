@@ -64,6 +64,8 @@ Liu, J., et al. Utility-maximisation charging choice model (inspiration for
 ``ForwardLookingChargingChoiceStrategy``).
 """
 
+from __future__ import annotations
+
 import logging
 
 import dask.dataframe as dd
