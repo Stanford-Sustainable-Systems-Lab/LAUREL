@@ -165,6 +165,19 @@ parking_public:
   type: laurel.datasets.shapefile.ShapefileDataset
   filepath: data/01_raw/Truck_Parking/jlaw_data_shapefile_2019/Final Public Truck Parking Locations-2019.shp
 
+# Other public datasets which are read by special non-Kedro software
+
+# National land cover database (read by exactextract directly from GeoTIFF)
+# See conf/base/parameters_describe_locations.yml for more information
+# Download: https://www.usgs.gov/centers/eros/science/annual-national-land-cover-database
+
+# OpenStreetMap for North America
+# After downloading, this dataset needs to be imported into Graphhopper for use in
+# routing, but it is also used in the describe_locations pipeline in ways that do not
+# require this import step.
+# See conf/base/parameters_compute_routes.yml for more information.
+# Download: https://download.geofabrik.de/north-america-latest.osm.pbf
+
 # -----------------------------------------------------------------------------
 # INTERNAL — hand-crafted metadata or lookup tables committed to this repository
 # -----------------------------------------------------------------------------
