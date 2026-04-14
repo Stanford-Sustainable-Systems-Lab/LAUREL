@@ -25,7 +25,6 @@ data/**
 !data/01_raw/adoption_policies/act_states.csv
 !data/01_raw/establishments/naics_tree_focus_leaves.csv
 !data/01_raw/establishments/freight_intensive_naics.csv
-!data/01_raw/land_use/land_use_groups.csv
 
 
 ##########################
