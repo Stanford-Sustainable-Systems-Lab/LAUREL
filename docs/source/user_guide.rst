@@ -132,7 +132,7 @@ To verify the installation:
    kedro info
    kedro pipeline list
 
-You should see the nine pipelines: ``preprocess``, ``describe_vehicles``,
+You should see the eight pipelines: ``describe_vehicles``,
 ``describe_dwells``, ``compute_routes``, ``describe_locations``,
 ``prepare_totals``, ``electrify_trips``, ``evaluate_impacts``, ``build_scenarios``.
 
@@ -156,8 +156,8 @@ data catalog (``conf/base/catalog.yml``) defines where each dataset is expected.
      - ``describe_dwells``, ``describe_vehicles``, ``compute_routes``, ``electrify_trips``
    * - VIUS (Vehicle Inventory and Use Survey)
      - `BTS <https://www.bts.gov/vius>`_
-     - ``preprocess``
-   * - NREL Ledna adoption scenarios
+     - ``prepare_totals``
+   * - NLR Ledna adoption scenarios
      - `iScience 27 (2024) 109385 <https://doi.org/10.1016/j.isci.2024.109385>`_
      - ``prepare_totals``
    * - HIFLD Electrical Substations
@@ -210,7 +210,7 @@ The model has six modules that map to Kedro pipelines:
    Module 1: Select SoWs              ← prepare_totals
    Module 2: Augment dwell data       ← describe_dwells + compute_routes
    Module 3: Augment TAZs             ← describe_locations
-                                         (also: preprocess, describe_vehicles)
+                                         (also: describe_vehicles)
    ─── repeat for each SoW ───
    Module 4: Simulate e-HDT dwells              ← electrify_trips
    Module 5: Estimate expected dwells by TAZ    ← evaluate_impacts (first half)
@@ -221,7 +221,7 @@ Module 1 — Select States of the World (``prepare_totals``)
 
 Generates 512 quasi-random SoWs using Sobol' sequences (via OpenTURNS). Adoption
 rates by vehicle primary operating distance class are drawn from Beta distributions
-fit to NREL scenarios via a Gaussian copula. Other parameters (energy consumption
+fit to NLR scenarios via a Gaussian copula. Other parameters (energy consumption
 rate, charger power at truck stops / depots / destinations, battery reserve) are
 sampled uniformly.
 
@@ -290,7 +290,6 @@ Individual pipelines
 .. code-block:: bash
 
    # Data preparation (run once)
-   kedro run --pipeline=preprocess
    kedro run --pipeline=describe_vehicles
    kedro run --pipeline=describe_dwells
    kedro run --pipeline=compute_routes        # Requires Docker (GraphHopper)
@@ -346,7 +345,7 @@ YAML files that override base parameters.
    * - Scenario
      - Description
    * - ``sense_512``
-     - Main paper scenario: 512 SoWs, adoption from NREL Beta+copula
+     - Main paper scenario: 512 SoWs, adoption from NLR Beta+copula
    * - ``validate``
      - Validation run matching Broga et al. (2025) assumptions
    * - ``test``
@@ -388,7 +387,7 @@ SoW parameter ranges (``sense_512``)
      - Uniform
 
 Adoption rates across distance classes are correlated via a Gaussian copula fit to
-NREL scenarios (see Figure A.10 in the paper).
+NLR scenarios (see Figure A.10 in the paper).
 
 ----
 
@@ -420,8 +419,6 @@ Each pipeline has a corresponding parameter file in ``conf/base/``:
 
    * - File
      - Controls
-   * - ``parameters_preprocess.yml``
-     - VIUS scaling weights
    * - ``parameters_describe_dwells.yml``
      - Dwell coalescing thresholds, shift detection
    * - ``parameters_describe_vehicles.yml``

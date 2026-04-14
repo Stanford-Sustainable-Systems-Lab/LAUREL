@@ -57,6 +57,8 @@ Federal Motor Carrier Safety Administration. Hours of Service Regulations,
 49 CFR Part 395.
 """
 
+from __future__ import annotations
+
 import logging
 from copy import deepcopy
 

@@ -1,21 +1,32 @@
-# This is a boilerplate parameters config generated for pipeline 'describe_vehicles'
-# using Kedro 0.19.3.
+# Parameters for the ``describe_vehicles`` pipeline (Model Module 2: Augment Dwell Data).
 #
-# Documentation for this file format can be found in "Parameters"
-# Link: https://docs.kedro.org/en/0.19.3/configuration/parameters.html
+# This pipeline characterizes each vehicle in the telematics dataset:
+# it strips vehicle attributes, identifies depot and truck-stop locations,
+# assigns each vehicle to a primary operating distance class (0–99, 100–249,
+# 250–499, or 500+ miles), computes a time-weighted center of operations,
+# and records the vehicle's home-base state.
+#
+# The four operating distance classes are used throughout the model to
+# stratify adoption rates and are designed to match the VIUS and NLR Ledna
+# scenario segmentation (see parameters_prepare_totals.yml).
+#
+# Documentation: https://docs.kedro.org/en/stable/configuration/parameters.html
 
 strip_vehicle_attrs:
   veh_id_col: veh_id
   veh_attr_cols:
     - veh_type
     - vin_gvw
-  min_trips_per_veh: 2
+  min_trips_per_veh: 2  # Vehicles with fewer than this many trips are excluded as insufficiently observed
 
 repartition_spatial_dwells:
   n_partitions: 20
 
 substantial_dwells:
-  thresh_hrs: 4
+  # A "substantial" dwell is long enough to plausibly represent a depot visit.
+  # Only substantial dwells are used when identifying each vehicle's primary
+  # depot location and home base.
+  thresh_hrs: 4   # Minimum dwell duration (hours) to be considered depot-like
   drop_cols:
     - trip_hrs
 
@@ -27,13 +38,13 @@ observation_frames:
 classify_vehicles:
   veh_col: veh_id
   loc_col: location
-  base_location_type: depot
+  base_location_type: depot  # Location type label assigned to identified depot hexes
 
 prepare_shared_locations:
   col_renamer:
     hex_id: hex_id_park
   loc_col: location
-  shared_location_type: truck_stop
+  shared_location_type: truck_stop  # Location type label for public truck-stop hexes
 
 merge_locations_shared:
   keep_right_columns:
@@ -59,13 +70,17 @@ merge_locations_vehicle_specific:
       - _specific
 
 mark_locations:
-  veh_loc_cols: # Later columns take priority over earlier columns on a per-vehicle basis
+  # Resolves location type conflicts between shared (truck-stop) and
+  # vehicle-specific (depot) assignments. Later columns take priority.
+  veh_loc_cols:  # Later columns take priority over earlier columns on a per-vehicle basis
     - location_shared
     - location_specific
   loc_col_out: location
   na_fill: other
 
 weight_class_group:
+  # Maps VIUS GVW codes to human-readable weight class groups for reporting.
+  # These groups are informational only; the model operates on GVW class codes directly.
   id_columns:
     - vin_gvw
   value_col: gvw_class
@@ -94,15 +109,19 @@ operating_radius:
   out_col: op_radius_miles
 
 time_weighted_centers:
-  proj_crs: EPSG:5070
+  proj_crs: EPSG:5070   # Albers Equal Area Conic (CONUS); used for accurate distance calculations
   out_col: time_weighted_center
 
 operating_segment:
+  # Assigns each vehicle to one of four primary operating distance classes based
+  # on the distance between its time-weighted center and its home base hex.
+  # These bins MUST match the VIUS distance bins in parameters_prepare_totals.yml
+  # and the NLR Ledna scenario bins in parameters_prepare_totals.yml.
   center_col: ${time_weighted_centers.out_col}
   home_base_col: ${mark_vehicle_centers.home_base_col}
   nan_int: ${mark_vehicle_centers.nan_int}
   proj_crs: ${time_weighted_centers.proj_crs}
-  radius_bin_low_bounds_miles:
+  radius_bin_low_bounds_miles:  # Lower bound (inclusive) of each operating distance class
     "0-99 Miles": 0
     "100-249 Miles": 100
     "250-499 Miles": 250

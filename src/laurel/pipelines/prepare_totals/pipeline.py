@@ -8,7 +8,7 @@ Sub-pipelines / tags
 --------------------
 - **vius_pipe** — filters and aggregates VIUS microdata into a
   disaggregation crosswalk ``P(region, op_dist | weight_class)``.
-- **adopt_pipe** — aggregates NREL Ledna adoption forecasts to the
+- **adopt_pipe** — aggregates NLR Ledna adoption forecasts to the
   required group level.
 - **joint_pipe** — merges the VIUS crosswalk onto the adoption totals
   to produce stratum-level vehicle counts (``adoption_scenarios_no_mandates``).

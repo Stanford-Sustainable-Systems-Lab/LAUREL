@@ -1,18 +1,28 @@
-# This is a boilerplate parameters config generated for pipeline 'prepare_totals'
-# using Kedro 0.19.11.
+# Parameters for the ``prepare_totals`` pipeline (Model Module 1: Select SoWs).
 #
-# Documentation for this file format can be found in "Parameters"
-# Link: https://docs.kedro.org/en/0.19.11/configuration/parameters.html
+# This pipeline fuses VIUS (Vehicle Inventory and Use Survey) microdata with
+# NLR Ledna adoption forecasts to produce disaggregated fleet-size targets by
+# state, weight class, and primary operating distance class. These totals are used
+# in evaluate_impacts to scale observed dwell rates to expected electrified dwell counts.
+#
+# Reference: Ledna, A. et al. (2024). iScience 27, 109385.
+#            https://doi.org/10.1016/j.isci.2024.109385
+#
+# Documentation: https://docs.kedro.org/en/stable/configuration/parameters.html
 
-filter_vius_in_use: # See VIUS microdata dictionary for info
+filter_vius_in_use:
+  # Retains trucks that are used commercially or for personal use; excludes
+  # those permanently out of service. See VIUS microdata dictionary for code meanings.
+  # Note: Class 8 trucks are included here for totals computation even though
+  # the electrification simulation uses telematics rather than VIUS vehicle counts.
   filters:
     BUSRELATED:
       value_isin:
-        - 1 # Some commercial activity
-        - 2 # Personal use only
-        - 4 # Not reported
+        - 1  # Some commercial activity
+        - 2  # Personal use only
+        - 4  # Not reported
     GVWR_CLASS:
-      value_isin:
+      value_isin:  # Keep all weight classes for disaggregation; filtering to Class 8 happens downstream
         - "3"
         - "4"
         - "5"
@@ -27,21 +37,25 @@ prepare_for_merging:
     gvw_class: GVWR_CLASS
     reg_state: REGSTATE
     cab_day: CABDAY
-  dist_bin_col_prefix: RO_
+  dist_bin_col_prefix: RO_    # VIUS distance-range columns are prefixed with "RO_" (Range of Operations)
   primary_dist_col: primary_op_dist_vius
 
 vius_classifications:
-  primary_op_dist: # From Ledna et al. 2024 Table S2.1
+  primary_op_dist:
+    # Maps VIUS distance-range columns to the four model operating distance classes.
+    # These bins MUST match the classes in parameters_describe_vehicles.yml
+    # and parameters_electrify_trips.yml. Defined per Ledna et al. (2024) Table S2.1.
     id_columns:
       - primary_op_dist_vius
     values:
-      "RO_0_50": "0-99 Miles"
+      "RO_0_50":   "0-99 Miles"
       "RO_51_100": "0-99 Miles"
       "RO_101_200": "100-249 Miles"
       "RO_201_500": "250-499 Miles"
-      "RO_GT500": "500+ Miles"
-      "NA": "NA"
-  home_base_reported: # See VIUS microdata dictionary for info
+      "RO_GT500":  "500+ Miles"
+      "NA":        "NA"
+  home_base_reported:
+    # VIUS home-base location codes; see VIUS microdata dictionary.
     id_columns:
       - HBSTATE
     values:
@@ -50,7 +64,9 @@ vius_classifications:
       "63": "No Home Base"
       "64": "Not Reported"
       "X": "Not In Use"
-  weight_class_group: # From Ledna et al. 2024
+  weight_class_group:
+    # Aggregates GVW classes into the three groups used by NLR Ledna for fleet totals.
+    # Defined per Ledna et al. (2024).
     id_columns:
       - gvw_class
     values:
@@ -66,7 +82,7 @@ aggregate_vius_totals:
   home_base_region_col: home_base_state
   region_source_col: reg_state
   op_dist_col: primary_op_dist
-  fill_op_dist: "500+ Miles"
+  fill_op_dist: "500+ Miles"  # Fill value for vehicles with missing operating distance; defaults to long-haul class
   spread_condition_cols:
     - gvw_class
     - primary_op_dist
@@ -78,24 +94,28 @@ aggregate_vius_totals:
     - home_base_state
     - gvw_class
     - primary_op_dist
-  weight_col: tab_weight
+  weight_col: tab_weight   # TABWEIGHT is the VIUS survey expansion weight (vehicles represented per sampled record)
   out_prob_col: cond_prob
 
 adoption_forecast_classifications:
-  primary_op_dist: # From Ledna et al. 2024 Table S2.1
+  primary_op_dist:
+    # Maps NLR Ledna distance segments to model distance classes.
+    # NLR uses finer bins for long-haul; all are collapsed to "500+ Miles"
+    # because VIUS and the telematics dataset do not distinguish within that range.
     id_columns:
       - "Market Segment"
     values:
-      "0-99 Miles": "0-99 Miles"
+      "0-99 Miles":    "0-99 Miles"
       "100-249 Miles": "100-249 Miles"
       "250-499 Miles": "250-499 Miles"
-      "500+ Miles": "500+ Miles"
-      "500-749 Miles": "500+ Miles"
+      "500+ Miles":    "500+ Miles"
+      "500-749 Miles": "500+ Miles"    # Collapsed: VIUS does not distinguish within 500+ mi
       "750-999 Miles": "500+ Miles"
       "1000-1499 Miles": "500+ Miles"
       "1500-1999 Miles": "500+ Miles"
-      "2000+ Miles": "500+ Miles"
+      "2000+ Miles":   "500+ Miles"
   fuel_type:
+    # Maps NLR technology labels to model fuel type categories.
     id_columns:
       - Technology
     values:
@@ -119,7 +139,7 @@ aggregate_adoption_forecast_totals:
     - weight_class_group
     - fuel_type
     - primary_op_dist
-  vehicle_stock_mult: 1000000
+  vehicle_stock_mult: 1000000  # NLR Ledna reports vehicle stock in millions; this converts to absolute vehicle counts
 
 create_disaggregated_adoption:
   merge_cols:
@@ -137,6 +157,7 @@ create_disaggregated_adoption:
     - primary_op_dist
 
 build_mandates_by_group:
+  # Constructs the Advanced Clean Fleets (ACF) mandate schedule
   acf_groups:
     value_column: milestone_group
     id_columns:

@@ -18,6 +18,8 @@ Key design decisions
   ``set_index`` that Dask requires for keyed joins on non-index columns.
 """
 
+from __future__ import annotations
+
 import itertools
 import logging
 from typing import Self

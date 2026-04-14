@@ -24,6 +24,8 @@ Key design decisions
   only where needed (e.g. :func:`coords_to_cells` returns uint64).
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable
 
 import dask.dataframe as dd

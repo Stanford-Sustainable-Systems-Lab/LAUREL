@@ -1,9 +1,9 @@
 [project]
 name = "LAUREL"
 version = "0.1.0"
-description = "Add your description here"
+description = "LAUREL: Location-Attuned Uncertainty-Robust Electric-vehicle Load-simulator"
 authors = [
-    { name = "Fletcher Passow", email = "fletcherpassow@icloud.com" }
+    { name = "Fletcher Passow", email = "passow@stanford.edu" }
 ]
 dependencies = [
     "dask>=2024.5.2",

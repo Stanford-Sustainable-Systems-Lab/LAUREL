@@ -4,7 +4,7 @@ Prepares the vehicle-count denominators and adoption-projection tables that
 the ``evaluate_impacts`` pipeline uses to scale telematics observations to
 realistic fleet-level charging loads.  This pipeline implements the first
 half of Model Module 1 (Select States of the World): constructing the
-disaggregation crosswalk that maps national NREL Ledna adoption forecasts
+disaggregation crosswalk that maps national NLR Ledna adoption forecasts
 down to the (region × operating-distance class × weight class) strata used
 by the model.  An optional ACF (Advanced Clean Fleets) mandate variant
 overrides projections wherever the regulatory minimum exceeds the forecast.
@@ -19,7 +19,7 @@ Pipeline overview
    respondents, and aggregates into a conditional probability table
    ``P(region, op_dist | weight_class)`` used as a disaggregation factor.
 3. **aggregate_adoption_forecast_totals** — Renames and aggregates the raw
-   NREL Ledna vehicle-count projections to the required group level, applying
+   NLR Ledna vehicle-count projections to the required group level, applying
    a vehicle-stock multiplier to convert units if necessary.
 4. **create_disaggregated_adoption** — Merges the VIUS disaggregation factors
    onto the national adoption totals to produce stratum-level vehicle counts.
@@ -52,7 +52,7 @@ References
 Passow, F., & Rajagopal, R. (2026). Identifying indicators to inform proactive
 substation upgrades for charging electric heavy-duty trucks. *Applied Energy*.
 
-NREL. (2023). Ledna: Light- and Medium-Duty Electric Vehicle Adoption Model.
+NLR. (2023). Ledna: Light- and Medium-Duty Electric Vehicle Adoption Model.
 California Air Resources Board. Advanced Clean Fleets regulation.
 """
 
@@ -72,8 +72,7 @@ def prepare_for_merging(vius: pd.DataFrame, params: dict) -> pd.DataFrame:
     value of ``"NA"`` so they can be excluded downstream.
 
     Args:
-        vius: Raw VIUS microdata DataFrame as loaded by the ``preprocess``
-            pipeline.
+        vius: Raw VIUS microdata DataFrame.
         params: Pipeline parameters dict with keys:
 
             - ``col_renamer`` (dict[str, str]): mapping from raw column names
@@ -212,7 +211,7 @@ def aggregate_vius_totals(vius: pd.DataFrame, params: dict) -> pd.DataFrame:
 def aggregate_adoption_forecast_totals(
     adopts: pd.DataFrame, params: dict
 ) -> pd.DataFrame:
-    """Aggregate and unit-scale the NREL Ledna adoption-forecast vehicle counts.
+    """Aggregate and unit-scale the NLR Ledna adoption-forecast vehicle counts.
 
     Renames columns, groups to the required dimensionality, and multiplies
     by a stock scalar (e.g., to convert from thousands of vehicles to

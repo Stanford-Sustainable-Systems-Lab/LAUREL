@@ -1,10 +1,24 @@
-# This is a boilerplate parameters config generated for pipeline 'evaluate_impacts'
-# using Kedro 0.19.1.
+# Parameters for the ``evaluate_impacts`` pipeline (Model Modules 5 & 6).
 #
-# Documentation for this file format can be found in "Parameters"
-# Link: https://docs.kedro.org/en/0.19.1/configuration/parameters.html
+# Module 5 (expected dwell estimation): estimates the expected number of
+# electrified dwells per TAZ on a typical weekday by fusing SoW adoption rates
+# with freight-activity-class-specific vehicle visit statistics from the
+# observed data. Uses logistic regression with a correction term.
+#
+# Module 6 (load profile assembly): bootstrap-samples electrified dwells
+# (default 100 draws, 95th percentile) to assemble 30-minute load profiles
+# for each TAZ, aggregates across TAZs in each substation territory, and saves
+# quantile summaries.
+#
+# This is the most memory-intensive pipeline. Dask is used for parallelism.
+# The code is NOT proven thread-safe (Numba JIT), so ``processes: True`` and
+# ``threads_per_worker: 1`` are required.
+#
+# Documentation: https://docs.kedro.org/en/stable/configuration/parameters.html
 
 summarize_vehicles:
+  # Computes per-vehicle operability statistics (delay, death rate) that are
+  # used to flag infeasible scenarios before assembling load profiles.
   dead_energy_col: dwell_init_kwh
   delay_hrs_col: dwell_init_delay_hrs
   delay_inc_hrs_col: delay_inc_hrs
@@ -20,7 +34,7 @@ summarize_vehicles:
   refresh_col: is_refresh
   location_col: location
   refresh_locations:
-  - depot
+    - depot
   summary_cols:
     delay_frac: delay_frac
     shift_dur: shift_dur_hrs
@@ -33,11 +47,14 @@ summarize_vehicles:
   electrified_col: electrified
   delay_frac_thresh_quantile: 0.95
   max_delay_thresh_quantile: 1.00
-  shift_max_dur_hrs: 14 # From FMCSA hours of service regulations
+  shift_max_dur_hrs: 14  # FMCSA maximum on-duty driving window (hours)
   thresholds:
-    pct_shifts_w_deaths_max: 0.05 # Maximum percentage of shifts with deaths from all causes
-    delay_frac_max: 0.1 # Maximum time fraction of a single shift added by delay
-    delay_hrs_max: 8 # Maximum accumulated delay at any point in vehicle's history
+    # Acceptability thresholds for vehicle operability. Observed vehicles which exceed
+    # these thresholds in a given scenario are flagged as infeasible (charging infrastructure
+    # insufficient to support electrification without unacceptable disruption).
+    pct_shifts_w_deaths_max: 0.05  # Maximum fraction of shifts with range failures from any cause
+    delay_frac_max: 0.1            # Maximum fraction of a single shift added by charging delay
+    delay_hrs_max: 8               # Maximum accumulated delay (hours) at any point in a vehicle's history
 
 localize_time_from_hexes:
   time_cols_source:
@@ -59,25 +76,23 @@ apply_delays:
   delay_unit: hour
 
 filter_dwells_pre_prob_eval:
-  filter_out_weekends: True
+  filter_out_weekends: True  # Load profiles represent typical weekdays; weekend dwells are excluded
   drop_na_cols:
-    - loc_group_id # This is okay, since everything from here on out is one dwell at a time
-    - charge_kwh # Any dwells with NaN charging should not be counted as electrified
+    - loc_group_id  # Dwells at unclassified hexes are excluded from probability estimation
+    - charge_kwh    # Dwells with NaN charging are not counted as electrified
 
 filter_locs_pre_prob:
   drop_na_cols:
-   - loc_group_id
-   - substation_id
+    - loc_group_id
+    - substation_id
 
 dwell_scaling:
   loc_class_cols:
     - loc_group_id
   veh_class_cols:
     - primary_op_dist
-    #- vin_gvw
   electrified_col: electrified
   dwell_rate_col: dwells_per_time_unit
-  
 
 compute_adoption_totals:
   totals_column: n_vehs_target
@@ -85,6 +100,10 @@ compute_adoption_totals:
   electrified_fuel_types:
     - electricity
   filter_totals:
+    # Selects the NLR "Central" scenario at 2035 as the adoption baseline.
+    # Modify ``year`` to project a different horizon year (2030, 2040, etc.).
+    # Modify ``scenario`` to use NLR "High" or "Low" adoption projections.
+    # This filtering is bypassed when override_with_params is True.
     filters:
       gvw_class:
         value_isin:
@@ -99,8 +118,11 @@ compute_adoption_totals:
         value_isin:
           - 2035
     keep_only_filter_cols: False
-  override_with_params: True
+  override_with_params: True   # When True, adoption_fracs below are used directly and NLR projections are ignored.
+                                # Set to False to use NLR Ledna projections filtered by filter_totals above.
+                                # In paper scenarios this is overridden per-SoW via scenario configs.
   adoption_fracs:
+    # Used only when override_with_params is True.
     id_columns:
       - primary_op_dist
     values:
@@ -127,14 +149,13 @@ merge_classes:
     - ${compute_class_probs.columns.n_vehs_electrified_in_class}
   merge_kwargs:
     how: left
-    'on': ${dwell_scaling.veh_class_cols} # Using quotes here because "on" somehow gets interpreted as "True" without quotes
+    'on': ${dwell_scaling.veh_class_cols}  # Using quotes here because "on" somehow gets interpreted as "True" without quotes
 
 compute_class_probs:
   loc_class_cols:
     - loc_group_id
   veh_class_cols:
     - primary_op_dist
-    #- vin_gvw
   columns:
     n_dwells_obs: n_dwells_obs
     n_dwells_obs_elect: n_dwells_electrified
@@ -152,7 +173,7 @@ manage_charging:
   charging_manager: MinPowerChargingManager
   drop_na_cols:
     - charge_kwh
-  input_cols: # keys should match the keyword arguments of the charging manager
+  input_cols:  # Keys must match the keyword arguments of the charging manager
     energy: charge_kwh
     duration: dwell_time_hrs
     max_power: max_power_kw
@@ -180,8 +201,8 @@ eval_columns:
   timezone_col: tz
   time_col: time
   charge_col: charge_kwh
-  group_cols: None # Filled in by the specific modular pipeline settings
-  profile_cols: # profile_cols and diff_cols must have the same set of keys
+  group_cols: None  # Filled in at runtime by the modular pipeline configuration
+  profile_cols:     # profile_cols and diff_cols must have the same set of keys
     power: power_kw
     plugged: plugged
   diff_cols:
@@ -215,7 +236,7 @@ assign_metadata_location:
     # Other columns will be added at runtime
   merge_kwargs:
     how: left
-    'on': hex_id # Using quotes here because "on" somehow gets interpreted as "True" without quotes
+    'on': hex_id  # Using quotes here because "on" somehow gets interpreted as "True" without quotes
     validate: many_to_one
 
 assign_metadata_vehicle:
@@ -225,7 +246,7 @@ assign_metadata_vehicle:
     # Other columns will be added at runtime
   merge_kwargs:
     how: left
-    'on': veh_id # Using quotes here because "on" somehow gets interpreted as "True" without quotes
+    'on': veh_id  # Using quotes here because "on" somehow gets interpreted as "True" without quotes
     validate: many_to_one
 
 merge_dwell_probs:
@@ -235,34 +256,38 @@ merge_dwell_probs:
     - p_obs_elect_g_lclass_vclass
   merge_kwargs:
     how: left
-    'on': # Using quotes here because "on" somehow gets interpreted as "True" without quotes
+    'on':  # Using quotes here because "on" somehow gets interpreted as "True" without quotes
       - loc_group_id
       - primary_op_dist
 
 slice_events:
-    slice_freq: 1d
-    clip_dur_to_slice_freq: True
-    slice_id_col: slice_time_start
-    slice_time_col: slice_time_relative
-    source_time_col: time_local
+  slice_freq: 1d
+  clip_dur_to_slice_freq: True
+  slice_id_col: slice_time_start
+  slice_time_col: slice_time_relative
+  source_time_col: time_local
 
 dask_eval:
   cluster:
-    n_workers: 3
-    processes: True
-    threads_per_worker: 1 # Must stay at 1, since our code is not thread safe
-    memory_limit: 16GiB # TODO: explore if this could be decreased by moving Dask farther along in pipeline (after filtering steps)
+    n_workers: 3           # Set to (available CPU cores - 1); fewer workers reduces peak memory
+    processes: True        # Must be True; code is not proven thread-safe
+    threads_per_worker: 1  # See previous comment
+    memory_limit: 16GiB    # Tune to available RAM; the loading of the dwells into memory is the most memory-intensive step
 
 sample_profiles:
-  discrete_freq: 30min
+  # Bootstrap sampling configuration for load profile assembly (Module 6).
+  # Each bootstrap draw samples a set of electrified dwells proportional to
+  # adoption rates, then assembles a 30-minute load profile per TAZ.
+  # The 95th percentile across bootstraps is used as the policy-relevant peak.
+  discrete_freq: 30min       # Load profile time resolution; 30-minute intervals
   slice_freq: ${slice_events.slice_freq}
-  n_bootstraps: 100 # Roughly 7 seconds per bootstrap on HPC for full-size data
-  save_bootstrap_profiles: False # Set to true to retain full per-bootstrap DataFrames in bootstrap_profiles_debug_partition (high memory cost)
+  n_bootstraps: 100         # Number of bootstrap draws; ~10 seconds per bootstrap on HPC for the full dataset.
+  save_bootstrap_profiles: False  # Set to True to retain full per-bootstrap DataFrames for debugging (high memory cost)
   master_seed: 42
   bootstrap_id_col: bootstrap_id
   sample_self: True
   sample_class: True
-  max_first_stage_options: 5000 # Higher should increase profile smoothness and runtime
+  max_first_stage_options: 5000  # Maximum candidate dwells considered in first-stage sampling; higher values improve profile smoothness
   dwell_prob_obs_elect_col: p_obs_elect_g_lclass_vclass
   n_dwells_expected_elect_col: n_dwells_expected_elect
   time_col: ${slice_events.slice_time_col}
@@ -271,6 +296,8 @@ sample_profiles:
     cumul: _cuml
     peak: _peak
   quantiles:
+    # Quantiles of the bootstrap distribution saved per substation.
+    # The 0.95 quantile ("duty-to-serve-robust" policy) is the primary metric in the paper (§4.1).
     - 0.00
     - 0.05
     - 0.40

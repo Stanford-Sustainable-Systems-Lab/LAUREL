@@ -1,10 +1,22 @@
-# This is a boilerplate parameters config generated for pipeline 'describe_locations'
-# using Kedro 0.19.3.
+# Parameters for the ``describe_locations`` pipeline (Model Module 3: Augment TAZs).
 #
-# Documentation for this file format can be found in "Parameters"
-# Link: https://docs.kedro.org/en/0.19.3/configuration/parameters.html
+# This pipeline builds the spatial foundation of the model. It:
+#   1. Formats and deduplicates substation geometries (HIFLD + PG&E sources).
+#   2. Assigns each H3 resolution-8 hexagon (~460 m diameter) in the continental
+#      U.S. to a state, urban area, highway buffer, and timezone.
+#   3. Formats business establishment data and supplements it with truck stops and
+#      warehouses extracted from OpenStreetMap.
+#   4. Classifies each hex into one of 22 freight activity classes using K-Means
+#      clustering on NAICS employee counts and NLCD land-cover features.
+#
+# The 22 classes are: undeveloped, no_estabs, no_freight_estabs, truck_stop,
+# and 18 K-Means clusters of freight-intensive hexes (numbered 0–17).
+# Charger deployment rules are applied per class downstream in electrify_trips.
+#
+# Documentation: https://docs.kedro.org/en/stable/configuration/parameters.html
 
-# For California substations
+# --- PG&E substation formatting (California only) ---
+
 format_substations_pg_and_e:
   col_renamer:
     substation_id: substationid
@@ -42,7 +54,8 @@ describe_substation_usage:
 pg_and_e.geo_partition:
   dir: pg_and_e
 
-# For continental substations
+# --- Continental (HIFLD) substation formatting ---
+
 format_substations_contin:
   col_renamer:
     substation_id: id
@@ -61,6 +74,7 @@ substations.select_columns:
     - substation_id
 
 filter_contin_subs:
+  # Retains substations that are operational or planned; excludes retired/decommissioned.
   filters:
     status:
       value_isin:
@@ -74,16 +88,20 @@ filter_contin_subs:
   keep_only_filter_cols: False
 
 fill_out_substations:
+  # Fills geographic gaps in the Voronoi substation territory tessellation by
+  # buffering each substation point and assigning any unmatched hexes to the
+  # nearest buffered substation. This ensures complete continental coverage.
   columns:
-      substation_id: substation_id
-      source: source
+    substation_id: substation_id
+    source: source
   proj_crs: ${clip_to_extent.crs}
-  buff_dist_meters: 1000
+  buff_dist_meters: 1000  # Search radius for gap-filling; 1 km is sufficient for typical substation spacing
 
 continental.geo_partition:
   dir: continental
 
-# For supporting datasets
+# --- Supporting spatial datasets ---
+
 format_states:
   col_renamer:
     state_code: STUSPS
@@ -96,19 +114,21 @@ states.select_columns:
     - county_code
 
 filter_state_codes:
+  # Removes non-CONUS states, territories, and Canadian provinces that appear
+  # in the continental U.S. boundary dataset.
   filters:
     state_code:
       value_isin:
-        - GU
-        - MP
-        - PR
-        - AK
-        - HI
-        - VI
-        - AS
-        - BC
-        - SK
-        - AB
+        - GU   # Guam
+        - MP   # Northern Mariana Islands
+        - PR   # Puerto Rico
+        - AK   # Alaska
+        - HI   # Hawaii
+        - VI   # U.S. Virgin Islands
+        - AS   # American Samoa
+        - BC   # British Columbia (Canada)
+        - SK   # Saskatchewan (Canada)
+        - AB   # Alberta (Canada)
       invert: True
   keep_only_filter_cols: False
 
@@ -125,7 +145,7 @@ format_highways:
     road_num: ROADNUM
   dissolve_cols:
     - road_num
-  highway_buffer_miles: 5
+  highway_buffer_miles: 5   # Hexes within this distance of a numbered U.S. highway are marked as highway-adjacent
   buff_crs: ${clip_to_extent.crs}
 
 highways.select_columns:
@@ -133,7 +153,7 @@ highways.select_columns:
     - road_num
 
 clip_to_extent:
-  crs: EPSG:5070
+  crs: EPSG:5070  # Albers Equal Area Conic (CONUS); used for all area and distance calculations
 
 hexify_polygons:
   hex_col: hex_id
@@ -147,10 +167,14 @@ fill_missingness:
     - state_code
     - tz
   fill_na_vals:
-    road_num: far_from_highway
-    urban_area: non_urban
+    road_num: far_from_highway   # Default for hexes not near any numbered highway
+    urban_area: non_urban        # Default for hexes outside Census urban area boundaries
+
+# --- Establishment data formatting ---
 
 format_estabs:
+  # Maps Data Axle column names to internal names and supplements with
+  # computed columns (hex_id, geometry).
   col_renamer:
     estab_id: ESTAB_ID
     name: COMPANY
@@ -161,13 +185,14 @@ format_estabs:
     state: STATE
     lat: LATITUDE
     lon: LONGITUDE
-  default_naics: 99999001
+  default_naics: 99999001  # Placeholder NAICS code for establishments with no reported primary code
+
   calculated_keep_cols:
     - hex_id
     - geometry
 
 prepare_stop_locations_public:
-  naics_code: 44719002 # An unused NAICS code in Data Axle
+  naics_code: 44719002  # An unused NAICS code in Data Axle; assigned to Jason's Law truck parking locations
   col_renamer:
     name: NHS Rest S
   columns:
@@ -182,12 +207,12 @@ get_osm_estabs:
   temp_path: data/01_raw/OpenStreetMap/temp_reader.osm.pbf
 
 get_osm_estabs_truck_stops:
-  naics_code: 44719007
+  naics_code: 44719007  # Assigned to OSM-derived truck stop locations; must match special_naics in group_hexes
   tag_regex: "\\b(?:love'?s(?:\\s+travel\\s+stops?)?|pilot(?:\\s+travel\\s+center)?|flying\\s+j|pilot\\s+flying\\s+j|ta(?:\\s+travel\\s+center)?|road\\s+ranger|sapp\\s+bros?\\.?)\\b"
   naics_col: ${format_extra_estabs.naics_col}
 
 get_osm_estabs_warehouses:
-  naics_code: 49311000
+  naics_code: 49311000  # Warehouse/distribution NAICS; supplements Data Axle with OSM-derived warehouses
   tag_regex: "\\b(?:distribution|fulfillment|fulfilment|logistics|freight|returns?|return|order|e-?commerce)\\s+(?:center|centre|facility|hub|park|warehouse)\\b"
   naics_col: ${format_extra_estabs.naics_col}
 
@@ -198,20 +223,26 @@ format_extra_estabs:
   proj_crs: ${clip_to_extent.crs}
 
 reassign_hqs:
+  # Reassigns the NAICS code of large-company headquarters to a holding-company
+  # code (55111201) so that HQ locations do not inflate freight counts for
+  # non-freight industries. Only applied to large companies (≥ n_estabs_big
+  # establishments) within the transportation/warehousing NAICS window (40–50M).
   columns:
     naics: naics_8
     parent_id: parent_id
     n_employees: n_employees
     estab_id: estab_id
     buss_status: business_status_code
-  emp_ratio_min: 5 # Minimum ratio of n_employees at this establishment compared to median of parent company for this to be considered an HQ
-  hq_bus_codes: # Business status codes corresponding to HQs
+  emp_ratio_min: 5       # Minimum ratio of this establishment's employees to median of parent company to be treated as an HQ
+  hq_bus_codes:          # Business status codes in Data Axle that correspond to HQ/parent locations
     - 1
-  n_estabs_big: 20 # The minimum number of establishments within a parent to be considered "big" and viable for HQ replacement
-  naics_window: # Window of NAICS values for which replacement can occur
+  n_estabs_big: 20       # Minimum number of establishments in a parent company to qualify for HQ reassignment
+  naics_window:          # Only reassign HQs within the transportation/warehousing NAICS range (4x–5x million)
     lower: 40000000
     upper: 50000000
-  hq_naics: 55111201 # Replacement NAICS for HQs - Offices of other holding companies
+  hq_naics: 55111201     # NAICS code for "Offices of Other Holding Companies"; assigned to identified HQs
+
+# --- Freight activity classification ---
 
 collapse_naics_classes:
   naics_cols:
@@ -219,7 +250,7 @@ collapse_naics_classes:
     out: naics_focus
     leaf: naics_leaf
   fill_leaf: 0
-  
+
 pivot_hex_estabs:
   columns:
     n_employees: n_employees
@@ -228,46 +259,70 @@ pivot_hex_estabs:
     geom: geometry
   keep_metadata_cols:
     - state
-  zero_emp_buff: 1 # Number of "fake" employees to add to establishments without employees
+  zero_emp_buff: 1  # "Fake" employees added to establishments reporting zero employees; prevents log(0) in clustering
   naics_prefix: naics_
+
+# --- NLCD land use raster extraction ---
+
+dask_read_land_use:
+  cluster: # Defaults to None, allowing Dask cluster to use whatever local resources are available
+
+partition_hex_corresp:
+  n_partitions: 500  # Number of Dask partitions; controls parallelism during raster extraction
+
+read_land_use:
+  # Path to the NLCD 2023 Annual Land Cover GeoTIFF, relative to the Kedro project root.
+  # NOTE: This path is passed as a parameter (not a catalog dataset) because
+  # exactextract reads the raster directly from disk via its own I/O layer.
+  # There is no standard Kedro dataset type that loads a GeoTIFF into memory
+  # in the format exactextract requires.
+  # Download: https://www.usgs.gov/centers/eros/science/annual-national-land-cover-database
+  raster_path: data/01_raw/land_use/Annual_NLCD_LndCov_2023_CU_C1V1.tif
+  hex_col: ${hexify_polygons.hex_col}  # Shared hex column name (= "hex_id")
 
 pivot_hex_land_use:
   input_cols:
     categories: unique
     fractions: frac
     hex: hex_id
-  code_group_corresp: # Values are my groupings, comments are original meaning
-    11: wild # open_water
-    12: wild # ice_snow
-    21: developed # developed_open
-    22: developed # developed_low
-    23: developed # developed_med
-    24: developed # developed_high
-    31: wild # barren_land
-    41: wild # forest_deciduous
-    42: wild # forest_evergreen
-    43: wild # forest_mixed
-    52: wild # shrub_scrub
-    71: wild # grassland
-    81: cultivated # pasture_hay
-    82: cultivated # cultivated_crops
-    90: wild # woody_wetlands
-    95: wild # emergent_herbaceous_wetlands
+  code_group_corresp:  # Maps NLCD 2023 land cover codes to three groups used in freight activity classification
+    # Changing these groupings alters which hexes are considered developable for charger deployment.
+    11: wild         # Open water
+    12: wild         # Perennial ice/snow
+    21: developed    # Developed, open space
+    22: developed    # Developed, low intensity
+    23: developed    # Developed, medium intensity
+    24: developed    # Developed, high intensity
+    31: wild         # Barren land
+    41: wild         # Deciduous forest
+    42: wild         # Evergreen forest
+    43: wild         # Mixed forest
+    52: wild         # Shrub/scrub
+    71: wild         # Grassland/herbaceous
+    81: cultivated   # Pasture/hay
+    82: cultivated   # Cultivated crops
+    90: wild         # Woody wetlands
+    95: wild         # Emergent herbaceous wetlands
 
 group_hexes:
+  # K-Means clustering of freight-intensive hexes into freight activity classes.
+  # The 18-cluster solution was selected by minimizing the probability that a
+  # randomly chosen hex exceeds a charger utilization threshold (see paper §3.3).
+  # Changing n_clusters affects downstream adoption rate estimates and load profiles;
+  # do not change without re-tuning the model.
   development:
     col: developed
-    frac_thresh: 0.025
+    frac_thresh: 0.025  # Hexes with < 2.5% developed land are classified as "undeveloped" and excluded from clustering
   naics_prefix: ${pivot_hex_estabs.naics_prefix}
   default_naics: 0
   special_naics:
-    truck_stop: 44719007
-    truck_park: 44719002
+    truck_stop: 44719007  # Must match get_osm_estabs_truck_stops.naics_code
+    truck_park: 44719002  # Must match prepare_stop_locations_public.naics_code
   clusterer_kwargs:
-    n_clusters: 18 # Optimized for lowest exceedance of threshold probability
-    random_state: 42
+    n_clusters: 18       # Number of K-Means clusters; optimized for lowest exceedance of threshold probability
+    random_state: 42     # Fixed for reproducibility; K-Means result is sensitive to initialization
     init: k-means++
-    verbose: 1 # Scikit-learn uses an integer system for verbosity, with 0 being no prints
+    verbose: 1           # scikit-learn verbosity: 0 = silent, 1 = progress, 2 = detailed
   loc_group_col: loc_group_id
 
 apply_groups:
