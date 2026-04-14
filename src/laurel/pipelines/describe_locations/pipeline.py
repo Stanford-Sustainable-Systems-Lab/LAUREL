@@ -491,6 +491,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 ],
                 outputs="hex_cluster_corresp",
                 name="apply_groups",
+                tags=["fast_loc_grouping"],
             ),
         ],
         tags="establishments",
