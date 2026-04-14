@@ -191,7 +191,10 @@ def tabularize_params(
     Returns: DataFrame of select parameters from each scenario, indexed by scenario identifier.
     """
     ext = {k: extract_params(v, read_keys) for k, v in cfgs.items()}
-    cfg_df = pd.DataFrame.from_dict(ext).T
+    col_wise = {
+        col: {k: row[col] for k, row in ext.items()} for col in next(iter(ext.values()))
+    }
+    cfg_df = pd.DataFrame.from_dict(col_wise)
     cfg_df.index.name = idx_name
     cfg_df = cfg_df.sort_index()
     return cfg_df
