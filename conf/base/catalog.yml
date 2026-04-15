@@ -771,9 +771,21 @@ factor_prioritization:
   save_args:
     bbox_inches: tight
 
+factor_prioritization_truck_stops:
+  type: matplotlib.MatplotlibDataset
+  filepath: data/08_reporting/factor_prioritization_truck_stops.pdf
+  save_args:
+    bbox_inches: tight
+
 single_factor_minimum:
   type: matplotlib.MatplotlibDataset
   filepath: data/08_reporting/single_factor_minimum.pdf
+  save_args:
+    bbox_inches: tight
+
+single_factor_minimum_truck_stops:
+  type: matplotlib.MatplotlibDataset
+  filepath: data/08_reporting/single_factor_minimum_truck_stops.pdf
   save_args:
     bbox_inches: tight
 
