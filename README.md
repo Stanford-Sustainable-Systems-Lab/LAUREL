@@ -4,7 +4,7 @@ This repository implements the LAUREL model described in:
 
 > Passow, F. H., & Rajagopal, R. (2026). Prioritizing uncertainty-robust indicators to inform proactive substation upgrades for charging electric heavy-duty trucks. *Applied Energy* (submitted March 2026).
 
-The specific use of the LAUREL model demonstrated here estimates e-HDT charging load profiles for each of the ~52,000 electrical substations in the continental U.S. across 512 plausible future states of the world (SoWs) representing 2035 conditions. It identifies which substations grid operators should consider proactively upgrading for e-HDT charging, and what techno-economic indicators signal when such an upgrade may become necessary — findings that are assessed for robustness to uncertainty across all 512 SoWs.
+The specific use of the LAUREL model demonstrated here estimates e-HDT charging load profiles for each of the ~52,000 electrical substations in the continental U.S. across 1024 plausible future states of the world (SoWs) representing 2035 conditions. It identifies which substations grid operators should consider proactively upgrading for e-HDT charging, and what techno-economic indicators signal when such an upgrade may become necessary — findings that are assessed for robustness to uncertainty across all 1024 SoWs.
 
 ---
 
@@ -30,7 +30,7 @@ The specific use of the LAUREL model demonstrated here estimates e-HDT charging 
 
 Electric heavy-duty trucks (e-HDTs) will require geographically concentrated, high-power charging that will stress electric distribution infrastructure — particularly substations, which can take years and millions of dollars to upgrade. This model was built to answer: *which substations should grid operators proactively upgrade, and what observable conditions should trigger that decision?*
 
-Our approach uses a continent-scale telematics dataset of ~69,000 diesel HDTs (International, Inc., April–November 2023) as the behavioral foundation. We simulate electrified versions of these vehicles across 512 quasi-random combinations of key uncertain parameters (adoption rates, energy consumption, charger power, battery reserve). For each combination, we assemble 30-minute load profiles for every substation in the continental U.S. Findings are assessed for robustness across the full ensemble.
+Our approach uses a continent-scale telematics dataset of ~69,000 diesel HDTs (International, Inc., April–November 2023) as the behavioral foundation. We simulate electrified versions of these vehicles across 1024 quasi-random combinations of key uncertain parameters (adoption rates, energy consumption, charger power, battery reserve). For each combination, we assemble 30-minute load profiles for every substation in the continental U.S. Findings are assessed for robustness across the full ensemble.
 
 Key findings:
 
