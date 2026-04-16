@@ -1,8 +1,8 @@
 """Kedro pipeline definition for the ``build_scenarios`` pipeline.
 
-Wires the nodes from :mod:`.nodes` into a single ``Pipeline`` object.
+Wires the nodes from :mod:`laurel.pipelines.build_scenarios.nodes` into a single ``Pipeline`` object.
 For full documentation of each node's inputs, outputs, and algorithm,
-see :mod:`.nodes`.
+see :mod:`laurel.pipelines.build_scenarios.nodes`.
 
 Sub-pipelines / tags
 --------------------

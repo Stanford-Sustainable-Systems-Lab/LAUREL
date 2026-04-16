@@ -1,8 +1,8 @@
 """Kedro pipeline definition for the ``describe_locations`` pipeline.
 
-Wires the nodes from :mod:`.nodes` into a single ``Pipeline`` object.
+Wires the nodes from :mod:`laurel.pipelines.describe_locations.nodes` into a single ``Pipeline`` object.
 For full documentation of each node's inputs, outputs, and algorithm,
-see :mod:`.nodes`.
+see :mod:`laurel.pipelines.describe_locations.nodes`.
 
 Sub-pipelines / tags
 --------------------
