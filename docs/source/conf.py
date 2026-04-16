@@ -43,6 +43,7 @@ autodoc_mock_imports = [
     "prim",
     "aiohttp",
     "cvxpy",
+    "triad",
 ]
 
 # -- Project information -----------------------------------------------------
