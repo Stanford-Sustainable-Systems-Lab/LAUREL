@@ -11,17 +11,16 @@ The specific use of the LAUREL model demonstrated here estimates e-HDT charging 
 ## Table of Contents
 
 - [Background](#background)
+- [Model Overview](#model-overview)
+- [Input Data](#input-data)
 - [Repository Structure](#repository-structure)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
-- [Input Data](#input-data)
-- [Model Overview](#model-overview)
 - [Running the Model](#running-the-model)
 - [Scenarios](#scenarios)
 - [Configuration](#configuration)
-- [Setup Scripts](#setup-scripts)
-- [HPC Execution (Sherlock)](#hpc-execution-sherlock)
 - [Output Data](#output-data)
+- [HPC Execution (Sherlock)](#hpc-execution-sherlock)
 - [Development](#development)
 - [Citation](#citation)
 
@@ -38,6 +37,72 @@ Key findings:
 - Under a "duty-to-serve-robust" policy (80th-percentile peak load), 7.4% of substations would exceed 3 MW from e-HDT charging alone by 2035.
 - Presence of a truck stop is the strongest geographic predictor; almost no substations exceed 3 MW at adoption rates below 5%.
 - Adoption level is by far the strongest techno-economic indicator, followed distantly by truck-stop charger power.
+
+---
+
+## Model Overview
+
+The model has six modules that map to Kedro pipelines (see circled numbers in the following figure):
+
+![Model flow diagram](docs/source/_static/model-flow.svg)
+
+### Module 1 — Select States of the World (`prepare_totals`, `build_scenarios`)
+
+Selects a set of plausible states of the world (SoWs) to evaluate, generating 1024 quasi-random combinations using Sobol' sequences (via OpenTURNS). Adoption rates by vehicle primary operating distance class are drawn from Beta distributions fit to NLR scenarios via a Gaussian copula. Other parameters (energy consumption rate, charger power at truck stops / depots / destinations, battery reserve) are sampled uniformly.
+
+### Module 2 — Augment Dwell Data (`describe_dwells`, `compute_routes`)
+
+Augments vehicle dwell history data with optional dwells and with marked driver shifts. Coalesces spurious short dwells, marks driver shifts (≥6.9 hr breaks per FMCSA rules), and inserts optional dwells at truck stops along shortest-path routes computed by GraphHopper. Optional dwells are inserted between existing dwells separated by >50 miles, if a truck stop falls within 1 mile of the shortest path. This grew our dwell count by ~35%.
+
+### Module 3 — Augment TAZs (`describe_locations`)
+
+Splits the continental U.S. into transportation analysis zones (TAZs) — H3 resolution-8 hexagons (~1/4-mile diameter) — and augments each with a freight activity classification and charger deployment. Classifies each TAZ into one of 22 freight activity classes:
+
+- Undeveloped / No establishments / No freight-intensive establishments / Truck stops
+- 18 K-Means clusters of freight-intensive TAZs (based on NAICS employee counts)
+
+Deploys chargers by freight activity class: truck-stop charging at truck-stop TAZs, destination charging at freight-intensive TAZs, depot charging per-vehicle based on a 30-day rolling dwell-time threshold.
+
+### Module 4 — Simulate Electrified Dwells (`electrify_trips`)
+
+Simulates the e-HDT charging choices each vehicle in our dataset might have made, using a utility-maximization algorithm (inspired by Liu et al. 2022). The algorithm selects charging mode and energy amount at each dwell, trading off SoC maintenance against incurred delay, with look-ahead to the end of the current driver shift. Uses Numba JIT compilation for performance. Each SoW runs in ~25 minutes on a 4-core/64 GB machine.
+
+### Module 5 — Estimate Expected Electrified Dwells (`evaluate_impacts`)
+
+Estimates the total number of electrified dwells expected in each TAZ, using the freight activity class. Fuses SoW adoption rates (from Module 1) with freight-activity-class-specific vehicle visit statistics from the observed data. Uses logistic regression with a numeric correction term to ensure consistency with known fleet-level adoption rates.
+
+### Module 6 — Assemble Load Profiles (`evaluate_impacts`)
+
+Assembles charging load profiles for each substation from the simulated e-HDT vehicle histories by aggregating load profiles from the TAZs within each substation's territory. Bootstrap-samples electrified dwells (100 draws, 95th percentile) to assemble 30-minute load profiles for each TAZ, then aggregates across all TAZs within each substation territory. Uses inverse propensity score weighting to correct for sampling bias in the telematics dataset. The final outputs are a set of charging load profiles for a typical weekday, one for each substation–SoW pair.
+
+---
+
+## Input Data
+
+The model requires several external datasets, placed under `data/01_raw/`. The data catalog (`conf/base/catalog.yml`) defines where each dataset is expected.
+
+**Proprietary datasets** (require a data-access agreement):
+
+| Dataset | Source | Pipeline(s) |
+| --- | --- | --- |
+| International, Inc. telematics | Proprietary (contact International, Inc.) | `describe_dwells`, `describe_vehicles`, `compute_routes`, `electrify_trips` |
+| Data Axle business establishments | Proprietary (contact Data Axle, Inc.) | `describe_locations` |
+
+**Public datasets** (freely downloadable):
+
+| Dataset | Source | Pipeline(s) |
+| --- | --- | --- |
+| VIUS (Vehicle Inventory and Use Survey) | [BTS](https://www.bts.gov/vius) | `prepare_totals` |
+| NLR Ledna adoption scenarios | [iScience 27 (2024) 109385](https://doi.org/10.1016/j.isci.2024.109385) | `prepare_totals` |
+| HIFLD Electrical Substations | [gem.anl.gov](https://gem.anl.gov) | `evaluate_impacts` |
+| PG&E ICA maps | [grip.pge.com](https://grip.pge.com) | `evaluate_impacts` (PG&E territory only) |
+| NLCD 2023 (National Land Cover Database) | [USGS](https://doi.org/10.5066/P94UXNTS) | `describe_locations` |
+| Jason's Law truck parking | [BTS geodata](https://geodata.bts.gov/datasets/fff36e0c37c748a5a1773b5784d4d9a5_0) | `describe_locations`, `compute_routes` |
+| OpenStreetMap (continental U.S.) | [Geofabrik](https://download.geofabrik.de) | `compute_routes`, `describe_locations` |
+
+> **Note on telematics data:** The International, Inc. dataset is proprietary and cannot be redistributed. Researchers wishing to replicate this work should contact International, Inc. to request access, or adapt the pipeline to use a comparable telematics dataset with the same schema (vehicle ID, dwell TAZ, dwell start/end times, trip distance).
+
+> **Note on business establishments data:** The Data Axle, Inc. dataset is proprietary and cannot be redistributed. Researchers wishing to replicate this work should contact Data Axle, Inc. to request access, or adapt the pipeline to use a comparable business establishment dataset with the same schema. The pipeline expects three tables joined on a shared establishment ID: a core table (`ESTAB_ID`, `COMPANY`, `PRIMARY_NAICS_CODE`, `EMPLOYEE_SIZE__5____LOCATION`, `BUSINESS_STATUS_CODE`, `STATE`), a geo table (`ESTAB_ID`, `LATITUDE`, `LONGITUDE`), and a relationships table (`ESTAB_ID`, `PARENT_NUMBER`).
 
 ---
 
@@ -108,135 +173,71 @@ cd LAUREL
 uv sync
 
 # Or with pip into an existing environment
-pip install -e .
+uv pip install -e .
 ```
 
 To verify the installation:
 
 ```bash
-kedro info
-kedro pipeline list
+uv run kedro info
+uv run kedro pipeline list
 ```
 
 You should see the eight pipelines: `describe_vehicles`, `describe_dwells`, `compute_routes`, `describe_locations`, `prepare_totals`, `electrify_trips`, `evaluate_impacts`, `build_scenarios`.
 
 ---
 
-## Input Data
-
-The model requires several external datasets, placed under `data/01_raw/`. The data catalog (`conf/base/catalog.yml`) defines where each dataset is expected.
-
-**Proprietary datasets** (require a data-access agreement):
-
-| Dataset | Source | Pipeline(s) |
-| --- | --- | --- |
-| International, Inc. telematics | Proprietary (contact International, Inc.) | `describe_dwells`, `describe_vehicles`, `compute_routes`, `electrify_trips` |
-| Data Axle business establishments | Proprietary (contact Data Axle, Inc.) | `describe_locations` |
-
-**Public datasets** (freely downloadable):
-
-| Dataset | Source | Pipeline(s) |
-| --- | --- | --- |
-| VIUS (Vehicle Inventory and Use Survey) | [BTS](https://www.bts.gov/vius) | `prepare_totals` |
-| NLR Ledna adoption scenarios | [iScience 27 (2024) 109385](https://doi.org/10.1016/j.isci.2024.109385) | `prepare_totals` |
-| HIFLD Electrical Substations | [gem.anl.gov](https://gem.anl.gov) | `evaluate_impacts` |
-| PG&E ICA maps | [grip.pge.com](https://grip.pge.com) | `evaluate_impacts` (PG&E territory only) |
-| NLCD 2023 (National Land Cover Database) | [USGS](https://doi.org/10.5066/P94UXNTS) | `describe_locations` |
-| Jason's Law truck parking | [BTS geodata](https://geodata.bts.gov/datasets/fff36e0c37c748a5a1773b5784d4d9a5_0) | `describe_locations`, `compute_routes` |
-| OpenStreetMap (continental U.S.) | [Geofabrik](https://download.geofabrik.de) | `compute_routes`, `describe_locations` |
-
-> **Note on telematics data:** The International, Inc. dataset is proprietary and cannot be redistributed. Researchers wishing to replicate this work should contact International, Inc. to request access, or adapt the pipeline to use a comparable telematics dataset with the same schema (vehicle ID, dwell TAZ, dwell start/end times, trip distance).
-
-> **Note on business establishments data:** The Data Axle, Inc. dataset is proprietary and cannot be redistributed. Researchers wishing to replicate this work should contact Data Axle, Inc. to request access, or adapt the pipeline to use a comparable business establishment dataset with the same schema. The pipeline expects three tables joined on a shared establishment ID: a core table (`ESTAB_ID`, `COMPANY`, `PRIMARY_NAICS_CODE`, `EMPLOYEE_SIZE__5____LOCATION`, `BUSINESS_STATUS_CODE`, `STATE`), a geo table (`ESTAB_ID`, `LATITUDE`, `LONGITUDE`), and a relationships table (`ESTAB_ID`, `PARENT_NUMBER`).
-
----
-
-## Model Overview
-
-The model has six modules that map to Kedro pipelines:
-
-```text
-Module 1: Select SoWs         ← prepare_totals + build_scenarios
-Module 2: Augment dwell data  ← describe_dwells + compute_routes
-Module 3: Augment TAZs        ← describe_locations
-                                 (also: describe_vehicles)
-─── repeat for each SoW ───
-Module 4: Simulate e-HDT dwells  ← electrify_trips
-Module 5: Estimate expected dwells by TAZ  ← evaluate_impacts (first half)
-Module 6: Assemble load profiles  ← evaluate_impacts (second half)
-```
-
-![Model flow diagram](docs/source/_static/model-flow.svg)
-
-### Module 1 — Select States of the World (`prepare_totals`, `build_scenarios`)
-
-Selects a set of plausible states of the world (SoWs) to evaluate, generating 1024 quasi-random combinations using Sobol' sequences (via OpenTURNS). Adoption rates by vehicle primary operating distance class are drawn from Beta distributions fit to NLR scenarios via a Gaussian copula. Other parameters (energy consumption rate, charger power at truck stops / depots / destinations, battery reserve) are sampled uniformly.
-
-### Module 2 — Augment Dwell Data (`describe_dwells`, `compute_routes`)
-
-Augments vehicle dwell history data with optional dwells and with marked driver shifts. Coalesces spurious short dwells, marks driver shifts (≥6.9 hr breaks per FMCSA rules), and inserts optional dwells at truck stops along shortest-path routes computed by GraphHopper. Optional dwells are inserted between existing dwells separated by >50 miles, if a truck stop falls within 1 mile of the shortest path. This grew our dwell count by ~35%.
-
-### Module 3 — Augment TAZs (`describe_locations`)
-
-Splits the continental U.S. into transportation analysis zones (TAZs) — H3 resolution-8 hexagons (~1/4-mile diameter) — and augments each with a freight activity classification and charger deployment. Classifies each TAZ into one of 22 freight activity classes:
-
-- Undeveloped / No establishments / No freight-intensive establishments / Truck stops
-- 18 K-Means clusters of freight-intensive TAZs (based on NAICS employee counts)
-
-Deploys chargers by freight activity class: truck-stop charging at truck-stop TAZs, destination charging at freight-intensive TAZs, depot charging per-vehicle based on a 30-day rolling dwell-time threshold.
-
-### Module 4 — Simulate Electrified Dwells (`electrify_trips`)
-
-Simulates the e-HDT charging choices each vehicle in our dataset might have made, using a utility-maximization algorithm (inspired by Liu et al. 2022). The algorithm selects charging mode and energy amount at each dwell, trading off SoC maintenance against incurred delay, with look-ahead to the end of the current driver shift. Uses Numba JIT compilation for performance. Each SoW runs in ~25 minutes on a 4-core/64 GB machine.
-
-### Module 5 — Estimate Expected Electrified Dwells (`evaluate_impacts`)
-
-Estimates the total number of electrified dwells expected in each TAZ, using the freight activity class. Fuses SoW adoption rates (from Module 1) with freight-activity-class-specific vehicle visit statistics from the observed data. Uses logistic regression with a numeric correction term to ensure consistency with known fleet-level adoption rates.
-
-### Module 6 — Assemble Load Profiles (`evaluate_impacts`)
-
-Assembles charging load profiles for each substation from the simulated e-HDT vehicle histories by aggregating load profiles from the TAZs within each substation's territory. Bootstrap-samples electrified dwells (100 draws, 95th percentile) to assemble 30-minute load profiles for each TAZ, then aggregates across all TAZs within each substation territory. Uses inverse propensity score weighting to correct for sampling bias in the telematics dataset. The final outputs are a set of charging load profiles for a typical weekday, one for each substation–SoW pair.
-
----
-
 ## Running the Model
 
-### Full pipeline (all modules, default scenario)
+### One-time data preparation
 
-```bash
-uv run kedro run
-```
+Before running any scenario, the model data must be prepared. The `scripts/setup/` directory contains shell scripts for each preparation step, numbered in execution order:
 
-### Individual pipelines
+| Script | Purpose |
+| ------ | ------- |
+| `01_download_osm.sh` | Download the OpenStreetMap road network for the continental U.S. |
+| `02a_describe_locations.sh` | Run the `describe_locations` pipeline (TAZ classification) |
+| `02b_import_graph.sh` | Import the OSM graph into GraphHopper |
+| `02c_preprocess_trips.sh` | Preprocess raw telematics trips |
+| `03_prepare_routing.sh` | Start the GraphHopper routing server |
+| `04_compute_routes.sh` | Run the `compute_routes` pipeline |
+| `05_optional_stops.sh` | Insert optional truck-stop dwells along routes |
+| `06_describe_dwells.sh` | Run the `describe_dwells` pipeline |
+| `07_describe_vehicles.sh` | Run the `describe_vehicles` pipeline |
+| `08_prepare_totals.sh` | Run the `prepare_totals` pipeline (SoW generation) |
 
-```bash
-# Data preparation (run once using the scripts in scripts/setup)
-uv run kedro run --pipeline=describe_vehicles
-uv run kedro run --pipeline=describe_dwells
-uv run kedro run --pipeline=compute_routes        # Requires Docker (GraphHopper)
-uv run kedro run --pipeline=describe_locations
-uv run kedro run --pipeline=prepare_totals
-
-# Per-SoW simulation (run once per scenario)
-uv run kedro run --pipeline=electrify_trips
-uv run kedro run --pipeline=evaluate_impacts
-```
+Run these scripts in order once before executing any scenario. The comments at the top
+of these scripts can be used directly by SLURM to set its resource allocations
+(see [HPC Execution](#hpc-execution-sherlock)), but you can also run them as `bash`
+scripts directly.
 
 ### Running a specific scenario
 
-```bash
-uv run kedro run --pipeline=electrify_trips --env=scenario/test/task_0
-uv run kedro run --pipeline=evaluate_impacts --params=scenario/test/task_0
-```
-
-### Running a single SoW from the 1024-SoW set
-
-The `sense` scenario set is designed to run one SoW at a time, identified by a `task_id` parameter. This is how the SLURM array jobs work:
+To run a specific scenario, make sure that its configurations are in `conf/scenarios/...`.
+These configurations can be built by hand, like the one in `conf/scenarios/validate/`, or
+they can be generated using custom code via the `build_scenarios` pipeline. For example,
+here is the command to build the configurations for the `sense_manage` scenario set:
 
 ```bash
-uv run kedro run --pipeline=electrify_trips --params=scenario/sense/task_0
-uv run kedro run --pipeline=evaluate_impacts --params=scenario/sense/task_0
+uv run kedro run --pipeline=build_scenarios --params=scenario_builders/sense_manage
 ```
+
+This writes SLURM batch scripts to `scripts/` and per-task config files to `conf/scenarios/`.
+Each array index corresponds to one SoW.
+
+Once the configurations have been generated, you can run the scenarios one at a time using
+the `--env` flag to `kedro run`. The `task_` directory at the bottom level is essential
+to allow SLURM's job arrays to find the correct scenarios.
+
+```bash
+# Per-SoW simulation (run once per scenario)
+uv run kedro run --pipeline=electrify_trips --env=scenarios/test/task_0
+uv run kedro run --pipeline=evaluate_impacts --env=scenarios/test/task_0
+```
+
+### Scenario run scripts
+
+The `scripts/scenarios/` directory contains shell scripts for running individual scenarios. `validate.sh` is included as a tracked example. SLURM array scripts generated by `build_scenarios` (e.g. `sense_manage.sh`) land in the `scripts/` root and are gitignored.
 
 ---
 
@@ -246,26 +247,9 @@ Scenario definitions live in `conf/scenarios/`. Each scenario directory contains
 
 | Scenario | Description |
 | --------- | ------------- |
-| `sense` | Main paper scenario: 1024 SoWs, adoption from NLR Beta+copula |
+| `sense_manage` | Main paper scenario: 1024 SoWs, adoption from NLR Beta+copula |
 | `validate` | Validation run matching Broga et al. (2025) assumptions; hand-built (not generated by `build_scenarios`) — tracked in `conf/scenarios/validate/` as an example |
 | `test` | Fast smoke-test scenario |
-
-### SoW parameter ranges (sense)
-
-| Parameter | Range | Distribution |
-| --------- | ----- | ------------ |
-| Adoption, 0–99 mi class | 0–29% | Beta (median ~4%) |
-| Adoption, 100–249 mi class | 0–30% | Beta (median ~3%) |
-| Adoption, 250–499 mi class | 0–19% | Beta (median ~2%) |
-| Adoption, 500+ mi class | 0–11% | Beta (median ~0%) |
-| Energy consumption | 1.4–2.0 kWh/mile | Uniform |
-| Charger power at truck stops | 350–1,500 kW | Uniform |
-| Charger power at depots/destinations | 40–350 kW | Uniform |
-| Battery reserve (target SoC) | 10–50% | Uniform |
-
-Adoption rates across distance classes are correlated via a Gaussian copula fit to NLR scenarios (see Figure A.10 in the paper).
-
----
 
 ## Configuration
 
@@ -278,7 +262,7 @@ Defines all ~860 datasets with their file paths and formats. Uses standard Kedro
 - `07_model_output` — per-scenario simulation outputs
 - `08_reporting` — final outputs and visualizations
 
-Per-scenario outputs are stored under `data/07_model_output/<scenario_name>/<task_id>/` as partitioned Parquet datasets.
+Per-scenario outputs are stored under `data/07_model_output/<scenario_name>/<partition>/`, where each partition directory contains one subdirectory per `task_id`, as partitioned Parquet datasets.
 
 ### Pipeline parameters
 
@@ -311,28 +295,28 @@ The OSM road network file for the continental U.S. must be placed at the path sp
 
 ---
 
-## Setup Scripts
+## Output Data
 
-Before running any scenario, the model data must be prepared. The `scripts/setup/` directory contains shell scripts for each preparation step, numbered in execution order:
+After running `evaluate_impacts` for all 1024 SoWs, the outputs are organized as:
 
-| Script | Purpose |
-| ------ | ------- |
-| `01_download_osm.sh` | Download the OpenStreetMap road network for the continental U.S. |
-| `02a_describe_locations.sh` | Run the `describe_locations` pipeline (TAZ classification) |
-| `02b_import_graph.sh` | Import the OSM graph into GraphHopper |
-| `02c_preprocess_trips.sh` | Preprocess raw telematics trips |
-| `03_prepare_routing.sh` | Start the GraphHopper routing server |
-| `04_compute_routes.sh` | Run the `compute_routes` pipeline |
-| `05_optional_stops.sh` | Insert optional truck-stop dwells along routes |
-| `06_describe_dwells.sh` | Run the `describe_dwells` pipeline |
-| `07_describe_vehicles.sh` | Run the `describe_vehicles` pipeline |
-| `08_prepare_totals.sh` | Run the `prepare_totals` pipeline (SoW generation) |
+```text
+data/07_model_output/sense_manage/
+├── dwells_with_charging_partition/   # Per-vehicle charging decisions
+│   └── <task_id>/
+├── events_partition/                 # Charging events (power, time)
+│   └── <task_id>/
+├── vehicles_with_params_partition/   # Vehicle design ranges + parameters
+│   └── <task_id>/
+└── load_profile_quantiles/           # 30-min load profiles by substation
+    └── <task_id>/
+```
 
-Run these scripts in order once before executing any scenario.
+The final reporting outputs (maps, policy analysis, validation figures) are in `data/08_reporting/`.
 
-### Scenario run scripts
+### Cross-SoW aggregation
 
-The `scripts/scenarios/` directory contains shell scripts for running individual scenarios. `validate.sh` is included as a tracked example. SLURM array scripts generated by `build_scenarios` (e.g. `sense.sh`) land in the `scripts/` root and are gitignored.
+To compute the 80th/20th percentile ("duty-to-serve-robust" / "used-and-useful-robust") peak loads across all SoWs, aggregate the `load_profile_quantiles` datasets across task IDs. Example notebooks for this analysis are in `notebooks/`.
+
 
 ---
 
@@ -340,18 +324,10 @@ The `scripts/scenarios/` directory contains shell scripts for running individual
 
 The full 1024-SoW run was computed on the [Sherlock cluster](https://www.sherlock.stanford.edu/) at Stanford University. Each SoW takes ~25 minutes on 4 cores / 64 GB RAM.
 
-### Generating SLURM scripts
-
-```bash
-uv run kedro run --pipeline=build_scenarios --env=build_scenarios/sense
-```
-
-This writes SLURM batch scripts to `scripts/` and per-task config files to `conf/scenarios/`. Each array index corresponds to one SoW.
-
 ### Submitting jobs
 
 ```bash
-sbatch scripts/sense.sh
+sbatch scripts/sense_manage.sh
 ```
 
 ### GraphHopper on Sherlock (Apptainer)
@@ -369,27 +345,6 @@ HPC environments like Sherlock do not support Docker; use [Apptainer](https://ap
 3. **Edit `/graphhopper/graphhopper.sh`** (inside the container) to restrict the `.jar` file search to the `/graphhopper` directory. The relevant line is near the bottom of the file where the `JAR` environment variable is set.
 
 Once patched, point `conf/base/parameters_compute_routes.yml` at the Apptainer sandbox path instead of a Docker image name.
-
----
-
-## Output Data
-
-After running `evaluate_impacts` for all 1024 SoWs, the outputs are organized as:
-
-```text
-data/07_model_output/sense/
-└── <task_id>/
-    ├── dwells_with_charging_partition/   # Per-vehicle charging decisions
-    ├── events_partition/                 # Charging events (power, time)
-    ├── vehicles_with_params_partition/   # Vehicle design ranges + parameters
-    └── load_profile_quantiles/           # 30-min load profiles by substation
-```
-
-The final reporting outputs (maps, policy analysis, validation figures) are in `data/08_reporting/`.
-
-### Cross-SoW aggregation
-
-To compute the 80th/20th percentile ("duty-to-serve-robust" / "used-and-useful-robust") peak loads across all SoWs, aggregate the `load_profile_quantiles` datasets across task IDs. Example notebooks for this analysis are in `notebooks/`.
 
 ---
 
