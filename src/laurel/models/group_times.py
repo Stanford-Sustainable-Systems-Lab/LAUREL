@@ -45,7 +45,7 @@ class AbstractTimeGrouper(ABC):
     a group label, and declare :attr:`time_group_cols` and :attr:`time_attrs`
     to describe the resulting grouping columns.
 
-    Class attributes:
+    Attributes:
         count_col: Name of the output column produced by
             :meth:`get_possible_obs_counts`.  Defaults to ``"possible_count"``.
         _default_tz: Fallback timezone string (``"America/Los_Angeles"``).

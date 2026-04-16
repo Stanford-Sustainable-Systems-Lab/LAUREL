@@ -231,7 +231,7 @@ class IndependentDwellChargingManager(AbstractChargingManager):
     Concrete subclasses implement :meth:`set_dwell_events` and declare
     :attr:`seq_names`.
 
-    Class attributes:
+    Attributes:
         suffixes: Dict mapping logical role (``"time"``, ``"duration"``,
             ``"power"``, ``"plugged"``) to the column-name suffix appended
             after each sequence name.
@@ -270,6 +270,7 @@ class IndependentDwellChargingManager(AbstractChargingManager):
         2. Optionally scales power columns by ``self.scale_up``.
         3. Sets :attr:`~DwellSet.seq_names` on the DwellSet.
         4. Calls :meth:`~DwellSet.to_events` to reshape to long format.
+
         Logs a warning if any existing columns already use the suffix convention.
         """
         checks = self.check_for_suffixes()

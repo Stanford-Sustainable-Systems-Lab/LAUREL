@@ -21,44 +21,46 @@ class DirectoryPartitionedDataset(PartitionedDataset):
     - GeoPandas Parquet datasets
     - Any custom dataset that stores partitioned data as directories
 
-    Example usage in catalog.yml:
-    ```yaml
-    # With Dask Parquet
-    my_dask_partitioned_data:
-      type: laurel.datasets.directory_partitioned.DirectoryPartitionedDataset
-      path: data/07_model_output/my_dask_data
-      dataset:
-        type: dask.ParquetDataset
-        save_args:
-          write_index: False
-          engine: pyarrow
-        load_args:
-          engine: pyarrow
+    Example usage in ``catalog.yml``:
 
-    # With GeoPandas Parquet
-    my_geo_partitioned_data:
-      type: laurel.datasets.directory_partitioned.DirectoryPartitionedDataset
-      path: data/07_model_output/my_geo_data
-      dataset:
-        type: laurel.datasets.geoparquet.GeoParquetDataset
-        save_args:
-          write_index: False
-        load_args:
-          engine: pyarrow
-    ```
+    .. code-block:: yaml
+
+       # With Dask Parquet
+       my_dask_partitioned_data:
+         type: laurel.datasets.directory_partitioned.DirectoryPartitionedDataset
+         path: data/07_model_output/my_dask_data
+         dataset:
+           type: dask.ParquetDataset
+           save_args:
+             write_index: False
+             engine: pyarrow
+           load_args:
+             engine: pyarrow
+
+       # With GeoPandas Parquet
+       my_geo_partitioned_data:
+         type: laurel.datasets.directory_partitioned.DirectoryPartitionedDataset
+         path: data/07_model_output/my_geo_data
+         dataset:
+           type: laurel.datasets.geoparquet.GeoParquetDataset
+           save_args:
+             write_index: False
+           load_args:
+             engine: pyarrow
 
     The dataset will create/read directory structures like:
-    ```
-    data/07_model_output/my_data/
-    ├── partition1/
-    │   ├── part.0.parquet
-    │   ├── part.1.parquet
-    │   └── _metadata
-    └── partition2/
-        ├── part.0.parquet
-        ├── part.1.parquet
-        └── _metadata
-    ```
+
+    .. code-block:: text
+
+       data/07_model_output/my_data/
+       ├── partition1/
+       │   ├── part.0.parquet
+       │   ├── part.1.parquet
+       │   └── _metadata
+       └── partition2/
+           ├── part.0.parquet
+           ├── part.1.parquet
+           └── _metadata
 
     On load, returns a dict with partition IDs as keys and lazy load functions as values,
     exactly like the standard PartitionedDataset.

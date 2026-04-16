@@ -44,7 +44,7 @@ class SensitivityAnalysis:
     3. Extract first- and total-order Sobol' indices via :meth:`calculate_sobols`.
     4. Visualise results via :meth:`plot_sobols`.
 
-    Args (constructor):
+    Args:
         scens: DataFrame of scenario results, one row per State of the World.
         output_col: Name of the scalar output column to analyse (e.g.
             ``"peak_load_95th_kw"``).

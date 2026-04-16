@@ -89,7 +89,7 @@ class AbstractChargingChoiceStrategy(ABC):
     are used to build ``_renamer``, a dict mapping *input column names* to the
     *recarray field names* that the JIT functions address.
 
-    Class attributes:
+    Attributes:
         _replace_dtypes: Dtype substitution map used when building recarrays
             from DataFrames.  Converts pandas nullable types and Python bools
             to Numba-compatible equivalents.
@@ -516,7 +516,7 @@ class SoCThreshChargingChoiceStrategy(AbstractChargingChoiceStrategy):
     the current SoC is at or below ``charge_soc``; otherwise does not charge.
     Used for baseline comparisons and validation.
 
-    Additional Args (beyond :class:`AbstractChargingChoiceStrategy`):
+    Args:
         charge_soc: Vehicle-table column containing the SoC threshold
             (fraction of ``batt_cap``) below which charging is triggered.
     """
@@ -587,7 +587,7 @@ class ForwardLookingChargingChoiceStrategy(AbstractChargingChoiceStrategy):
     - Constraint violations (infeasible trip, battery overflow, infeasible
       shift) via ``-inf`` masks.
 
-    Additional Args (beyond :class:`AbstractChargingChoiceStrategy`):
+    Args:
         soc_buffer_low: Vehicle-table column: minimum SoC buffer for trip/shift
             energy calculations (fraction of ``batt_cap``).
         soc_buffer_high: Vehicle-table column: target SoC (fraction of
