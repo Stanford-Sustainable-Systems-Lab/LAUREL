@@ -47,12 +47,9 @@ build-backend = "hatchling.build"
 
 [tool.uv]
 managed = true
-dev-dependencies = [
-    "sphinx-autodoc-typehints>=2.5.0",
-    "nbsphinx>=0.9.5",
-    "sphinx-copybutton>=0.5.2",
-    "myst-parser>=4.0.0",
-    "sphinx-rtd-theme>=3.0.1",
+
+[dependency-groups]
+dev = [
     "folium>=0.18.0",
     "mapclassify>=2.8.1",
     "pre-commit>=4.2.0",
@@ -64,6 +61,25 @@ dev-dependencies = [
     "pytest-mock>=3.14.1",
     "pympler>=1.1",
     "kedro-viz>=12.0.0",
+]
+docs = [
+    "sphinx>=8.0",
+    "sphinx-rtd-theme>=3.0.1",
+    "sphinx-autodoc-typehints>=2.5.0",
+    "nbsphinx>=0.9.5",
+    "sphinx-copybutton>=0.5.2",
+    "myst-parser>=4.0.0",
+    "kedro>=1.0.0",
+    "kedro-datasets>=8.0",
+    "numpy>=2.0",
+    "pandas>=2.2.2",
+    "matplotlib>=3.0",
+    "scipy>=1.0",
+    "seaborn>=0.13",
+    "scikit-learn>=1.0",
+    "patsy>=0.5",
+    "tqdm>=4.0",
+    "shapely>=2.0",
 ]
 
 [tool.hatch.metadata]
