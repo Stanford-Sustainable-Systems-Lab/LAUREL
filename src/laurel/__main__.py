@@ -1,6 +1,4 @@
-"""EPA Phase III file for ensuring the package is executable
-as `epa-phase-iii` and `python -m laurel`
-"""
+"""Entry point for ensuring the package is executable as ``python -m laurel``."""
 
 import importlib
 from pathlib import Path
