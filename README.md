@@ -185,6 +185,20 @@ uv run kedro pipeline list
 
 You should see the eight pipelines: `describe_vehicles`, `describe_dwells`, `compute_routes`, `describe_locations`, `prepare_totals`, `electrify_trips`, `evaluate_impacts`, `build_scenarios`.
 
+### GraphHopper routing engine
+
+The `compute_routes` pipeline uses GraphHopper via Docker. Before running:
+
+```bash
+# Pull the GraphHopper Docker image
+docker pull graphhopper/graphhopper
+
+# The pipeline manages container startup/shutdown automatically
+uv run kedro run --pipeline=compute_routes
+```
+
+The OSM road network file for the continental U.S. must be placed at the path specified in `conf/base/parameters_graphhopper.yml`.
+
 ---
 
 ## Running the Model
@@ -253,6 +267,9 @@ Scenario definitions live in `conf/scenarios/`. Each scenario directory contains
 
 ## Configuration
 
+To learn more about how parameter files are handled, and how scenarios override the base
+parameters, please see the [Kedro documentation](https://docs.kedro.org/en/stable/configure/parameters/).
+
 ### Data catalog (`conf/base/catalog.yml`)
 
 Defines all ~860 datasets with their file paths and formats. Uses standard Kedro layers:
@@ -279,22 +296,6 @@ Each pipeline has a corresponding parameter file in `conf/base/`:
 | `parameters_evaluate_impacts.yml` | Bootstrap count, percentile, electrifiability criteria |
 | `parameters_build_scenarios.yml` | SLURM configuration for HPC job arrays |
 
-### GraphHopper routing engine
-
-The `compute_routes` pipeline uses GraphHopper via Docker. Before running:
-
-```bash
-# Pull the GraphHopper Docker image
-docker pull graphhopper/graphhopper
-
-# The pipeline manages container startup/shutdown automatically
-uv run kedro run --pipeline=compute_routes
-```
-
-The OSM road network file for the continental U.S. must be placed at the path specified in `conf/base/parameters_graphhopper.yml`.
-
----
-
 ## Output Data
 
 After running `evaluate_impacts` for all 1024 SoWs, the outputs are organized as:
@@ -303,11 +304,9 @@ After running `evaluate_impacts` for all 1024 SoWs, the outputs are organized as
 data/07_model_output/sense_manage/
 ├── dwells_with_charging_partition/   # Per-vehicle charging decisions
 │   └── <task_id>/
-├── events_partition/                 # Charging events (power, time)
-│   └── <task_id>/
-├── vehicles_with_params_partition/   # Vehicle design ranges + parameters
-│   └── <task_id>/
-└── load_profile_quantiles/           # 30-min load profiles by substation
+├── report_by_region_quantiles/           # 30-min load profiles by substation
+|    └── <task_id>/
+└── report_by_region_summaries/           # Summaries of profiles by substation
     └── <task_id>/
 ```
 
@@ -315,14 +314,13 @@ The final reporting outputs (maps, policy analysis, validation figures) are in `
 
 ### Cross-SoW aggregation
 
-To compute the 80th/20th percentile ("duty-to-serve-robust" / "used-and-useful-robust") peak loads across all SoWs, aggregate the `load_profile_quantiles` datasets across task IDs. Example notebooks for this analysis are in `notebooks/`.
-
+To compute the 80th/20th percentile ("duty-to-serve-robust" / "used-and-useful-robust") peak loads across all SoWs, aggregate the `report_by_region_summaries` datasets across task IDs. Example notebooks for this analysis are in `notebooks/`.
 
 ---
 
 ## HPC Execution (Sherlock)
 
-The full 1024-SoW run was computed on the [Sherlock cluster](https://www.sherlock.stanford.edu/) at Stanford University. Each SoW takes ~25 minutes on 4 cores / 64 GB RAM.
+The full 1024-SoW run was computed on the [Sherlock cluster](https://www.sherlock.stanford.edu/) at Stanford University. Each SoW takes ~25 minutes on 4 cores / 48 GB RAM.
 
 ### Submitting jobs
 
