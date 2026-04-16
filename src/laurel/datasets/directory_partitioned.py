@@ -87,6 +87,7 @@ class DirectoryPartitionedDataset(PartitionedDataset):
             dataset: Underlying dataset definition for each partition directory.
                 This can be any dataset type that can handle directory-based data.
                 Accepted formats are:
+
                 a) object of a class that inherits from AbstractDataset
                 b) a string representing a fully qualified class name to such class
                 c) a dictionary with 'type' key pointing to a string from b),
