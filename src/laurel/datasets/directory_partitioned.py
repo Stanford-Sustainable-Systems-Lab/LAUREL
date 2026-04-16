@@ -91,6 +91,7 @@ class DirectoryPartitionedDataset(PartitionedDataset):
                 b) a string representing a fully qualified class name to such class
                 c) a dictionary with 'type' key pointing to a string from b),
                    other keys are passed to the dataset initializer.
+
             credentials: Protocol-specific options passed to fsspec.filesystem.
             load_args: Keyword arguments passed to filesystem find() method.
             fs_args: Extra arguments for underlying filesystem class constructor.
