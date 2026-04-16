@@ -29,23 +29,15 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Install docs dependencies
-        run: |
-          uv pip install --system \
-            sphinx \
-            sphinx-rtd-theme \
-            sphinx-autodoc-typehints \
-            nbsphinx \
-            sphinx-copybutton \
-            myst-parser \
-            kedro
+        run: uv sync --only-group docs
 
       - name: Install laurel (no heavy deps)
-        run: uv pip install --system --no-deps -e .
+        run: uv pip install --no-deps -e .
 
       - name: Build docs
         run: |
           cd docs
-          make html SPHINXOPTS="-W --keep-going"
+          uv run make html SPHINXOPTS="-W --keep-going"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
