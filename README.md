@@ -166,17 +166,19 @@ Module 5: Estimate expected dwells by TAZ  ← evaluate_impacts (first half)
 Module 6: Assemble load profiles  ← evaluate_impacts (second half)
 ```
 
+![Model flow diagram](docs/source/_static/model-flow.svg)
+
 ### Module 1 — Select States of the World (`prepare_totals`, `build_scenarios`)
 
-Generates 1024 quasi-random SoWs using Sobol' sequences (via OpenTURNS). Adoption rates by vehicle primary operating distance class are drawn from Beta distributions fit to NLR scenarios via a Gaussian copula. Other parameters (energy consumption rate, charger power at truck stops / depots / destinations, battery reserve) are sampled uniformly.
+Selects a set of plausible states of the world (SoWs) to evaluate, generating 1024 quasi-random combinations using Sobol' sequences (via OpenTURNS). Adoption rates by vehicle primary operating distance class are drawn from Beta distributions fit to NLR scenarios via a Gaussian copula. Other parameters (energy consumption rate, charger power at truck stops / depots / destinations, battery reserve) are sampled uniformly.
 
 ### Module 2 — Augment Dwell Data (`describe_dwells`, `compute_routes`)
 
-Coalesces spurious short dwells, marks driver shifts (≥6.9 hr breaks per FMCSA rules), and inserts optional dwells at truck stops along shortest-path routes computed by GraphHopper. Optional dwells are inserted between existing dwells separated by >50 miles, if a truck stop falls within 1 mile of the shortest path. This grew our dwell count by ~35%.
+Augments vehicle dwell history data with optional dwells and with marked driver shifts. Coalesces spurious short dwells, marks driver shifts (≥6.9 hr breaks per FMCSA rules), and inserts optional dwells at truck stops along shortest-path routes computed by GraphHopper. Optional dwells are inserted between existing dwells separated by >50 miles, if a truck stop falls within 1 mile of the shortest path. This grew our dwell count by ~35%.
 
 ### Module 3 — Augment TAZs (`describe_locations`)
 
-Classifies each H3 resolution-8 hexagon (~1/4-mile diameter) in the continental U.S. into one of 22 freight activity classes:
+Splits the continental U.S. into transportation analysis zones (TAZs) — H3 resolution-8 hexagons (~1/4-mile diameter) — and augments each with a freight activity classification and charger deployment. Classifies each TAZ into one of 22 freight activity classes:
 
 - Undeveloped / No establishments / No freight-intensive establishments / Truck stops
 - 18 K-Means clusters of freight-intensive TAZs (based on NAICS employee counts)
@@ -185,15 +187,15 @@ Deploys chargers by freight activity class: truck-stop charging at truck-stop TA
 
 ### Module 4 — Simulate Electrified Dwells (`electrify_trips`)
 
-Runs a utility-maximization charging choice algorithm (inspired by Liu et al. 2022) for each vehicle's full dwell history. The algorithm selects charging mode and energy amount at each dwell, trading off SoC maintenance against incurred delay, with look-ahead to the end of the current driver shift. Uses Numba JIT compilation for performance. Each SoW runs in ~25 minutes on a 4-core/64 GB machine.
+Simulates the e-HDT charging choices each vehicle in our dataset might have made, using a utility-maximization algorithm (inspired by Liu et al. 2022). The algorithm selects charging mode and energy amount at each dwell, trading off SoC maintenance against incurred delay, with look-ahead to the end of the current driver shift. Uses Numba JIT compilation for performance. Each SoW runs in ~25 minutes on a 4-core/64 GB machine.
 
 ### Module 5 — Estimate Expected Electrified Dwells (`evaluate_impacts`)
 
-Estimates the expected number of electrified dwells per TAZ on a typical weekday by fusing SoW adoption rates (from Module 1) with freight-activity-class-specific vehicle visit statistics from the observed data. Uses logistic regression with a numeric correction term to ensure consistency with known fleet-level adoption rates.
+Estimates the total number of electrified dwells expected in each TAZ, using the freight activity class. Fuses SoW adoption rates (from Module 1) with freight-activity-class-specific vehicle visit statistics from the observed data. Uses logistic regression with a numeric correction term to ensure consistency with known fleet-level adoption rates.
 
 ### Module 6 — Assemble Load Profiles (`evaluate_impacts`)
 
-Bootstrap-samples electrified dwells (100 draws, 95th percentile) to assemble 30-minute load profiles for each TAZ, then aggregates across all TAZs within each substation territory. Uses inverse propensity score weighting to correct for sampling bias in the telematics dataset.
+Assembles charging load profiles for each substation from the simulated e-HDT vehicle histories by aggregating load profiles from the TAZs within each substation's territory. Bootstrap-samples electrified dwells (100 draws, 95th percentile) to assemble 30-minute load profiles for each TAZ, then aggregates across all TAZs within each substation territory. Uses inverse propensity score weighting to correct for sampling bias in the telematics dataset. The final outputs are a set of charging load profiles for a typical weekday, one for each substation–SoW pair.
 
 ---
 
