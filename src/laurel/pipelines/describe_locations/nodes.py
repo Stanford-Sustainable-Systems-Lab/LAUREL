@@ -9,6 +9,7 @@ from the paper.
 Pipeline overview
 -----------------
 Substation territory construction:
+
 1. **format_substation_boundaries_pg_and_e** — Sums transformer bank ratings
    to substation level and adds provenance metadata for PG&E ICA data.
 2. **format_substation_profiles** — Collapses hour-month baseload profiles to
@@ -24,6 +25,7 @@ Substation territory construction:
    ``fill_out_substations``).
 
 Spatial layer formatting:
+
 7. **format_states** — Renames columns in the U.S. state polygons layer.
 8. **format_urban** — Renames columns in the urban-area polygons layer.
 9. **format_highways** — Dissolves and buffers highway polylines to create
@@ -36,6 +38,7 @@ Spatial layer formatting:
     each hex that overlaps the polygon the polygon's attributes.
 
 Establishment data preparation:
+
 13. **concat_columns** — Joins per-hexagon feature tables by shared hex index.
 14. **fill_missingness** — Drops rows with missing required values and fills
     optional columns with configured defaults.
@@ -61,12 +64,14 @@ Establishment data preparation:
     employment matrix (one column per NAICS leaf class).
 
 NLCD land use raster extraction (``read_land_use`` tag):
+
 25. **partition_hex_corresp** — Converts the pandas ``hex_base_corresp`` feather
     to a partitioned Dask parquet file for parallel raster extraction.
 26. **read_land_use** — Extracts NLCD 2023 land cover fractions for every H3
     hexagon using ``exactextract``; writes ``hex_land_use`` in long format.
 
 Freight-activity-class assignment:
+
 27. **pivot_hex_land_use** — Pivots the land-use coverage table to a
     per-hexagon land-use-group fraction matrix.
 28. **group_hexes** — Assigns each hexagon a freight-activity class using a
