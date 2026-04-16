@@ -4,7 +4,7 @@ This repository implements the LAUREL model described in:
 
 > Passow, F. H., & Rajagopal, R. (2026). Identifying indicators to inform proactive substation upgrades for charging electric heavy-duty trucks. *Applied Energy* (submitted March 2026).
 
-The specific use of the LAUREL model demonstrated here estimates e-HDT charging load profiles for each of the ~52,000 electrical substations in the continental U.S. across 512 plausible future states of the world (SoWs) representing 2035 conditions. It is used to identify which substations grid operators should consider proactively upgrading for e-HDT charging, and what techno-economic indicators signal when such upgrades may become necessary.
+The specific use of the LAUREL model demonstrated here estimates e-HDT charging load profiles for each of the ~52,000 electrical substations in the continental U.S. across 1024 plausible future states of the world (SoWs) representing 2035 conditions. It is used to identify which substations grid operators should consider proactively upgrading for e-HDT charging, and what techno-economic indicators signal when such upgrades may become necessary.
 
 ---
 
@@ -31,7 +31,7 @@ The specific use of the LAUREL model demonstrated here estimates e-HDT charging 
 
 Electric heavy-duty trucks (e-HDTs) will require geographically concentrated, high-power charging that will stress electric distribution infrastructure — particularly substations, which can take years and millions of dollars to upgrade. This model was built to answer: *which substations should grid operators proactively upgrade, and what observable conditions should trigger that decision?*
 
-Our approach uses a continent-scale telematics dataset of ~69,000 diesel HDTs (International, Inc., April–November 2023) as the behavioral foundation. We simulate electrified versions of these vehicles across 512 quasi-random combinations of key uncertain parameters (adoption rates, energy consumption, charger power, battery reserve). For each combination, we assemble 30-minute load profiles for every substation in the continental U.S.
+Our approach uses a continent-scale telematics dataset of ~69,000 diesel HDTs (International, Inc., April–November 2023) as the behavioral foundation. We simulate electrified versions of these vehicles across 1024 quasi-random combinations of key uncertain parameters (adoption rates, energy consumption, charger power, battery reserve). For each combination, we assemble 30-minute load profiles for every substation in the continental U.S.
 
 Key findings:
 
@@ -89,11 +89,11 @@ LAUREL/
 | Python ≥ 3.12 | Tested on 3.12 |
 | [uv](https://docs.astral.sh/uv/) | Preferred package manager |
 | Docker | Required only for the `compute_routes` pipeline (GraphHopper routing engine) |
-| ~200 GB disk space | For raw inputs + intermediate outputs for all 512 SoWs |
+| ~200 GB disk space | For raw inputs + intermediate outputs for all 1024 SoWs |
 | 64 GB RAM | Minimum for running a single SoW through `electrify_trips` / `evaluate_impacts` |
 | 128 GB RAM | Recommended for `compute_routes` |
 
-For large-scale runs across all 512 SoWs, an HPC cluster is strongly recommended (see [HPC Execution](#hpc-execution-sherlock)).
+For large-scale runs across all 1024 SoWs, an HPC cluster is strongly recommended (see [HPC Execution](#hpc-execution-sherlock)).
 
 ---
 
@@ -126,15 +126,22 @@ You should see the eight pipelines: `describe_vehicles`, `describe_dwells`, `com
 
 The model requires several external datasets, placed under `data/01_raw/`. The data catalog (`conf/base/catalog.yml`) defines where each dataset is expected.
 
+**Proprietary datasets** (require a data-access agreement):
+
 | Dataset | Source | Pipeline(s) |
 | --- | --- | --- |
 | International, Inc. telematics | Proprietary (contact International, Inc.) | `describe_dwells`, `describe_vehicles`, `compute_routes`, `electrify_trips` |
+| Data Axle business establishments | Proprietary (contact Data Axle, Inc.) | `describe_locations` |
+
+**Public datasets** (freely downloadable):
+
+| Dataset | Source | Pipeline(s) |
+| --- | --- | --- |
 | VIUS (Vehicle Inventory and Use Survey) | [BTS](https://www.bts.gov/vius) | `prepare_totals` |
 | NLR Ledna adoption scenarios | [iScience 27 (2024) 109385](https://doi.org/10.1016/j.isci.2024.109385) | `prepare_totals` |
 | HIFLD Electrical Substations | [gem.anl.gov](https://gem.anl.gov) | `evaluate_impacts` |
 | PG&E ICA maps | [grip.pge.com](https://grip.pge.com) | `evaluate_impacts` (PG&E territory only) |
 | NLCD 2023 (National Land Cover Database) | [USGS](https://doi.org/10.5066/P94UXNTS) | `describe_locations` |
-| Data Axle business establishments | Proprietary (contact Data Axle, Inc.) | `describe_locations` |
 | Jason's Law truck parking | [BTS geodata](https://geodata.bts.gov/datasets/fff36e0c37c748a5a1773b5784d4d9a5_0) | `describe_locations`, `compute_routes` |
 | OpenStreetMap (continental U.S.) | [Geofabrik](https://download.geofabrik.de) | `compute_routes`, `describe_locations` |
 
@@ -149,7 +156,7 @@ The model requires several external datasets, placed under `data/01_raw/`. The d
 The model has six modules that map to Kedro pipelines:
 
 ```text
-Module 1: Select SoWs         ← prepare_totals
+Module 1: Select SoWs         ← prepare_totals + build_scenarios
 Module 2: Augment dwell data  ← describe_dwells + compute_routes
 Module 3: Augment TAZs        ← describe_locations
                                  (also: describe_vehicles)
@@ -159,9 +166,9 @@ Module 5: Estimate expected dwells by TAZ  ← evaluate_impacts (first half)
 Module 6: Assemble load profiles  ← evaluate_impacts (second half)
 ```
 
-### Module 1 — Select States of the World (`prepare_totals`)
+### Module 1 — Select States of the World (`prepare_totals`, `build_scenarios`)
 
-Generates 512 quasi-random SoWs using Sobol' sequences (via OpenTURNS). Adoption rates by vehicle primary operating distance class are drawn from Beta distributions fit to NLR scenarios via a Gaussian copula. Other parameters (energy consumption rate, charger power at truck stops / depots / destinations, battery reserve) are sampled uniformly.
+Generates 1024 quasi-random SoWs using Sobol' sequences (via OpenTURNS). Adoption rates by vehicle primary operating distance class are drawn from Beta distributions fit to NLR scenarios via a Gaussian copula. Other parameters (energy consumption rate, charger power at truck stops / depots / destinations, battery reserve) are sampled uniformly.
 
 ### Module 2 — Augment Dwell Data (`describe_dwells`, `compute_routes`)
 
@@ -195,48 +202,38 @@ Bootstrap-samples electrified dwells (100 draws, 95th percentile) to assemble 30
 ### Full pipeline (all modules, default scenario)
 
 ```bash
-kedro run
+uv run kedro run
 ```
 
 ### Individual pipelines
 
 ```bash
-# Data preparation (run once)
-kedro run --pipeline=describe_vehicles
-kedro run --pipeline=describe_dwells
-kedro run --pipeline=compute_routes        # Requires Docker (GraphHopper)
-kedro run --pipeline=describe_locations
-
-# SoW generation (run once)
-kedro run --pipeline=prepare_totals
+# Data preparation (run once using the scripts in scripts/setup)
+uv run kedro run --pipeline=describe_vehicles
+uv run kedro run --pipeline=describe_dwells
+uv run kedro run --pipeline=compute_routes        # Requires Docker (GraphHopper)
+uv run kedro run --pipeline=describe_locations
+uv run kedro run --pipeline=prepare_totals
 
 # Per-SoW simulation (run once per scenario)
-kedro run --pipeline=electrify_trips
-kedro run --pipeline=evaluate_impacts
+uv run kedro run --pipeline=electrify_trips
+uv run kedro run --pipeline=evaluate_impacts
 ```
 
 ### Running a specific scenario
 
 ```bash
-kedro run --pipeline=electrify_trips --params="scenario:sense_512"
-kedro run --pipeline=evaluate_impacts --params="scenario:sense_512"
+uv run kedro run --pipeline=electrify_trips --env=scenario/test/task_0
+uv run kedro run --pipeline=evaluate_impacts --params=scenario/test/task_0
 ```
 
-### Running a single SoW from the 512-SoW set
+### Running a single SoW from the 1024-SoW set
 
-The `sense_512` scenario set is designed to run one SoW at a time, identified by a `task_id` parameter. This is how the SLURM array jobs work:
-
-```bash
-kedro run --pipeline=electrify_trips --params="scenario:sense_512,task_id:42"
-kedro run --pipeline=evaluate_impacts --params="scenario:sense_512,task_id:42"
-```
-
-### Interactive development
+The `sense` scenario set is designed to run one SoW at a time, identified by a `task_id` parameter. This is how the SLURM array jobs work:
 
 ```bash
-kedro jupyter lab    # JupyterLab with full Kedro context
-kedro jupyter notebook
-kedro ipython        # IPython REPL with Kedro context
+uv run kedro run --pipeline=electrify_trips --params=scenario/sense/task_0
+uv run kedro run --pipeline=evaluate_impacts --params=scenario/sense/task_0
 ```
 
 ---
@@ -247,11 +244,11 @@ Scenario definitions live in `conf/scenarios/`. Each scenario directory contains
 
 | Scenario | Description |
 | --------- | ------------- |
-| `sense_512` | Main paper scenario: 512 SoWs, adoption from NLR Beta+copula |
+| `sense` | Main paper scenario: 1024 SoWs, adoption from NLR Beta+copula |
 | `validate` | Validation run matching Broga et al. (2025) assumptions; hand-built (not generated by `build_scenarios`) — tracked in `conf/scenarios/validate/` as an example |
 | `test` | Fast smoke-test scenario |
 
-### SoW parameter ranges (sense_512)
+### SoW parameter ranges (sense)
 
 | Parameter | Range | Distribution |
 | --------- | ----- | ------------ |
@@ -305,7 +302,7 @@ The `compute_routes` pipeline uses GraphHopper via Docker. Before running:
 docker pull graphhopper/graphhopper
 
 # The pipeline manages container startup/shutdown automatically
-kedro run --pipeline=compute_routes
+uv run kedro run --pipeline=compute_routes
 ```
 
 The OSM road network file for the continental U.S. must be placed at the path specified in `conf/base/parameters_graphhopper.yml`.
@@ -327,23 +324,24 @@ Before running any scenario, the model data must be prepared. The `scripts/setup
 | `05_optional_stops.sh` | Insert optional truck-stop dwells along routes |
 | `06_describe_dwells.sh` | Run the `describe_dwells` pipeline |
 | `07_describe_vehicles.sh` | Run the `describe_vehicles` pipeline |
+| `08_prepare_totals.sh` | Run the `prepare_totals` pipeline (SoW generation) |
 
 Run these scripts in order once before executing any scenario.
 
 ### Scenario run scripts
 
-The `scripts/scenarios/` directory contains shell scripts for running individual scenarios. `validate.sh` is included as a tracked example. SLURM array scripts generated by `build_scenarios` (e.g. `sense_512.sh`) land in the `scripts/` root and are gitignored.
+The `scripts/scenarios/` directory contains shell scripts for running individual scenarios. `validate.sh` is included as a tracked example. SLURM array scripts generated by `build_scenarios` (e.g. `sense.sh`) land in the `scripts/` root and are gitignored.
 
 ---
 
 ## HPC Execution (Sherlock)
 
-The full 512-SoW run was computed on the [Sherlock cluster](https://www.sherlock.stanford.edu/) at Stanford University. Each SoW takes ~25 minutes on 4 cores / 64 GB RAM.
+The full 1024-SoW run was computed on the [Sherlock cluster](https://www.sherlock.stanford.edu/) at Stanford University. Each SoW takes ~25 minutes on 4 cores / 64 GB RAM.
 
 ### Generating SLURM scripts
 
 ```bash
-kedro run --pipeline=build_scenarios --env=build_scenarios/sense_512
+uv run kedro run --pipeline=build_scenarios --env=build_scenarios/sense
 ```
 
 This writes SLURM batch scripts to `scripts/` and per-task config files to `conf/scenarios/`. Each array index corresponds to one SoW.
@@ -351,7 +349,7 @@ This writes SLURM batch scripts to `scripts/` and per-task config files to `conf
 ### Submitting jobs
 
 ```bash
-sbatch scripts/sense_512.sh
+sbatch scripts/sense.sh
 ```
 
 ### GraphHopper on Sherlock (Apptainer)
@@ -374,10 +372,10 @@ Once patched, point `conf/base/parameters_compute_routes.yml` at the Apptainer s
 
 ## Output Data
 
-After running `evaluate_impacts` for all 512 SoWs, the outputs are organized as:
+After running `evaluate_impacts` for all 1024 SoWs, the outputs are organized as:
 
 ```text
-data/07_model_output/sense_512/
+data/07_model_output/sense/
 └── <task_id>/
     ├── dwells_with_charging_partition/   # Per-vehicle charging decisions
     ├── events_partition/                 # Charging events (power, time)
