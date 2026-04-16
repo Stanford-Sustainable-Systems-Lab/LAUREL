@@ -2,9 +2,9 @@
 
 This repository implements the LAUREL model described in:
 
-> Passow, F. H., & Rajagopal, R. (2026). Identifying indicators to inform proactive substation upgrades for charging electric heavy-duty trucks. *Applied Energy* (submitted March 2026).
+> Passow, F. H., & Rajagopal, R. (2026). Prioritizing uncertainty-robust indicators to inform proactive substation upgrades for charging electric heavy-duty trucks. *Applied Energy* (submitted March 2026).
 
-The specific use of the LAUREL model demonstrated here estimates e-HDT charging load profiles for each of the ~52,000 electrical substations in the continental U.S. across 1024 plausible future states of the world (SoWs) representing 2035 conditions. It is used to identify which substations grid operators should consider proactively upgrading for e-HDT charging, and what techno-economic indicators signal when such upgrades may become necessary.
+The specific use of the LAUREL model demonstrated here estimates e-HDT charging load profiles for each of the ~52,000 electrical substations in the continental U.S. across 512 plausible future states of the world (SoWs) representing 2035 conditions. It identifies which substations grid operators should consider proactively upgrading for e-HDT charging, and what techno-economic indicators signal when such an upgrade may become necessary — findings that are assessed for robustness to uncertainty across all 512 SoWs.
 
 ---
 
@@ -30,13 +30,13 @@ The specific use of the LAUREL model demonstrated here estimates e-HDT charging 
 
 Electric heavy-duty trucks (e-HDTs) will require geographically concentrated, high-power charging that will stress electric distribution infrastructure — particularly substations, which can take years and millions of dollars to upgrade. This model was built to answer: *which substations should grid operators proactively upgrade, and what observable conditions should trigger that decision?*
 
-Our approach uses a continent-scale telematics dataset of ~69,000 diesel HDTs (International, Inc., April–November 2023) as the behavioral foundation. We simulate electrified versions of these vehicles across 1024 quasi-random combinations of key uncertain parameters (adoption rates, energy consumption, charger power, battery reserve). For each combination, we assemble 30-minute load profiles for every substation in the continental U.S.
+Our approach uses a continent-scale telematics dataset of ~69,000 diesel HDTs (International, Inc., April–November 2023) as the behavioral foundation. We simulate electrified versions of these vehicles across 512 quasi-random combinations of key uncertain parameters (adoption rates, energy consumption, charger power, battery reserve). For each combination, we assemble 30-minute load profiles for every substation in the continental U.S. Findings are assessed for robustness across the full ensemble.
 
 Key findings:
 
-- Under a "duty-to-serve-robust" policy (80th-percentile peak load), 7.4% of substations would exceed 3 MW from e-HDT charging alone by 2035.
-- Presence of a truck stop is the strongest geographic predictor; almost no substations exceed 3 MW at adoption rates below 5%.
-- Adoption level is by far the strongest techno-economic indicator, followed distantly by truck-stop charger power.
+- The share of substations that would exceed 3 MW from e-HDT charging alone by 2035 ranges from 0.6% under a "used-and-useful-robust" policy (20th-percentile peak load) to 12.8% under a "duty-to-serve-robust" policy (80th-percentile peak load).
+- Presence of a truck stop is the strongest geographic predictor of upgrade need; manufacturing and wholesaling land use are also influential. Almost no substations exceed 3 MW at adoption rates below 5%.
+- The priority ordering of techno-economic indicators depends on local infrastructure: short-haul adoption rate is the leading indicator universally; for substations serving truck stops, truck-stop charger power is the second most important indicator; for all other substations, charging management strategy takes second place.
 
 ---
 
