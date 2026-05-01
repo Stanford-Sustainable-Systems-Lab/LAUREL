@@ -587,6 +587,13 @@ example_vehicle_trajectory:
     index: True
     layer: trips
 
+example_tazs:
+  type: laurel.datasets.geopackage.GeoPackageDataset
+  filepath: data/08_reporting/example_tazs.gpkg
+  save_args:
+    index: True
+    layer: tazs
+
 observed_vehicles_by_state:
   type: laurel.datasets.geopackage.GeoPackageDataset
   filepath: data/08_reporting/observed_vehicles_by_state.gpkg
