@@ -224,6 +224,10 @@ estabs_pivoted:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/estabs_pivoted.feather
 
+land_use_pivoted:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/land_use_pivoted.feather
+
 trips_formatted:
   type: dask.ParquetDataset
   filepath: data/02_intermediate/trips_formatted/
