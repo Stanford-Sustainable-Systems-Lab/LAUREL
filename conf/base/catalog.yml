@@ -224,6 +224,10 @@ estabs_pivoted:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/estabs_pivoted.feather
 
+land_use_pivoted:
+  type: pandas.FeatherDataset
+  filepath: data/02_intermediate/land_use_pivoted.feather
+
 trips_formatted:
   type: dask.ParquetDataset
   filepath: data/02_intermediate/trips_formatted/
@@ -582,6 +586,13 @@ example_vehicle_trajectory:
   save_args:
     index: True
     layer: trips
+
+example_tazs:
+  type: laurel.datasets.geopackage.GeoPackageDataset
+  filepath: data/08_reporting/example_tazs.gpkg
+  save_args:
+    index: True
+    layer: tazs
 
 observed_vehicles_by_state:
   type: laurel.datasets.geopackage.GeoPackageDataset
