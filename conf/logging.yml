@@ -1,0 +1,26 @@
+# Kedro logging configuration.
+# Loaded automatically at startup if this file exists; otherwise Kedro falls
+# back to its built-in rich_logging.yml (same handler config, no filters).
+# See: https://docs.kedro.org/en/stable/logging/logging.html
+version: 1
+
+disable_existing_loggers: False
+
+filters:
+  suppress_distributed:
+    (): laurel.logging_filters.SuppressDistributedFilter
+
+handlers:
+  rich:
+    class: kedro.logging.RichHandler
+    rich_tracebacks: True
+    filters: [suppress_distributed]
+
+loggers:
+  kedro:
+    level: INFO
+  laurel:
+    level: INFO
+
+root:
+  handlers: [rich]
