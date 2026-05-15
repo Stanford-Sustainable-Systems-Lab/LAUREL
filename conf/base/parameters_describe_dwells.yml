@@ -32,6 +32,8 @@ trip_derived_cols:
     trip_end: end_timestamp_utc
   persist: False
 
+# Read by DaskClusterHook (src/laurel/hooks.py) before_pipeline_run; not consumed by pipeline nodes.
+# Cluster kwargs are forwarded verbatim to dask.distributed.LocalCluster.
 dask_describe_dwells:
   use_dask: True
   cluster:

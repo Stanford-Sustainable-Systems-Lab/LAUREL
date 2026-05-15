@@ -41,11 +41,7 @@ from laurel.utils.data import (
     filter_by_vals_in_cols,
     select_columns,
 )
-from laurel.utils.distributed import (
-    load_in_memory_node,
-    start_dask_node,
-    stop_dask_node,
-)
+from laurel.utils.distributed import load_in_memory_node
 from laurel.utils.time import get_timezones
 
 from .nodes import (
@@ -424,17 +420,10 @@ def create_pipeline(**kwargs) -> Pipeline:
     read_land_use_pipe = Pipeline(
         [
             Node(
-                func=start_dask_node,
-                inputs=["params:dask_read_land_use"],
-                outputs=["dask_cluster_read_land_use", "dask_client_read_land_use"],
-                name="start_dask_node_read_land_use",
-            ),
-            Node(
                 func=partition_hex_corresp,
                 inputs=[
                     "hex_base_corresp",
                     "params:partition_hex_corresp",
-                    "dask_client_read_land_use",
                 ],
                 outputs="hex_base_corresp_dask",
                 name="partition_hex_corresp",
@@ -444,16 +433,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["hex_base_corresp_dask", "params:read_land_use"],
                 outputs="hex_land_use",
                 name="read_land_use",
-            ),
-            Node(
-                func=stop_dask_node,
-                inputs=[
-                    "dask_cluster_read_land_use",
-                    "dask_client_read_land_use",
-                    "hex_land_use",
-                ],
-                outputs=None,
-                name="stop_dask_node_read_land_use",
             ),
         ],
         tags="read_land_use",

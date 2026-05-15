@@ -25,6 +25,8 @@ load_dwell_set:
   reset: reset_state_before
   verify_sorting: False
 
+# Read by DaskClusterHook (src/laurel/hooks.py) before_pipeline_run; not consumed by pipeline nodes.
+# Cluster kwargs are forwarded verbatim to dask.distributed.LocalCluster.
 dask_electrify_trips:
   use_dask: True
   cluster:
@@ -32,7 +34,9 @@ dask_electrify_trips:
     processes: True        # Must be True; code is not proven thread-safe
     threads_per_worker: 1  # Must stay at 1; do not increase
     memory_limit: 8GiB     # Tune to available RAM; 8 GiB works for typical fleet sizes on a laptop
-  n_partitions: 300        # Tune to available RAM; 300 works well for ~69,000 vehicles on 64 GB
+
+filter_vehicles_partitions:
+  n_partitions: 4        # Tune to available RAM; 300 works well for ~69,000 vehicles on 64 GB
 
 filter_vehicles:
   # Restricts simulation to the desired weight classes. By default, only Class 8

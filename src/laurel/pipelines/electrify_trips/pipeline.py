@@ -25,7 +25,6 @@ from kedro.pipeline import Node, Pipeline
 
 from laurel.models.dwell_sets import load_dwell_set, save_dwell_set
 from laurel.utils.data import categorize_columns, filter_by_vals_in_cols
-from laurel.utils.distributed import start_dask_node
 from laurel.utils.params import set_entity_params
 
 from .nodes import (
@@ -47,12 +46,6 @@ from .nodes import (
 def create_pipeline(**kwargs) -> Pipeline:
     charge_pipe = Pipeline(
         [
-            Node(
-                func=start_dask_node,
-                inputs=["params:dask_electrify_trips"],
-                outputs=["dask_cluster_elect", "dask_client_elect"],
-                name="start_dask_node_electrify_trips",
-            ),
             Node(
                 func=filter_by_vals_in_cols,
                 inputs=["vehicles_labelled", "params:filter_vehicles"],
@@ -76,7 +69,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=[
                     "dwell_obj",
                     "vehicles_with_params",
-                    "params:dask_electrify_trips",
+                    "params:filter_vehicles_partitions",
                 ],
                 outputs="dwell_obj_filtered_vehs",
                 name="filter_vehicles",

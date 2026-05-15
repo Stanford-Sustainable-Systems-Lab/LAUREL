@@ -1,99 +1,26 @@
-"""Helpers for managing Dask LocalCluster lifecycle and materialising deferred data.
+"""Helpers for materialising deferred Dask data as a Kedro node.
 
 Kedro pipelines that process large DwellSets or partitioned datasets use Dask
-for parallelism.  This module provides three thin wrappers — one to start a
-``LocalCluster``, one to shut it down cleanly, and one to force a Dask
-DataFrame (or a DwellSet backed by one) into RAM — so that the cluster
-lifecycle appears as ordinary Kedro nodes in the pipeline graph.
+for parallelism.  Cluster lifecycle is now managed by
+:class:`~laurel.hooks.DaskClusterHook`, which starts and stops a
+``LocalCluster`` around every pipeline run.  This module exposes only the
+:func:`load_in_memory_node` helper, which forces a Dask DataFrame (or a
+DwellSet backed by one) into RAM as a regular Kedro node.
 
 Key design decisions
 --------------------
-- **Soft Dask toggle**: If ``params["use_dask"]`` is ``False``, :func:`start_dask_node`
-  returns the string sentinel ``"None"`` (not Python ``None``) so that downstream
-  nodes that receive the client still have a truthy value to pass through the
-  pipeline graph without triggering Kedro catalog mismatches.
-- **Auto cluster**: If ``params["cluster"]`` is ``None``, :func:`start_dask_node`
-  calls ``Client()`` with no arguments so Dask selects cluster parameters
-  automatically from local resources.  The auto-created cluster is returned via
-  ``client.cluster`` so that :func:`stop_dask_node` can shut it down cleanly.
-- **result dependency**: :func:`stop_dask_node` accepts the final computed
-  dataset as a ``result`` argument purely to enforce DAG ordering; Kedro
-  executes nodes only once all their inputs are ready, so passing the last
-  dataset here guarantees the cluster outlives all computation.
+- **load_in_memory_node**: Used to materialise deferred Dask computations
+  before operations that require random access or pandas-only APIs (e.g.
+  Numba JIT calls, index-based joins).  Returns the input unchanged if it is
+  already backed by pandas.
 """
 
 from __future__ import annotations
 
 import dask.dataframe as dd
 import pandas as pd
-from dask.distributed import Client, LocalCluster
 
 from laurel.models.dwell_sets import DwellSet
-
-
-def start_dask_node(params: dict) -> tuple[LocalCluster, Client]:
-    """Start a Dask ``LocalCluster`` and connect a ``Client`` to it.
-
-    If ``params["use_dask"]`` is explicitly set to ``False``, returns the string
-    sentinel ``("None", "None")`` instead of a real cluster/client pair so that
-    downstream nodes can be written uniformly without ``None``-checks.
-
-    If ``params["cluster"]`` is ``None``, calls ``Client()`` with no arguments
-    so that Dask creates a ``LocalCluster`` automatically using all available
-    local resources.  The auto-created cluster is accessible via
-    ``client.cluster`` and is returned as the first element of the tuple so
-    that :func:`stop_dask_node` can shut it down cleanly.
-
-    Args:
-        params: Configuration dict with the following keys:
-
-            - **use_dask** (``bool``, optional): If ``False``, skip cluster
-              creation.  Defaults to ``True`` when absent.
-            - **cluster** (``dict`` or ``None``): Keyword arguments forwarded to
-              ``dask.distributed.LocalCluster`` (e.g. ``n_workers``,
-              ``threads_per_worker``, ``memory_limit``).  If ``None``, Dask
-              selects sensible defaults for the local machine automatically.
-
-    Returns:
-        A ``(LocalCluster, Client)`` pair, or ``("None", "None")`` if Dask is
-        disabled.
-    """
-    if ("use_dask" in params and params["use_dask"]) or ("use_dask" not in params):
-        if params.get("cluster") is None:
-            client = Client()
-            return client.cluster, client
-        else:
-            cluster = LocalCluster(**params["cluster"])
-            client = Client(cluster)
-            return cluster, client
-    else:
-        return "None", "None"
-
-
-def stop_dask_node(cluster: LocalCluster, client: Client, result: object) -> None:
-    """Shut down the Dask ``Client`` and ``LocalCluster``.
-
-    The ``result`` parameter serves only as a DAG dependency: by wiring the
-    final computed dataset through this node, Kedro guarantees the cluster
-    remains alive until all upstream computation has finished.
-
-    Handles the ``"None"`` string sentinel returned by :func:`start_dask_node`
-    when Dask is disabled, so this node is always safe to include in the
-    pipeline.
-
-    Args:
-        cluster: The ``LocalCluster`` to close, or the string ``"None"`` if Dask
-            was disabled.
-        client: The ``Client`` to close, or the string ``"None"`` if Dask was
-            disabled.
-        result: The final dataset produced by the Dask computation.  Not used
-            directly; present only to enforce execution ordering.
-    """
-    if client != "None" and isinstance(client, Client):
-        client.close()
-
-    if cluster != "None" and isinstance(cluster, LocalCluster):
-        cluster.close()
 
 
 def load_in_memory_node(ddf: dd.DataFrame | DwellSet) -> pd.DataFrame | DwellSet:

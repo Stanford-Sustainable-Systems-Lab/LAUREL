@@ -31,7 +31,6 @@ from laurel.routing.nodes import (
     stop_routing_server_node,
 )
 from laurel.utils.data import filter_by_vals_in_cols
-from laurel.utils.distributed import start_dask_node, stop_dask_node
 
 from .nodes import (
     concat_optional_stops,
@@ -86,12 +85,6 @@ def create_pipeline(**kwargs) -> Pipeline:
     route_pipe = Pipeline(
         [
             Node(
-                func=start_dask_node,
-                inputs="params:dask_routing",
-                outputs=["dask_cluster_routing", "dask_client_routing"],
-                name="start_dask_routing",
-            ),
-            Node(
                 func=start_routing_server_node,
                 inputs=[
                     "params:graphhopper",
@@ -114,12 +107,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=["routing_server", "trips_routed"],
                 outputs=None,
                 name="stop_routing_server",
-            ),
-            Node(
-                func=stop_dask_node,
-                inputs=["dask_cluster_routing", "dask_client_routing", "trips_routed"],
-                outputs=None,
-                name="stop_dask_routing",
             ),
         ],
         tags="routing",

@@ -41,7 +41,9 @@ partition_trips:
   # Increase partitions (smaller batches) if workers run out of memory.
   n_partitions: 6000
 
-dask_routing:
+# Read by DaskClusterHook (src/laurel/hooks.py) before_pipeline_run; not consumed by pipeline nodes.
+# Cluster kwargs are forwarded verbatim to dask.distributed.LocalCluster.
+dask_compute_routes:
   cluster:
     n_workers: 4           # Tune to available CPU cores
     processes: True        # Must be True; code is not proven thread-safe

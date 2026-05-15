@@ -100,7 +100,7 @@ import dask.dataframe as dd
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-from dask.distributed import Client, as_completed
+from dask.distributed import as_completed, get_client
 from tqdm.auto import tqdm
 
 from laurel.models.dwell_sets import DwellSet
@@ -1224,7 +1224,6 @@ def sample_profiles_node(
     classes: pd.DataFrame,
     params: dict,
     pcols: dict,
-    client: Client,
 ) -> tuple[dict, pd.DataFrame, pd.DataFrame, dict]:
     """Assemble per-region load profiles via inverse-propensity-weighted bootstrap sampling.
 
@@ -1299,9 +1298,6 @@ def sample_profiles_node(
 
             - ``hex_col``, ``group_cols``, ``dw_col``, ``duration_col``,
               ``profile_cols``, ``diff_cols``, ``cum_cols``, ``peak_cols``.
-
-        client: Dask distributed ``Client`` used to scatter data and submit
-            bootstrap draws when ``n_bootstraps > 1``.
 
     Returns:
         A four-tuple of:
@@ -1500,6 +1496,7 @@ def sample_profiles_node(
         prof, summ = sample_profiles(**kws, seed=master_seed)
         _accumulate(prof, summ, boot_id=0)
     elif n_boots > 1:
+        client = get_client()
 
         def _sample_profiles_distrib(kws: dict, boot_id: int):
             if master_seed is not None:

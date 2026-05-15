@@ -65,7 +65,6 @@ from copy import deepcopy
 import dask.dataframe as dd
 import numpy as np
 import pandas as pd
-from dask.distributed import Client
 from sklearn.cluster import HDBSCAN
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
@@ -150,7 +149,7 @@ def calc_derived_trip_cols(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
     return trips
 
 
-def create_dwells(trips: dd.DataFrame, params: dict, client: Client) -> DwellSet:
+def create_dwells(trips: dd.DataFrame, params: dict) -> DwellSet:
     """Convert a trip-oriented DataFrame into a ``DwellSet`` of dwell events.
 
     A dwell event represents the period during which a vehicle is stationary
@@ -182,9 +181,6 @@ def create_dwells(trips: dd.DataFrame, params: dict, client: Client) -> DwellSet
               verifies that trips are sorted by (vehicle, time).
             - ``set_index_kwargs`` (dict): additional keyword arguments for
               setting the index in ``DwellSet.from_trips``.
-        client: Active Dask distributed ``Client`` (used implicitly by the
-            Dask scheduler; not called directly in this function).
-
     Returns:
         A ``DwellSet`` with one dwell record per stationary event, sorted by
         (vehicle, start time).

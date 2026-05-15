@@ -139,7 +139,6 @@ import pandas as pd
 import rasterio
 from dask.dataframe.dispatch import make_meta
 from dask.diagnostics.progress import ProgressBar
-from dask.distributed import Client
 from osmium.filter import KeyFilter, TagFilter
 from sklearn.cluster import KMeans
 
@@ -1236,9 +1235,7 @@ def pivot_hex_estabs(estabs: gpd.GeoDataFrame, params: dict) -> gpd.GeoDataFrame
     return estabs_hex
 
 
-def partition_hex_corresp(
-    hex_base: pd.DataFrame, params: dict, client: Client | str
-) -> dd.DataFrame:
+def partition_hex_corresp(hex_base: pd.DataFrame, params: dict) -> dd.DataFrame:
     """Split the hexagon base correspondence table into Dask parquet partitions.
 
     Converts the pandas feather ``hex_base_corresp`` to a Dask DataFrame so that
@@ -1253,10 +1250,6 @@ def partition_hex_corresp(
 
             - ``n_partitions`` (int): number of Dask partitions to create.
               Controls parallelism during raster extraction.
-        client: Active Dask ``Client`` (or the ``"None"`` sentinel when Dask is
-            disabled).  Not used directly; accepted here solely to enforce DAG
-            ordering so this node does not execute until the Dask cluster is up.
-
     Returns:
         Dask DataFrame with the same schema as ``hex_base``, split into
         ``n_partitions`` partitions and saved as ``hex_base_corresp_dask``.

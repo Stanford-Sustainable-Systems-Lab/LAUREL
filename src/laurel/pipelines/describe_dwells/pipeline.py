@@ -35,8 +35,6 @@ from .nodes import (
     mark_vehicle_shifts,
 )
 
-from laurel.utils.distributed import start_dask_node
-
 
 def create_pipeline(**kwargs) -> Pipeline:
     format_pipe = Pipeline(
@@ -59,12 +57,6 @@ def create_pipeline(**kwargs) -> Pipeline:
 
     dwell_pipe = Pipeline(
         [
-            Node(
-                func=start_dask_node,
-                inputs=["params:dask_describe_dwells"],
-                outputs=["dask_cluster_dwells", "dask_client_dwells"],
-                name="start_dask_node_describe_dwells",
-            ),
             # If you want optional stops, then use "trips_with_optional" as the input.
             # Otherwise, use "trips_formatted". Also, if you want optional stops, run
             # the `optional_stops` and this `create_dwells` pipeline together, using the
@@ -74,7 +66,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=[
                     "trips_with_optional",
                     "params:create_dwells",
-                    "dask_client_dwells",
                 ],
                 outputs="dwell_obj_preprocess",
                 name="create_dwells",

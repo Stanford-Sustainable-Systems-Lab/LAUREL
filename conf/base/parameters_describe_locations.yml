@@ -264,7 +264,10 @@ pivot_hex_estabs:
 
 # --- NLCD land use raster extraction ---
 
-dask_read_land_use:
+# Read by DaskClusterHook (src/laurel/hooks.py) before_pipeline_run; not consumed by pipeline nodes.
+# Cluster kwargs are forwarded verbatim to dask.distributed.LocalCluster.
+# A null cluster value lets Dask auto-detect local resources.
+dask_describe_locations:
   cluster: # Defaults to None, allowing Dask cluster to use whatever local resources are available
 
 partition_hex_corresp:

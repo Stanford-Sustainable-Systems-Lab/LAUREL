@@ -267,7 +267,9 @@ slice_events:
   slice_time_col: slice_time_relative
   source_time_col: time_local
 
-dask_eval:
+# Read by DaskClusterHook (src/laurel/hooks.py) before_pipeline_run; not consumed by pipeline nodes.
+# Cluster kwargs are forwarded verbatim to dask.distributed.LocalCluster.
+dask_evaluate_impacts:
   cluster:
     n_workers: 3           # Set to (available CPU cores - 1); fewer workers reduces peak memory
     processes: True        # Must be True; code is not proven thread-safe

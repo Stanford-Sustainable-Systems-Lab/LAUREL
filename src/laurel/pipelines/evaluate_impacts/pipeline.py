@@ -44,7 +44,7 @@ from laurel.utils.data import (
     categorize_columns,
     get_merge_params,
 )
-from laurel.utils.distributed import load_in_memory_node, start_dask_node
+from laurel.utils.distributed import load_in_memory_node
 
 from .nodes import (
     add_dwell_id,
@@ -72,17 +72,6 @@ from .nodes import (
 
 
 def create_pipeline(**kwargs) -> Pipeline:
-    report_profiles_scaled_prep_pipe = Pipeline(
-        [
-            Node(
-                func=start_dask_node,
-                inputs="params:dask_eval",
-                outputs=["dask_cluster_eval", "dask_client_eval"],
-                name="start_dask_eval",
-            ),
-        ],
-    )
-
     read_pipe = Pipeline(
         [
             Node(
@@ -366,7 +355,6 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "classes_w_probs",
                     "params:sample_profiles",
                     "eval_columns",
-                    "dask_client_eval",
                 ],
                 outputs=[
                     "bootstrap_profiles",
@@ -420,7 +408,6 @@ def create_pipeline(**kwargs) -> Pipeline:
         "slices_ordered",
         "hex_region_corresp_categorized",
         "classes_w_probs",
-        "dask_client_eval",
     }
 
     report_profiles_pipes = [
@@ -445,6 +432,5 @@ def create_pipeline(**kwargs) -> Pipeline:
         + prob_pipe
         + dwell_pipe_post_prob
         + event_pipe
-        + report_profiles_scaled_prep_pipe
         + sum(report_profiles_pipes)
     )
