@@ -15,6 +15,13 @@
 #
 # Documentation: https://docs.kedro.org/en/stable/data/data_catalog.html
 
+# Self-referential entry: loads this file as a plain YAML dict (no OmegaConf
+# interpolation), so _build_single_catalog() can read metadata.scenario_override
+# annotations directly.
+base_catalog:
+  type: yaml.YAMLDataset
+  filepath: conf/base/catalog.yml
+
 # =============================================================================
 # RAW DATASETS (01_raw/)
 # =============================================================================
@@ -442,6 +449,9 @@ dwells_with_charging_partition_dask:
       write_metadata_file: True
     load_args:
       calculate_divisions: True
+  metadata:
+    scenario_override:
+      flatten: true
 
 events_partition:
   type: partitions.PartitionedDataset
@@ -467,6 +477,9 @@ vehicles_with_params_partition:
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
+  metadata:
+    scenario_override:
+      flatten: true
 
 vehicles_evaluated_partition:
   type: partitions.PartitionedDataset
@@ -474,6 +487,9 @@ vehicles_evaluated_partition:
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
+  metadata:
+    scenario_override:
+      flatten: true
 
 substation.report_by_region_quantiles_partition:
   type: partitions.PartitionedDataset
@@ -481,6 +497,9 @@ substation.report_by_region_quantiles_partition:
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
+  metadata:
+    scenario_override:
+      flatten: true
 
 substation.report_by_region_summaries_partition:
   type: partitions.PartitionedDataset
@@ -488,6 +507,9 @@ substation.report_by_region_summaries_partition:
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
+  metadata:
+    scenario_override:
+      flatten: true
 
 substation.sampling_source_partition:
   type: partitions.PartitionedDataset
@@ -495,6 +517,9 @@ substation.sampling_source_partition:
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
+  metadata:
+    scenario_override:
+      flatten: true
 
 substation.bootstrap_profiles_debug_partition:
   type: partitions.PartitionedDataset
@@ -502,6 +527,8 @@ substation.bootstrap_profiles_debug_partition:
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
+  metadata:
+    scenario_override: {}
 
 county.report_by_region_quantiles_partition:
   type: partitions.PartitionedDataset
@@ -509,6 +536,9 @@ county.report_by_region_quantiles_partition:
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
+  metadata:
+    scenario_override:
+      flatten: true
 
 county.report_by_region_summaries_partition:
   type: partitions.PartitionedDataset
@@ -516,6 +546,9 @@ county.report_by_region_summaries_partition:
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
+  metadata:
+    scenario_override:
+      flatten: true
 
 county.sampling_source_partition:
   type: partitions.PartitionedDataset
@@ -523,6 +556,9 @@ county.sampling_source_partition:
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
+  metadata:
+    scenario_override:
+      flatten: true
 
 county.bootstrap_profiles_debug_partition:
   type: partitions.PartitionedDataset
@@ -530,6 +566,8 @@ county.bootstrap_profiles_debug_partition:
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
+  metadata:
+    scenario_override: {}
 
 report_by_region_peaks_with_geoms:
   type: laurel.datasets.geopackage.GeoPackageDataset

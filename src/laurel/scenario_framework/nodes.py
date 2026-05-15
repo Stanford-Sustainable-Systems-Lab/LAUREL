@@ -33,7 +33,11 @@ Key design decisions
 from .build import ScenarioBuilder
 
 
-def generate_scenario_configs(scen_params: dict, all_params: dict) -> tuple:
+def generate_scenario_configs(
+    scen_params: dict,
+    all_params: dict,
+    catalog: dict,
+) -> tuple:
     """Dispatch to the named ScenarioBuilder and return configuration partitions.
 
     Looks up ``scen_params["builder"]`` in
@@ -60,10 +64,15 @@ def generate_scenario_configs(scen_params: dict, all_params: dict) -> tuple:
 
         all_params: The complete Kedro ``parameters`` dict for the run,
             forwarded unchanged to the builder constructor.
+        catalog: The raw ``conf/base/catalog.yml`` dict, loaded as
+            plain YAML by the ``base_catalog`` catalog entry (no OmegaConf
+            interpolation).  Each task's partition will include a
+            ``catalog.yml`` that overrides scenario-specific entries with
+            task-scoped paths.
 
     Returns:
         Two-tuple ``(partitions, builder)`` where ``partitions`` is the dict
-        of ``{config_file_path: param_dict}`` entries returned by
+        of ``{config_file_path: content_dict}`` entries returned by
         :meth:`~laurel.scenario_framework.build.ScenarioBuilder.build_configs`, and
         ``builder`` is the instantiated builder (whose
         :attr:`~laurel.scenario_framework.build.ScenarioBuilder.n_tasks_generated`
@@ -81,6 +90,10 @@ def generate_scenario_configs(scen_params: dict, all_params: dict) -> tuple:
             "Ensure its module is imported before calling generate_scenario_configs."
         )
     builder_cls = ScenarioBuilder._registry[bldr_name]
-    builder = builder_cls(scen_params=scen_params, all_params=all_params)
+    builder = builder_cls(
+        scen_params=scen_params,
+        all_params=all_params,
+        catalog=catalog,
+    )
     parts = builder.build_configs()
     return (parts, builder)
