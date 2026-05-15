@@ -29,7 +29,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             Node(
                 func=generate_scenario_configs,
-                inputs=["params:scenario_params", "parameters"],
+                inputs=["params:scenario_params", "parameters", "base_catalog"],
                 outputs=["scenario_configs", "scenario_builder"],
                 name="generate_scenario_configs",
             ),
