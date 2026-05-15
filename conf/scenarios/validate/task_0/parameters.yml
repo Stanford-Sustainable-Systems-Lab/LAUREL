@@ -1,9 +1,3 @@
-results_partition:
-  dir: validate/task_0
-  level_names:
-  - run_name
-  - task_id
-
 compute_adoption_totals:
   adoption_fracs:
     id_columns:
