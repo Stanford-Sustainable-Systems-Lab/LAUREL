@@ -40,10 +40,6 @@ from laurel.pipelines.electrify_trips.nodes import (
     merge_dataframes_node,
     merge_dwellset_node,
 )
-from laurel.scenario_framework.io import (
-    read_scenario_partition,
-    write_scenario_partition,
-)
 from laurel.utils.data import (
     categorize_columns,
     get_merge_params,
@@ -90,30 +86,14 @@ def create_pipeline(**kwargs) -> Pipeline:
     read_pipe = Pipeline(
         [
             Node(
-                func=read_scenario_partition,
-                inputs=[
-                    "dwells_with_charging_partition_dask",
-                    "params:results_partition",
-                    "dask_client_eval",
-                ],
-                outputs="dwells_with_charging_eval",
-                name="collate_partitions_dwells_with_charging",
-            ),
-            Node(
                 func=load_dwell_set,
-                inputs=["dwells_with_charging_eval", "params:load_dwell_set"],
+                inputs=["dwells_with_charging_partition_dask", "params:load_dwell_set"],
                 outputs="dwell_obj_eval",
                 name="load_dwell_set_eval_impacts",
             ),
             Node(
-                func=read_scenario_partition,
-                inputs=["vehicles_with_params_partition", "params:results_partition"],
-                outputs="vehicles_with_params_eval",
-                name="collate_partitions_vehicles_with_params",
-            ),
-            Node(
                 func=categorize_columns,
-                inputs="vehicles_with_params_eval",
+                inputs="vehicles_with_params_partition",
                 outputs="vehicles_with_params_eval_categorized",
                 name="categorize_vehicles_with_params_eval",
             ),
@@ -141,14 +121,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "vehicles_with_params_eval_categorized",
                     "params:summarize_vehicles",
                 ],
-                outputs="vehicles_evaluated",
-                name="summarize_vehicles",
-            ),
-            Node(
-                func=write_scenario_partition,
-                inputs=["vehicles_evaluated", "params:results_partition"],
                 outputs="vehicles_evaluated_partition",
-                name="write_scenario_partition_vehicles",
+                name="summarize_vehicles",
             ),
         ],
         tags=["report_vehicles"],
@@ -194,7 +168,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=get_merge_params,
                 inputs=[
                     "params:assign_metadata_vehicle",
-                    "vehicles_evaluated",
+                    "vehicles_evaluated_partition",
                     "params:stratify_columns",
                     "params:substation.group_columns",
                     "params:county.group_columns",
@@ -206,7 +180,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=merge_dwellset_node,
                 inputs=[
                     "dwell_obj_w_regions",
-                    "vehicles_evaluated",
+                    "vehicles_evaluated_partition",
                     "merge_params_vehicles",
                 ],
                 outputs="dwell_obj_w_metadata",
@@ -231,7 +205,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=build_class_frame,
                 inputs=[
                     "hex_region_corresp_categorized",
-                    "vehicles_evaluated",
+                    "vehicles_evaluated_partition",
                     "params:dwell_scaling",
                 ],
                 outputs="classes_frame",
@@ -262,7 +236,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=[
                     "veh_classes_adopt",
                     "dwell_obj_filtered",
-                    "vehicles_evaluated",
+                    "vehicles_evaluated_partition",
                     "params:compute_dwell_rate_vclass",
                     "params:dwell_scaling",
                 ],
@@ -397,7 +371,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs=[
                     "bootstrap_profiles",
                     "bootstrap_summaries",
-                    "sampling_source",
+                    "sampling_source_partition",
                     "bootstrap_profiles_debug_partition",
                 ],
                 name="sample_profiles_node",
@@ -419,7 +393,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "params:sample_profiles",
                     "eval_columns",
                 ],
-                outputs="report_by_region_quantiles",
+                outputs="report_by_region_quantiles_partition",
                 name="compress_bootstrap_profiles",
             ),
             Node(
@@ -429,33 +403,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "params:sample_profiles",
                     "eval_columns",
                 ],
-                outputs="report_by_region_summaries",
-                name="compress_bootstrap_summaries",
-            ),
-            Node(
-                func=write_scenario_partition,
-                inputs=["sampling_source", "params:results_partition"],
-                outputs="sampling_source_partition",
-                name="write_scenario_partition_sampling_sources",
-            ),
-            Node(
-                func=write_scenario_partition,
-                inputs=["report_by_region_summaries", "params:results_partition"],
                 outputs="report_by_region_summaries_partition",
-                name="write_scenario_partition_hexes_summaries",
-            ),
-            Node(
-                func=write_scenario_partition,
-                inputs=["report_by_region_quantiles", "params:results_partition"],
-                outputs="report_by_region_quantiles_partition",
-                name="write_scenario_partition_hexes_quants",
+                name="compress_bootstrap_summaries",
             ),
         ],
         tags="report_profiles",
     )
 
     profile_group_fixed_params = {
-        "params:results_partition",
         "params:eval_columns",
         "params:sample_profiles",
         "params:calc_utilization",

@@ -24,7 +24,6 @@ from the pipeline dropdown.
 from kedro.pipeline import Node, Pipeline
 
 from laurel.models.dwell_sets import load_dwell_set, save_dwell_set
-from laurel.scenario_framework.io import write_scenario_partition
 from laurel.utils.data import categorize_columns, filter_by_vals_in_cols
 from laurel.utils.distributed import start_dask_node
 from laurel.utils.params import set_entity_params
@@ -95,14 +94,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "dwell_obj",  # Using original dwell_obj to avoid double-computing
                     "params:calc_vehicle_ranges",
                 ],
-                outputs="vehicles_with_ranges",
+                outputs="vehicles_with_params_partition",
                 name="calc_vehicle_ranges",
             ),
             Node(
                 func=merge_dwellset_node,
                 inputs=[
                     "dwell_obj_filtered_vehs_categorized",
-                    "vehicles_with_ranges",
+                    "vehicles_with_params_partition",
                     "params:merge_vehicle_params",
                 ],
                 outputs="dwell_obj_w_veh_params",
@@ -168,7 +167,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=simulate_charging_choice,
                 inputs=[
                     "dwell_obj_shift_powers",
-                    "vehicles_with_ranges",
+                    "vehicles_with_params_partition",
                     "charging_modes",
                     "params:simulate_charging_choice",
                 ],
@@ -196,20 +195,8 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=save_dwell_set,
                 inputs="dwell_obj_w_modes",
-                outputs="dwells_with_charging",
-                name="save_dwell_set",
-            ),
-            Node(
-                func=write_scenario_partition,
-                inputs=["dwells_with_charging", "params:results_partition"],
                 outputs="dwells_with_charging_partition_dask",
-                name="write_scenario_partition_dwells",
-            ),
-            Node(
-                func=write_scenario_partition,
-                inputs=["vehicles_with_ranges", "params:results_partition"],
-                outputs="vehicles_with_params_partition",
-                name="write_scenario_partition_vehs",
+                name="save_dwell_set",
             ),
         ],
         tags=["choose_charging"],
