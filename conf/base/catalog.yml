@@ -394,12 +394,15 @@ substation_usage:
 # changes. Typical path: data/07_model_output/<scenario_name>/<task_id>/
 # =============================================================================
 
-dwells_with_charging_partition:
+dwells_with_charging_scenario:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/dwells_with_charging"
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
+  metadata:
+    scenario_override:
+      flatten: true
 
 dwells_with_charging_scenario_dask:
   type: laurel.datasets.directory_partitioned.DirectoryPartitionedDataset
