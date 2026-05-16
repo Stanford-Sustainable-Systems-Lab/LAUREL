@@ -87,13 +87,7 @@ class DaskClusterHook:
             return
         if not params.get("use_dask", True):
             return
-        verbose = params.get("verbose", False)
         cluster_kwargs = params.get("cluster") or {}
-        if not verbose:
-            dist_logger = logging.getLogger("distributed")
-            self._distributed_log_level = dist_logger.level
-            dist_logger.setLevel(logging.WARNING)
-            cluster_kwargs = {"silence_logs": logging.WARNING, **cluster_kwargs}
         self._cluster = LocalCluster(**cluster_kwargs)
         logger.info(
             "DaskClusterHook: started LocalCluster for pipeline '%s' (%s).",
@@ -103,6 +97,10 @@ class DaskClusterHook:
             else "default settings",
         )
         self._client = Client(self._cluster)
+        logger.info(
+            "DaskClusterHook: Dask Status dashboard at %s",
+            self._cluster.dashboard_link,
+        )
 
     @hook_impl
     def after_pipeline_run(
