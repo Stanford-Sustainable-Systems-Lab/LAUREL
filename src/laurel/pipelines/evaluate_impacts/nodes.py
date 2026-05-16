@@ -1315,7 +1315,7 @@ def sample_profiles_node(
           ``params["save_bootstrap_profiles"]`` is ``False`` (production).
           When ``True``, maps zero-padded bootstrap ID strings to the
           full per-bootstrap profile DataFrame captured before accumulation,
-          for writing to the ``bootstrap_profiles_debug_partition`` catalog
+          for writing to the ``bootstrap_profiles_debug_scenario`` catalog
           entry.
 
     Raises:

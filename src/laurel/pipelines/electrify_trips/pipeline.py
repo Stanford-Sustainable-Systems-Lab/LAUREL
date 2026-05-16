@@ -87,14 +87,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "dwell_obj",  # Using original dwell_obj to avoid double-computing
                     "params:calc_vehicle_ranges",
                 ],
-                outputs="vehicles_with_params_partition",
+                outputs="vehicles_with_params_scenario",
                 name="calc_vehicle_ranges",
             ),
             Node(
                 func=merge_dwellset_node,
                 inputs=[
                     "dwell_obj_filtered_vehs_categorized",
-                    "vehicles_with_params_partition",
+                    "vehicles_with_params_scenario",
                     "params:merge_vehicle_params",
                 ],
                 outputs="dwell_obj_w_veh_params",
@@ -160,7 +160,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=simulate_charging_choice,
                 inputs=[
                     "dwell_obj_shift_powers",
-                    "vehicles_with_params_partition",
+                    "vehicles_with_params_scenario",
                     "charging_modes",
                     "params:simulate_charging_choice",
                 ],
@@ -188,7 +188,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=save_dwell_set,
                 inputs="dwell_obj_w_modes",
-                outputs="dwells_with_charging_partition_dask",
+                outputs="dwells_with_charging_scenario_dask",
                 name="save_dwell_set",
             ),
         ],

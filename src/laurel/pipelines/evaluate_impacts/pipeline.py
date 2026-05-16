@@ -76,13 +76,13 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             Node(
                 func=load_dwell_set,
-                inputs=["dwells_with_charging_partition_dask", "params:load_dwell_set"],
+                inputs=["dwells_with_charging_scenario_dask", "params:load_dwell_set"],
                 outputs="dwell_obj_eval",
                 name="load_dwell_set_eval_impacts",
             ),
             Node(
                 func=categorize_columns,
-                inputs="vehicles_with_params_partition",
+                inputs="vehicles_with_params_scenario",
                 outputs="vehicles_with_params_eval_categorized",
                 name="categorize_vehicles_with_params_eval",
             ),
@@ -110,7 +110,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "vehicles_with_params_eval_categorized",
                     "params:summarize_vehicles",
                 ],
-                outputs="vehicles_evaluated_partition",
+                outputs="vehicles_evaluated_scenario",
                 name="summarize_vehicles",
             ),
         ],
@@ -157,7 +157,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=get_merge_params,
                 inputs=[
                     "params:assign_metadata_vehicle",
-                    "vehicles_evaluated_partition",
+                    "vehicles_evaluated_scenario",
                     "params:stratify_columns",
                     "params:substation.group_columns",
                     "params:county.group_columns",
@@ -169,7 +169,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=merge_dwellset_node,
                 inputs=[
                     "dwell_obj_w_regions",
-                    "vehicles_evaluated_partition",
+                    "vehicles_evaluated_scenario",
                     "merge_params_vehicles",
                 ],
                 outputs="dwell_obj_w_metadata",
@@ -194,7 +194,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 func=build_class_frame,
                 inputs=[
                     "hex_region_corresp_categorized",
-                    "vehicles_evaluated_partition",
+                    "vehicles_evaluated_scenario",
                     "params:dwell_scaling",
                 ],
                 outputs="classes_frame",
@@ -225,7 +225,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                 inputs=[
                     "veh_classes_adopt",
                     "dwell_obj_filtered",
-                    "vehicles_evaluated_partition",
+                    "vehicles_evaluated_scenario",
                     "params:compute_dwell_rate_vclass",
                     "params:dwell_scaling",
                 ],
@@ -359,8 +359,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs=[
                     "bootstrap_profiles",
                     "bootstrap_summaries",
-                    "sampling_source_partition",
-                    "bootstrap_profiles_debug_partition",
+                    "sampling_source_scenario",
+                    "bootstrap_profiles_debug_scenario",
                 ],
                 name="sample_profiles_node",
             ),
@@ -381,7 +381,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "params:sample_profiles",
                     "eval_columns",
                 ],
-                outputs="report_by_region_quantiles_partition",
+                outputs="report_by_region_quantiles_scenario",
                 name="compress_bootstrap_profiles",
             ),
             Node(
@@ -391,7 +391,7 @@ def create_pipeline(**kwargs) -> Pipeline:
                     "params:sample_profiles",
                     "eval_columns",
                 ],
-                outputs="report_by_region_summaries_partition",
+                outputs="report_by_region_summaries_scenario",
                 name="compress_bootstrap_summaries",
             ),
         ],

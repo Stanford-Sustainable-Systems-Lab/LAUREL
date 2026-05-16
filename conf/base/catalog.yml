@@ -439,7 +439,7 @@ dwells_with_charging_partition:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
-dwells_with_charging_partition_dask:
+dwells_with_charging_scenario_dask:
   type: laurel.datasets.directory_partitioned.DirectoryPartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/dwells_with_charging"
   dataset:
@@ -471,7 +471,7 @@ events_partition_dask:
     load_args:
       calculate_divisions: True
 
-vehicles_with_params_partition:
+vehicles_with_params_scenario:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/vehicles_with_params"
   dataset:
@@ -481,7 +481,7 @@ vehicles_with_params_partition:
     scenario_override:
       flatten: true
 
-vehicles_evaluated_partition:
+vehicles_evaluated_scenario:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/vehicles_evaluated"
   dataset:
@@ -491,7 +491,7 @@ vehicles_evaluated_partition:
     scenario_override:
       flatten: true
 
-substation.report_by_region_quantiles_partition:
+substation.report_by_region_quantiles_scenario:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_quantiles/substation"
   dataset:
@@ -501,7 +501,7 @@ substation.report_by_region_quantiles_partition:
     scenario_override:
       flatten: true
 
-substation.report_by_region_summaries_partition:
+substation.report_by_region_summaries_scenario:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_summaries/substation"
   dataset:
@@ -511,7 +511,7 @@ substation.report_by_region_summaries_partition:
     scenario_override:
       flatten: true
 
-substation.sampling_source_partition:
+substation.sampling_source_scenario:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/sampling_source/substation"
   dataset:
@@ -521,7 +521,7 @@ substation.sampling_source_partition:
     scenario_override:
       flatten: true
 
-substation.bootstrap_profiles_debug_partition:
+substation.bootstrap_profiles_debug_scenario:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/bootstrap_profiles_debug/substation"
   dataset:
@@ -530,7 +530,7 @@ substation.bootstrap_profiles_debug_partition:
   metadata:
     scenario_override: {}
 
-county.report_by_region_quantiles_partition:
+county.report_by_region_quantiles_scenario:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_quantiles/county"
   dataset:
@@ -540,7 +540,7 @@ county.report_by_region_quantiles_partition:
     scenario_override:
       flatten: true
 
-county.report_by_region_summaries_partition:
+county.report_by_region_summaries_scenario:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/report_by_region_summaries/county"
   dataset:
@@ -550,7 +550,7 @@ county.report_by_region_summaries_partition:
     scenario_override:
       flatten: true
 
-county.sampling_source_partition:
+county.sampling_source_scenario:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/sampling_source/county"
   dataset:
@@ -560,7 +560,7 @@ county.sampling_source_partition:
     scenario_override:
       flatten: true
 
-county.bootstrap_profiles_debug_partition:
+county.bootstrap_profiles_debug_scenario:
   type: partitions.PartitionedDataset
   path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/bootstrap_profiles_debug/county"
   dataset:
