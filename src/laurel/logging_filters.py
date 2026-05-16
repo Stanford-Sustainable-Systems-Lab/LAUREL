@@ -10,4 +10,6 @@ class SuppressDistributedFilter(logging.Filter):
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
-        return not record.name.startswith("distributed")
+        if record.name.startswith("distributed"):
+            return record.levelno >= logging.WARNING
+        return True
