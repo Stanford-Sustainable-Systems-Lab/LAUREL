@@ -19,6 +19,8 @@ handlers:
 loggers:
   kedro:
     level: INFO
+  kedro.framework.project:
+    level: WARNING
   laurel:
     level: INFO
 
