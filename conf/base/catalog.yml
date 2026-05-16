@@ -95,13 +95,6 @@ ledna_adoption:
   load_args:
     sheet_name: D-VehicleStock
 
-# NLR Ledna (2024) vehicle design parameters (range, energy consumption).
-# Same file as ledna_adoption; different sheet.
-ledna_vehicle_params:
-  type: pandas.ExcelDataset
-  filepath: data/01_raw/Ledna_2024_Forecasts/Data_Supplement_Final_010424.xlsx
-  load_args:
-    sheet_name: G-Inputs-Vehicles
 
 # HIFLD Electrical Substations (v4).
 # Homeland Infrastructure Foundation-Level Data; ~80,000 U.S. substations.
@@ -138,11 +131,6 @@ substation_profiles_pg_and_e:
 
 # U.S. Census TIGER/Line state and county boundaries (2023, 1:500k).
 # Download: https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html
-state_boundaries:
-  type: laurel.datasets.geodatabase.GeoDataBaseDataset
-  filepath: data/01_raw/Census_Geographies/cb_2023_us_all_500k.gdb
-  load_args:
-    layer: cb_2023_us_state_500k
 
 county_boundaries:
   type: laurel.datasets.geodatabase.GeoDataBaseDataset
@@ -271,9 +259,6 @@ parking_formatted:
   load_args:
     layer: parking
 
-dwells:
-  type: pandas.FeatherDataset
-  filepath: "${runtime_params:partition_data_dir, 'data/02_intermediate'}/dwells.feather"
 
 dwells_with_locations:
   type: pandas.FeatherDataset
@@ -305,17 +290,9 @@ vehicles_labelled:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vehicles_labelled.feather
 
-vehicle_location_pairs:
-  type: pandas.FeatherDataset
-  filepath: data/02_intermediate/vehicle_location_pairs.feather
-
 vehicle_location_pairs_clustered:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/vehicle_location_pairs_clustered.feather
-
-vehicle_location_pairs_labelled:
-  type: pandas.FeatherDataset
-  filepath: data/02_intermediate/vehicle_location_pairs_labelled.feather
 
 states_formatted:
   type: laurel.datasets.geopackage.GeoPackageDataset
@@ -392,21 +369,6 @@ hex_cluster_corresp:
   type: pandas.FeatherDataset
   filepath: data/02_intermediate/hex_cluster_corresp.feather
 
-continental.hex_region_corresp:
-  type: pandas.FeatherDataset
-  filepath: data/02_intermediate/hex_region_corresp/continental.feather
-
-pg_and_e.hex_region_corresp:
-  type: pandas.FeatherDataset
-  filepath: data/02_intermediate/hex_region_corresp/pg_and_e.feather
-
-hex_region_corresp_partition:
-  type: partitions.PartitionedDataset
-  path: data/02_intermediate/hex_region_corresp
-  dataset:
-    type: pandas.FeatherDataset
-  filename_suffix: ".feather"
-
 hex_base_corresp_dask:
   type: dask.ParquetDataset
   filepath: data/02_intermediate/hex_base_corresp_dask/
@@ -452,24 +414,6 @@ dwells_with_charging_scenario_dask:
   metadata:
     scenario_override:
       flatten: true
-
-events_partition:
-  type: partitions.PartitionedDataset
-  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/events"
-  dataset:
-    type: pandas.FeatherDataset
-  filename_suffix: ".feather"
-
-events_partition_dask:
-  type: laurel.datasets.directory_partitioned.DirectoryPartitionedDataset
-  path: "${runtime_params:partition_data_dir, 'data/07_model_output'}/events"
-  dataset:
-    type: dask.ParquetDataset
-    save_args:
-      write_index: True
-      write_metadata_file: True
-    load_args:
-      calculate_divisions: True
 
 vehicles_with_params_scenario:
   type: partitions.PartitionedDataset
@@ -920,10 +864,6 @@ dwell_obj_w_energy:
   type: MemoryDataset
   copy_mode: assign
 
-dwell_obj_w_refreshes:
-  type: MemoryDataset
-  copy_mode: assign
-
 dwell_obj_crit_days:
   type: MemoryDataset
   copy_mode: assign
@@ -984,22 +924,6 @@ dwell_obj_nonzero:
   type: MemoryDataset
   copy_mode: assign
 
-dwell_obj_desc_veh_locs:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_filtered_desc_veh_locs:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_inter_visit_desc_veh_locs:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_roll_desc_veh_locs:
-  type: MemoryDataset
-  copy_mode: assign
-
 dwell_obj_desc_vehs:
   type: MemoryDataset
   copy_mode: assign
@@ -1008,63 +932,7 @@ dwell_obj_filtered_desc_vehs:
   type: MemoryDataset
   copy_mode: assign
 
-dwell_obj_desc_dwells:
-  type: MemoryDataset
-  copy_mode: assign
-
-dwell_obj_with_locations:
-  type: MemoryDataset
-  copy_mode: assign
-
 routing_server:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_cluster:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_client:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_cluster_routing:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_client_routing:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_cluster_elect:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_client_elect:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_cluster_eval:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_client_eval:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_cluster_dwells:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_client_dwells:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_cluster_read_land_use:
-  type: MemoryDataset
-  copy_mode: assign
-
-dask_client_read_land_use:
   type: MemoryDataset
   copy_mode: assign
 
