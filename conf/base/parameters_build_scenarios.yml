@@ -42,7 +42,8 @@ slurm_resources:
 cmd_line_calls:
   prefix: uv run
   kedro:
-    # pipeline: simulate
+    - pipeline: electrify_trips
+    - pipeline: evaluate_impacts
     # params: Use this for command line parameters
 
 scenario_params:
