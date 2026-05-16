@@ -9,3 +9,8 @@ warnings.filterwarnings(
     message="FNV hashing is not implemented in Numba",
     category=UserWarning,
 )
+warnings.filterwarnings(
+    "ignore",
+    message="pkg_resources is deprecated as an API",
+    category=UserWarning,
+)
