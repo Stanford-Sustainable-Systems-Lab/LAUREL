@@ -164,6 +164,7 @@ session_store.db
 
 # Jupyter notebooks
 *.ipynb
+!notebooks/publications/**/*.ipynb
 
 # Auto-generated configs and bash scripts
 conf/scenarios/*
