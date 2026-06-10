@@ -16,4 +16,4 @@
 # raster extraction or other heavy preprocessing, add the following argument:
 #   --tags=fast_loc_grouping
 
-uv run kedro run --pipeline=describe_locations --params=data_dir=$SCRATCH/laurel
+uv run kedro run --pipeline=describe_locations --params=data_dir=$SCRATCH/laurel/data

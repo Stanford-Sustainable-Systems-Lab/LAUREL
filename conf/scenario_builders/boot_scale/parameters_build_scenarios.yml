@@ -20,7 +20,7 @@ cmd_line_calls:
   prefix: uv run
   kedro:
     pipeline: evaluate_impacts
-    params: data_dir=$SCRATCH/laurel
+    params: data_dir=$SCRATCH/laurel/data
 
 scenario_params:
   builder: SenseScenarioBuilder

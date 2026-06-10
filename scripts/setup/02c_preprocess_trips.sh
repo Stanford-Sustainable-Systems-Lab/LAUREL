@@ -8,4 +8,4 @@
 #SBATCH --job-name=preprocess_trips
 #SBATCH --output=logs/slurm/%x_%j.log
 
-uv run kedro run --pipeline=describe_dwells --tags=format_trips --params=data_dir=$SCRATCH/laurel
+uv run kedro run --pipeline=describe_dwells --tags=format_trips --params=data_dir=$SCRATCH/laurel/data

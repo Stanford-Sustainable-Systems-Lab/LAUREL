@@ -8,4 +8,4 @@
 #SBATCH --job-name=prepare_totals
 #SBATCH --output=logs/slurm/%x_%j.log
 
-uv run kedro run --pipeline=prepare_totals --params=data_dir=$SCRATCH/laurel
+uv run kedro run --pipeline=prepare_totals --params=data_dir=$SCRATCH/laurel/data

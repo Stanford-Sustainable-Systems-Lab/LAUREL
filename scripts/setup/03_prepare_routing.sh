@@ -8,4 +8,4 @@
 #SBATCH --job-name=prepare_routing
 #SBATCH --output=logs/slurm/%x_%j.log
 
-uv run kedro run --pipeline=compute_routes --tags=pre_routing --params=data_dir=$SCRATCH/laurel
+uv run kedro run --pipeline=compute_routes --tags=pre_routing --params=data_dir=$SCRATCH/laurel/data

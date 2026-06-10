@@ -8,4 +8,4 @@
 #SBATCH --job-name=import_graph
 #SBATCH --output=logs/slurm/%x_%j.log
 
-uv run kedro run --pipeline=compute_routes --tags=import --params=data_dir=$SCRATCH/laurel
+uv run kedro run --pipeline=compute_routes --tags=import --params=data_dir=$SCRATCH/laurel/data

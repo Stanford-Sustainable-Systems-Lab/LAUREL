@@ -10,5 +10,5 @@
 #SBATCH --output=logs/slurm/%x_%A_%a.log
 
 cd conf && conf_dir=$(find scenarios/validate -type d -name "task_$SLURM_ARRAY_TASK_ID") && cd ..
-uv run kedro run --pipeline=electrify_trips --env=$conf_dir --params=data_dir=$SCRATCH/laurel
-uv run kedro run --pipeline=evaluate_impacts --env=$conf_dir --params=data_dir=$SCRATCH/laurel
+uv run kedro run --pipeline=electrify_trips --env=$conf_dir --params=data_dir=$SCRATCH/laurel/data
+uv run kedro run --pipeline=evaluate_impacts --env=$conf_dir --params=data_dir=$SCRATCH/laurel/data
