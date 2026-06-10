@@ -15,16 +15,6 @@
 #
 # Documentation: https://docs.kedro.org/en/stable/data/data_catalog.html
 
-# _data_dir is an internal OmegaConf variable (the leading underscore prevents
-# Kedro from registering it as a dataset). It sets the root directory for all
-# dataset filepaths in this catalog via OmegaConf inter-node interpolation.
-# The default value is "data" (the local project data directory). Override it
-# at runtime to redirect the entire catalog to a different location:
-#
-#   kedro run --params "data_dir=/path/to/your/data"
-#
-_data_dir: ${runtime_params:data_dir, 'data'}
-
 # Self-referential entry: loads this file as a plain YAML dict (no OmegaConf
 # interpolation), so _build_single_catalog() can read metadata.scenario_override
 # annotations directly.
@@ -48,7 +38,7 @@ base_catalog:
 # See README.md §Input Data for the full schema.
 trips_raw:
   type: dask.ParquetDataset
-  filepath: ${_data_dir}/01_raw/Navistar/stanford_dataset_v2/
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/Navistar/stanford_dataset_v2/
 
 # Data Axle, Inc. business establishment records.
 # ~28 million U.S. establishments with location, NAICS code, employee count,
@@ -64,15 +54,15 @@ trips_raw:
 #   establishments_parent_bus_status — ESTAB_ID, PARENT_NUMBER
 establishments_location:
   type: dask.CSVDataset
-  filepath: ${_data_dir}/01_raw/establishments/data_axle/location.csv
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/establishments/data_axle/location.csv
 
 establishments_name_naics_employees:
   type: dask.CSVDataset
-  filepath: ${_data_dir}/01_raw/establishments/data_axle/name_naics_employees.csv
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/establishments/data_axle/name_naics_employees.csv
 
 establishments_parent_bus_status:
   type: dask.CSVDataset
-  filepath: ${_data_dir}/01_raw/establishments/data_axle/parent_bus_status.csv
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/establishments/data_axle/parent_bus_status.csv
   load_args:
     dtype:
       PARENT_NUMBER: float64
@@ -81,7 +71,7 @@ establishments_parent_bus_status:
 # to request access. Cannot be redistributed.
 naics_descriptions:
   type: pandas.CSVDataset
-  filepath: ${_data_dir}/01_raw/establishments/metadata/naics_descriptions.csv
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/establishments/metadata/naics_descriptions.csv
 
 # -----------------------------------------------------------------------------
 # PUBLIC — freely available from the cited source; download link in comments
@@ -92,7 +82,7 @@ naics_descriptions:
 # Download: https://www.bts.gov/vius
 vius_public_use:
   type: pandas.CSVDataset
-  filepath: ${_data_dir}/01_raw/VIUS/vius_2021_puf.csv
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/VIUS/vius_2021_puf.csv
 
 # NLR Ledna (2024) BEV adoption forecasts (vehicle stock).
 # Ledna, A. et al. (2024). iScience 27, 109385.
@@ -101,7 +91,7 @@ vius_public_use:
 # supplementary materials.
 ledna_adoption:
   type: pandas.ExcelDataset
-  filepath: ${_data_dir}/01_raw/Ledna_2024_Forecasts/Data_Supplement_Final_010424.xlsx
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/Ledna_2024_Forecasts/Data_Supplement_Final_010424.xlsx
   load_args:
     sheet_name: D-VehicleStock
 
@@ -111,7 +101,7 @@ ledna_adoption:
 # Download: https://gem.anl.gov
 substations_continent:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/01_raw/HIFLD/electric_substation_hifld_v4/electric_substation_hifld_v4.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/HIFLD/electric_substation_hifld_v4/electric_substation_hifld_v4.gpkg
   load_args:
     layer: electric_substation_hifld_v4
 
@@ -120,7 +110,7 @@ substations_continent:
 # Download requires a PG&E account: https://grip.pge.com
 substations_pg_and_e:
   type: laurel.datasets.geodatabase.GeoDataBaseDataset
-  filepath: ${_data_dir}/01_raw/ICA_Maps/PGE/GRIP_FGDB/GNA.gdb
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/ICA_Maps/PGE/GRIP_FGDB/GNA.gdb
   load_args:
     layer: DFSubstationArea___PeakFacilityLoadingPercent
 
@@ -129,7 +119,7 @@ substations_pg_and_e:
 # Same access path as substations_pg_and_e.
 substation_profiles_pg_and_e:
   type: laurel.datasets.geodatabase.GeoDataBaseDataset
-  filepath: ${_data_dir}/01_raw/ICA_Maps/PGE/GRIP_FGDB/ICA.gdb
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/ICA_Maps/PGE/GRIP_FGDB/ICA.gdb
   load_args:
     layer: SubstationLoadProfile
     columns:
@@ -144,7 +134,7 @@ substation_profiles_pg_and_e:
 
 county_boundaries:
   type: laurel.datasets.geodatabase.GeoDataBaseDataset
-  filepath: ${_data_dir}/01_raw/Census_Geographies/cb_2023_us_all_500k.gdb
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/Census_Geographies/cb_2023_us_all_500k.gdb
   load_args:
     layer: cb_2023_us_county_500k
 
@@ -152,14 +142,14 @@ county_boundaries:
 # Download: https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html
 urban_areas:
   type: laurel.datasets.shapefile.ShapefileDataset
-  filepath: ${_data_dir}/01_raw/Census_Geographies/tl_2020_us_uac20_corrected/tl_2020_us_uac20_corrected.shp
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/Census_Geographies/tl_2020_us_uac20_corrected/tl_2020_us_uac20_corrected.shp
 
 # North American Roads 2024 geodatabase (Census/HERE).
 # Used to identify highway-adjacent hexes for freight activity classification.
 # Download: https://geodata.bts.gov/datasets/usdot::north-american-roads/
 highways:
   type: laurel.datasets.geodatabase.GeoDataBaseDataset
-  filepath: ${_data_dir}/01_raw/Census_Geographies/north_american_roads_2024.gdb
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/Census_Geographies/north_american_roads_2024.gdb
   load_args:
     layer: North_American_Roads
 
@@ -168,7 +158,7 @@ highways:
 # Download: https://geodata.bts.gov/datasets/fff36e0c37c748a5a1773b5784d4d9a5_0
 parking_public:
   type: laurel.datasets.shapefile.ShapefileDataset
-  filepath: ${_data_dir}/01_raw/Truck_Parking/jlaw_data_shapefile_2019/Final Public Truck Parking Locations-2019.shp
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/Truck_Parking/jlaw_data_shapefile_2019/Final Public Truck Parking Locations-2019.shp
 
 # Other public datasets which are read by special non-Kedro software
 
@@ -192,25 +182,25 @@ parking_public:
 # Based on CARB's ACF regulation milestone groups by GVW class and operating range.
 advanced_clean_fleets_milestones:
  type: pandas.CSVDataset
- filepath: ${_data_dir}/01_raw/adoption_policies/acf_zev_milestones.csv
+ filepath: ${runtime_params:data_dir, 'data'}/01_raw/adoption_policies/acf_zev_milestones.csv
 
 # List of states that have adopted the Advanced Clean Trucks (ACT) regulation.
 advanced_clean_trucks_states:
   type: pandas.CSVDataset
-  filepath: ${_data_dir}/01_raw/adoption_policies/act_states.csv
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/adoption_policies/act_states.csv
 
 # Hand-crafted list of NAICS "focus" leaf codes used in freight
 # activity classification. Determines which NAICS branches are aggregated
 # into freight-relevant categories before K-Means clustering.
 naics_focus_leaves:
   type: pandas.CSVDataset
-  filepath: ${_data_dir}/01_raw/establishments/naics_tree_focus_leaves.csv
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/establishments/naics_tree_focus_leaves.csv
 
 # Hand-crafted list of NAICS codes classified as freight-intensive.
 # Used to identify hexes with freight-relevant business activity.
 naics_freight_intensive:
   type: pandas.CSVDataset
-  filepath: ${_data_dir}/01_raw/establishments/freight_intensive_naics.csv
+  filepath: ${runtime_params:data_dir, 'data'}/01_raw/establishments/freight_intensive_naics.csv
 
 # =============================================================================
 # INTERMEDIATE DATASETS (02_intermediate/) — generated by the pipeline
@@ -218,7 +208,7 @@ naics_freight_intensive:
 
 establishments_formatted:
   type: laurel.datasets.geoparquet.GeoParquetDataset
-  filepath: ${_data_dir}/02_intermediate/establishments_formatted/
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/establishments_formatted/
   save_args:
     write_index: True
     write_metadata_file: True
@@ -227,19 +217,19 @@ establishments_formatted:
 
 estabs_pivoted:
   type: pandas.FeatherDataset
-  filepath: ${_data_dir}/02_intermediate/estabs_pivoted.feather
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/estabs_pivoted.feather
 
 land_use_pivoted:
   type: pandas.FeatherDataset
-  filepath: ${_data_dir}/02_intermediate/land_use_pivoted.feather
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/land_use_pivoted.feather
 
 trips_formatted:
   type: dask.ParquetDataset
-  filepath: ${_data_dir}/02_intermediate/trips_formatted/
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/trips_formatted/
 
 trips_to_route:
   type: laurel.datasets.geoparquet.GeoParquetDataset
-  filepath: ${_data_dir}/02_intermediate/trips_to_route
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/trips_to_route
   save_args:
     write_index: False
   load_args:
@@ -247,13 +237,13 @@ trips_to_route:
 
 trips_routed:
   type: laurel.datasets.geoparquet.GeoParquetDataset
-  filepath: ${_data_dir}/02_intermediate/trips_routed
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/trips_routed
   save_args:
     write_index: False
 
 trips_with_optional:
   type: dask.ParquetDataset
-  filepath: ${_data_dir}/02_intermediate/trips_with_optional
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/trips_with_optional
   save_args:
     write_index: True
     write_metadata_file: True
@@ -262,7 +252,7 @@ trips_with_optional:
 
 parking_formatted:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/02_intermediate/parking.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/parking.gpkg
   save_args:
     index: False
     layer: parking
@@ -272,11 +262,11 @@ parking_formatted:
 
 dwells_with_locations:
   type: pandas.FeatherDataset
-  filepath: ${_data_dir}/02_intermediate/dwells_with_locations.feather
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/dwells_with_locations.feather
 
 dwells_with_locations_dask:
   type: dask.ParquetDataset
-  filepath: ${_data_dir}/02_intermediate/dwells_with_locations/
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/dwells_with_locations/
   save_args:
     write_index: True
     write_metadata_file: True
@@ -285,7 +275,7 @@ dwells_with_locations_dask:
 
 dwells_with_locations_dask_spatial:
   type: laurel.datasets.geoparquet.GeoParquetDataset
-  filepath: ${_data_dir}/02_intermediate/dwells_with_locations_spatial/
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/dwells_with_locations_spatial/
   save_args:
     write_index: True
     write_metadata_file: True
@@ -294,19 +284,19 @@ dwells_with_locations_dask_spatial:
 
 vehicles_raw:
   type: pandas.FeatherDataset
-  filepath: ${_data_dir}/02_intermediate/vehicles_raw.feather
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/vehicles_raw.feather
 
 vehicles_labelled:
   type: pandas.FeatherDataset
-  filepath: ${_data_dir}/02_intermediate/vehicles_labelled.feather
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/vehicles_labelled.feather
 
 vehicle_location_pairs_clustered:
   type: pandas.FeatherDataset
-  filepath: ${_data_dir}/02_intermediate/vehicle_location_pairs_clustered.feather
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/vehicle_location_pairs_clustered.feather
 
 states_formatted:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/02_intermediate/states_select.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/states_select.gpkg
   save_args:
     index: False
     layer: states
@@ -315,7 +305,7 @@ states_formatted:
 
 highways_formatted:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/02_intermediate/highways_formatted.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/highways_formatted.gpkg
   save_args:
     index: False
     layer: highways
@@ -324,7 +314,7 @@ highways_formatted:
 
 urban_areas_formatted:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/02_intermediate/urban_areas_formatted.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/urban_areas_formatted.gpkg
   save_args:
     index: False
     layer: urban_areas
@@ -333,7 +323,7 @@ urban_areas_formatted:
 
 substations_formatted:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/02_intermediate/substations_formatted.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/substations_formatted.gpkg
   save_args:
     index: False
     layer: substations
@@ -342,11 +332,11 @@ substations_formatted:
 
 hex_base_corresp:
   type: pandas.FeatherDataset
-  filepath: ${_data_dir}/02_intermediate/hex_base_corresp.feather
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/hex_base_corresp.feather
 
 hex_land_use:
   type: dask.ParquetDataset
-  filepath: ${_data_dir}/02_intermediate/hex_land_use/
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/hex_land_use/
   save_args:
     write_index: True
     write_metadata_file: True
@@ -355,7 +345,7 @@ hex_land_use:
 
 substations_continent_formatted:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/02_intermediate/substation_geographies/continental.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/substation_geographies/continental.gpkg
   save_args:
     index: True
     layer: substations
@@ -364,7 +354,7 @@ substations_continent_formatted:
 
 substations_standard_pg_and_e:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/02_intermediate/substation_geographies/pg_and_e.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/substation_geographies/pg_and_e.gpkg
   save_args:
     index: True
     layer: substations
@@ -373,15 +363,15 @@ substations_standard_pg_and_e:
 
 hex_clusters:
   type: pandas.FeatherDataset
-  filepath: ${_data_dir}/02_intermediate/hex_clusters.feather
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/hex_clusters.feather
 
 hex_cluster_corresp:
   type: pandas.FeatherDataset
-  filepath: ${_data_dir}/02_intermediate/hex_cluster_corresp.feather
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/hex_cluster_corresp.feather
 
 hex_base_corresp_dask:
   type: dask.ParquetDataset
-  filepath: ${_data_dir}/02_intermediate/hex_base_corresp_dask/
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/hex_base_corresp_dask/
   save_args:
     write_index: True
     write_metadata_file: True
@@ -390,11 +380,11 @@ hex_base_corresp_dask:
 
 adoption_scenarios:
   type: pandas.FeatherDataset
-  filepath: ${_data_dir}/02_intermediate/adoption_scenarios.feather
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/adoption_scenarios.feather
 
 substation_usage:
   type: pandas.FeatherDataset
-  filepath: ${_data_dir}/02_intermediate/usage/substation.feather
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/usage/substation.feather
 
 # =============================================================================
 # MODEL OUTPUT DATASETS (07_model_output/) — per-scenario simulation outputs
@@ -406,7 +396,7 @@ substation_usage:
 
 dwells_with_charging_scenario:
   type: partitions.PartitionedDataset
-  path: ${_data_dir}/07_model_output/dwells_with_charging
+  path: ${runtime_params:data_dir, 'data'}/07_model_output/dwells_with_charging
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
@@ -416,7 +406,7 @@ dwells_with_charging_scenario:
 
 dwells_with_charging_scenario_dask:
   type: laurel.datasets.directory_partitioned.DirectoryPartitionedDataset
-  path: ${_data_dir}/07_model_output/dwells_with_charging
+  path: ${runtime_params:data_dir, 'data'}/07_model_output/dwells_with_charging
   dataset:
     type: dask.ParquetDataset
     save_args:
@@ -430,7 +420,7 @@ dwells_with_charging_scenario_dask:
 
 vehicles_with_params_scenario:
   type: partitions.PartitionedDataset
-  path: ${_data_dir}/07_model_output/vehicles_with_params
+  path: ${runtime_params:data_dir, 'data'}/07_model_output/vehicles_with_params
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
@@ -440,7 +430,7 @@ vehicles_with_params_scenario:
 
 vehicles_evaluated_scenario:
   type: partitions.PartitionedDataset
-  path: ${_data_dir}/07_model_output/vehicles_evaluated
+  path: ${runtime_params:data_dir, 'data'}/07_model_output/vehicles_evaluated
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
@@ -450,7 +440,7 @@ vehicles_evaluated_scenario:
 
 substation.report_by_region_quantiles_scenario:
   type: partitions.PartitionedDataset
-  path: ${_data_dir}/07_model_output/report_by_region_quantiles/substation
+  path: ${runtime_params:data_dir, 'data'}/07_model_output/report_by_region_quantiles/substation
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
@@ -460,7 +450,7 @@ substation.report_by_region_quantiles_scenario:
 
 substation.report_by_region_summaries_scenario:
   type: partitions.PartitionedDataset
-  path: ${_data_dir}/07_model_output/report_by_region_summaries/substation
+  path: ${runtime_params:data_dir, 'data'}/07_model_output/report_by_region_summaries/substation
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
@@ -470,7 +460,7 @@ substation.report_by_region_summaries_scenario:
 
 substation.sampling_source_scenario:
   type: partitions.PartitionedDataset
-  path: ${_data_dir}/07_model_output/sampling_source/substation
+  path: ${runtime_params:data_dir, 'data'}/07_model_output/sampling_source/substation
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
@@ -480,7 +470,7 @@ substation.sampling_source_scenario:
 
 substation.bootstrap_profiles_debug_scenario:
   type: partitions.PartitionedDataset
-  path: ${_data_dir}/07_model_output/bootstrap_profiles_debug/substation
+  path: ${runtime_params:data_dir, 'data'}/07_model_output/bootstrap_profiles_debug/substation
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
@@ -489,7 +479,7 @@ substation.bootstrap_profiles_debug_scenario:
 
 county.report_by_region_quantiles_scenario:
   type: partitions.PartitionedDataset
-  path: ${_data_dir}/07_model_output/report_by_region_quantiles/county
+  path: ${runtime_params:data_dir, 'data'}/07_model_output/report_by_region_quantiles/county
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
@@ -499,7 +489,7 @@ county.report_by_region_quantiles_scenario:
 
 county.report_by_region_summaries_scenario:
   type: partitions.PartitionedDataset
-  path: ${_data_dir}/07_model_output/report_by_region_summaries/county
+  path: ${runtime_params:data_dir, 'data'}/07_model_output/report_by_region_summaries/county
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
@@ -509,7 +499,7 @@ county.report_by_region_summaries_scenario:
 
 county.sampling_source_scenario:
   type: partitions.PartitionedDataset
-  path: ${_data_dir}/07_model_output/sampling_source/county
+  path: ${runtime_params:data_dir, 'data'}/07_model_output/sampling_source/county
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
@@ -519,7 +509,7 @@ county.sampling_source_scenario:
 
 county.bootstrap_profiles_debug_scenario:
   type: partitions.PartitionedDataset
-  path: ${_data_dir}/07_model_output/bootstrap_profiles_debug/county
+  path: ${runtime_params:data_dir, 'data'}/07_model_output/bootstrap_profiles_debug/county
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
@@ -528,7 +518,7 @@ county.bootstrap_profiles_debug_scenario:
 
 report_by_region_peaks_with_geoms:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/07_model_output/report_by_region_single_run.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/07_model_output/report_by_region_single_run.gpkg
   save_args:
     layer: peak_kw
 
@@ -538,25 +528,25 @@ report_by_region_peaks_with_geoms:
 
 vehicle_representative_points:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/03_primary/veh_rep_pts.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/03_primary/veh_rep_pts.gpkg
   save_args:
     index: True
     layer: vehicle_representative_points
 
 vehicle_dwells:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/03_primary/veh_dwells.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/03_primary/veh_dwells.gpkg
   save_args:
     index: True
     layer: vehicle_dwells
 
 vehicle_depots:
   type: pandas.FeatherDataset
-  filepath: ${_data_dir}/03_primary/vehicle_depots.feather
+  filepath: ${runtime_params:data_dir, 'data'}/03_primary/vehicle_depots.feather
 
 vehicle_depots_geoms:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/03_primary/vehicle_depots.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/03_primary/vehicle_depots.gpkg
   save_args:
     index: True
     layer: vehicle_depots
@@ -565,11 +555,11 @@ vehicle_depots_geoms:
 
 clusterable_veh_locs:
   type: pandas.FeatherDataset
-  filepath: ${_data_dir}/04_feature/clusterable_veh_locs.feather
+  filepath: ${runtime_params:data_dir, 'data'}/04_feature/clusterable_veh_locs.feather
 
 canonical_veh_locs:
   type: pandas.CSVDataset
-  filepath: ${_data_dir}/03_primary/canonical_veh_locs.csv
+  filepath: ${runtime_params:data_dir, 'data'}/03_primary/canonical_veh_locs.csv
 
 # =============================================================================
 # REPORTING DATASETS (08_reporting/) — figures and geospatial outputs
@@ -577,56 +567,56 @@ canonical_veh_locs:
 
 example_vehicle_trajectory:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/08_reporting/example_vehicle_trajectory.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/example_vehicle_trajectory.gpkg
   save_args:
     index: True
     layer: trips
 
 example_tazs:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/08_reporting/example_tazs.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/example_tazs.gpkg
   save_args:
     index: True
     layer: tazs
 
 observed_vehicles_by_state:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/08_reporting/observed_vehicles_by_state.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/observed_vehicles_by_state.gpkg
   save_args:
     index: True
     layer: observed_vehicles_by_state
 
 vehicle_peak_load_by_substation:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/08_reporting/vehicle_peak_load_by_substation.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/vehicle_peak_load_by_substation.gpkg
   save_args:
     index: True
     layer: vehicle_peak_load_by_substation
 
 min_adoption_by_substation:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/08_reporting/min_adoption_by_substation.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/min_adoption_by_substation.gpkg
   save_args:
     index: True
     layer: min_adoption_by_substation
 
 min_adoption_by_substation_points:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/08_reporting/min_adoption_by_substation.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/min_adoption_by_substation.gpkg
   save_args:
     index: True
     layer: min_adoption_by_substation_points
 
 vehicle_peak_load_by_substation_and_scenario_partition:
   type: partitions.PartitionedDataset
-  path: ${_data_dir}/08_reporting/substation_scenario_peaks/
+  path: ${runtime_params:data_dir, 'data'}/08_reporting/substation_scenario_peaks/
   dataset:
     type: pandas.FeatherDataset
   filename_suffix: ".feather"
 
 vehicle_peak_load_by_substation_partition:
   type: partitions.PartitionedDataset
-  path: ${_data_dir}/08_reporting/vehicle_peak_load/substation/
+  path: ${runtime_params:data_dir, 'data'}/08_reporting/vehicle_peak_load/substation/
   dataset:
     type: laurel.datasets.geopackage.GeoPackageDataset
     save_args:
@@ -636,7 +626,7 @@ vehicle_peak_load_by_substation_partition:
 
 vehicle_peak_load_by_substation_points_partition:
   type: partitions.PartitionedDataset
-  path: ${_data_dir}/08_reporting/vehicle_peak_load/substation/
+  path: ${runtime_params:data_dir, 'data'}/08_reporting/vehicle_peak_load/substation/
   dataset:
     type: laurel.datasets.geopackage.GeoPackageDataset
     save_args:
@@ -646,7 +636,7 @@ vehicle_peak_load_by_substation_points_partition:
 
 substation_rating_overload_partition:
   type: partitions.PartitionedDataset
-  path: ${_data_dir}/08_reporting/substation_rating_overload/
+  path: ${runtime_params:data_dir, 'data'}/08_reporting/substation_rating_overload/
   dataset:
     type: laurel.datasets.geopackage.GeoPackageDataset
     save_args:
@@ -656,166 +646,166 @@ substation_rating_overload_partition:
 
 capacity_consumed_percent_by_substation:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/08_reporting/capacity_consumed_percent_by_substation.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/capacity_consumed_percent_by_substation.gpkg
   save_args:
     index: True
     layer: capacity_consumed_percent_by_substation
 
 peak_load_addition_by_substation:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/08_reporting/peak_load_addition_by_substation.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/peak_load_addition_by_substation.gpkg
   save_args:
     index: True
     layer: peak_load_addition_by_substation
 
 vehicle_peak_load_by_substation_diff:
   type: laurel.datasets.geopackage.GeoPackageDataset
-  filepath: ${_data_dir}/08_reporting/vehicle_peak_load_by_substation_diff.gpkg
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/vehicle_peak_load_by_substation_diff.gpkg
   save_args:
     index: True
     layer: vehicle_peak_load_by_substation_diff
 
 substation_overcapacity_by_scenario:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/substation_overcapacity_by_scenario.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/substation_overcapacity_by_scenario.pdf
   save_args:
     bbox_inches: tight
 
 profiles_by_location_and_segment_no_map:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/profiles_by_location_and_segment_no_map.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/profiles_by_location_and_segment_no_map.pdf
   save_args:
     bbox_inches: tight
 
 profile_examples_with_uncertainty:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/profile_examples_with_uncertainty.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/profile_examples_with_uncertainty.pdf
   save_args:
     bbox_inches: tight
 
 profile_examples_with_capacity:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/profile_examples_with_capacity.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/profile_examples_with_capacity.pdf
   save_args:
     bbox_inches: tight
 
 profiles_by_sensitivity:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/profiles_by_sensitivity.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/profiles_by_sensitivity.pdf
   save_args:
     bbox_inches: tight
 
 feasibility_by_range_and_segment:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/feasibility_by_range_and_segment.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/feasibility_by_range_and_segment.pdf
   save_args:
     bbox_inches: tight
 
 substation_strategic_uncertainty:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/substation_strategic_uncertainty.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/substation_strategic_uncertainty.pdf
   save_args:
     bbox_inches: tight
 
 sensitivity_single_substation:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/sensitivity_single_substation.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/sensitivity_single_substation.pdf
   save_args:
     bbox_inches: tight
 
 sensitivity_sum_of_capacity_consumed:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/sensitivity_sum_of_capacity_consumed.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/sensitivity_sum_of_capacity_consumed.pdf
   save_args:
     bbox_inches: tight
 
 primary_operating_distance_distribution:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/primary_operating_distance_distribution.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/primary_operating_distance_distribution.pdf
   save_args:
     bbox_inches: tight
 
 adoption_observed_figure:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/adoption_observed.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/adoption_observed.pdf
   save_args:
     bbox_inches: tight
 
 adoption_copula_figure:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/adoption_copula.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/adoption_copula.pdf
   save_args:
     bbox_inches: tight
 
 peak_load_substation_distributions_across_scenarios:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/peak_load_substation_distributions_across_scenarios.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/peak_load_substation_distributions_across_scenarios.pdf
   save_args:
     bbox_inches: tight
 
 energy_utilization_substation_distributions_across_scenarios:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/energy_utilization_substation_distributions_across_scenarios.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/energy_utilization_substation_distributions_across_scenarios.pdf
   save_args:
     bbox_inches: tight
 
 example_substation_stacked_profiles:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/example_substation_stacked_profiles.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/example_substation_stacked_profiles.pdf
   save_args:
     bbox_inches: tight
 
 example_substation_charger_profiles:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/example_substation_charger_profiles.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/example_substation_charger_profiles.pdf
   save_args:
     bbox_inches: tight
 
 factor_prioritization:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/factor_prioritization.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/factor_prioritization.pdf
   save_args:
     bbox_inches: tight
 
 factor_prioritization_truck_stops:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/factor_prioritization_truck_stops.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/factor_prioritization_truck_stops.pdf
   save_args:
     bbox_inches: tight
 
 single_factor_minimum:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/single_factor_minimum.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/single_factor_minimum.pdf
   save_args:
     bbox_inches: tight
 
 single_factor_minimum_truck_stops:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/single_factor_minimum_truck_stops.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/single_factor_minimum_truck_stops.pdf
   save_args:
     bbox_inches: tight
 
 robust_upgrade_combos:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/robust_upgrade_combos.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/robust_upgrade_combos.pdf
   save_args:
     bbox_inches: tight
 
 validation_comparable_5pm:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/validation_comparable_5pm.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/validation_comparable_5pm.pdf
   save_args:
     bbox_inches: tight
 
 trip_distance_distribution:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/trip_distance_distribution.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/trip_distance_distribution.pdf
   save_args:
     bbox_inches: tight
 
 substation_area_distribution:
   type: matplotlib.MatplotlibDataset
-  filepath: ${_data_dir}/08_reporting/substation_area_distribution.pdf
+  filepath: ${runtime_params:data_dir, 'data'}/08_reporting/substation_area_distribution.pdf
   save_args:
     bbox_inches: tight
 
