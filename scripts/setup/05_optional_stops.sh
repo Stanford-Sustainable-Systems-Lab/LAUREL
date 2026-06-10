@@ -8,4 +8,4 @@
 #SBATCH --job-name=optional_stops
 #SBATCH --output=logs/slurm/%x_%j.log
 
-uv run kedro run --pipeline=compute_routes --tags=insert_optional_stops --params=partition_data_dir=$SCRATCH/laurel
+uv run kedro run --pipeline=compute_routes --tags=insert_optional_stops --params=data_dir=$SCRATCH/laurel

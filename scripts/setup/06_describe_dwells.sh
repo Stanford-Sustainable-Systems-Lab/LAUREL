@@ -8,4 +8,4 @@
 #SBATCH --job-name=describe_dwells
 #SBATCH --output=logs/slurm/%x_%j.log
 
-uv run kedro run --pipeline=describe_dwells --tags=create_dwells --params=partition_data_dir=$SCRATCH/laurel
+uv run kedro run --pipeline=describe_dwells --tags=create_dwells --params=data_dir=$SCRATCH/laurel
