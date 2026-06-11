@@ -20,6 +20,7 @@ The specific use of the LAUREL model demonstrated here estimates e-HDT charging 
 - [Scenarios](#scenarios)
 - [Configuration](#configuration)
 - [Output Data](#output-data)
+- [Publication Notebooks](#publication-notebooks)
 - [HPC Execution (Sherlock)](#hpc-execution-sherlock)
 - [Development](#development)
 - [Citation](#citation)
@@ -314,7 +315,26 @@ The final reporting outputs (maps, policy analysis, validation figures) are in `
 
 ### Cross-SoW aggregation
 
-To compute the 80th/20th percentile ("duty-to-serve-robust" / "used-and-useful-robust") peak loads across all SoWs, aggregate the `report_by_region_summaries` datasets across task IDs. Example notebooks for this analysis are in `notebooks/`.
+To compute the 80th/20th percentile ("duty-to-serve-robust" / "used-and-useful-robust") peak loads across all SoWs, aggregate the `report_by_region_summaries` datasets across task IDs. The publication notebooks that reproduce all manuscript figures are in [`notebooks/publications/applied_energy_2026/`](notebooks/publications/applied_energy_2026/); see the [Publication Notebooks](#publication-notebooks) section below.
+
+---
+
+## Publication Notebooks
+
+The notebooks in [`notebooks/publications/applied_energy_2026/`](notebooks/publications/applied_energy_2026/) reproduce all figures, the computed table, and the in-text summary numbers for the *Applied Energy* 2026 manuscript. They are organized by manuscript section.
+
+For the full figure-to-notebook index (which notebook produces each figure and whether it exports a GeoPackage for QGIS or generates an inline plot), see [`notebooks/publications/applied_energy_2026/README.md`](notebooks/publications/applied_energy_2026/README.md).
+
+| Notebook | Section | Produces |
+|---|---|---|
+| [`2.1_select_states_of_the_world.ipynb`](notebooks/publications/applied_energy_2026/2.1_select_states_of_the_world.ipynb) | §2.1 | Figure A.11 — adoption correlation scatter matrix |
+| [`2.2_augment_dwells_data.ipynb`](notebooks/publications/applied_energy_2026/2.2_augment_dwells_data.ipynb) | §2.2 | Figures 2b, 2c, A.12 — stop/route map (GeoPackage), operating-distance distribution, trip-distance ECDF |
+| [`2.3_augment_taz_data.ipynb`](notebooks/publications/applied_energy_2026/2.3_augment_taz_data.ipynb) | §2.3 | Figures 3a, A.10 — TAZ map (GeoPackage), territory-area distribution |
+| [`3.1.1_upgrades_across_us.ipynb`](notebooks/publications/applied_energy_2026/3.1.1_upgrades_across_us.ipynb) | §3.1 | Figures 4b, 5, 7 — robust peak-load ECDF, continental choropleth (GeoPackage), SF Bay Area inset (GeoPackage) |
+| [`3.1.2_upgrades_known_conditions.ipynb`](notebooks/publications/applied_energy_2026/3.1.2_upgrades_known_conditions.ipynb) | §3.1 | Figures 6a, 6b — PG&E overload map (GeoPackage), Laytonville load-profile envelopes |
+| [`3.2_upgrade_indicators_geographic.ipynb`](notebooks/publications/applied_energy_2026/3.2_upgrade_indicators_geographic.ipynb) | §3.2 | Table — PRIM employment thresholds; in-text substation values |
+| [`3.3_upgrade_indicators_technoeconomic.ipynb`](notebooks/publications/applied_energy_2026/3.3_upgrade_indicators_technoeconomic.ipynb) | §3.3 | Figures 8a–8d, 9 — factor importance, adoption-trigger ECDFs, per-substation map (GeoPackage); in-text PRIM examples |
+| [`4_validation.ipynb`](notebooks/publications/applied_energy_2026/4_validation.ipynb) | §4 | Figure A.13 — validation vs Broga et al. (2024) |
 
 ---
 
