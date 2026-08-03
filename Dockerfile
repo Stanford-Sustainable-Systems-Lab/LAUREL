@@ -19,6 +19,16 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
 
 WORKDIR /app
 
+# System libraries required by the geospatial stack. rasterio/pyogrio/exactextract
+# bundle their own GDAL, but that bundled GDAL still links against the host's
+# libexpat (XML parser), which is absent from the slim base image and causes an
+# ImportError on first rasterio import. libgomp1 is needed by numba's OpenMP-based
+# parallelism at runtime.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libexpat1 \
+        libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 # =============================================================================
 # Layer 1 -- third-party dependencies ONLY. Slow (~1.2 GB, minutes) and cached.
 #
@@ -185,6 +195,16 @@ ENV NUMBA_CACHE_DIR=/cache/numba
 #                      ~/.pytensor, a well-known source of lock contention when
 #                      several processes share it, so it must be node-local.
 ENV PYTENSOR_FLAGS=cxx=,base_compiledir=/cache/pytensor
+
+# --- Dask dashboard -----------------------------------------------------------
+# By default Dask binds its dashboard to 127.0.0.1 (loopback), which is
+# unreachable from outside the container even with -p. :8787 (no host prefix)
+# makes it listen on all interfaces so -p 8787:8787 / --bind works.
+ENV DASK_DISTRIBUTED__SCHEDULER__DASHBOARD_ADDRESS=:8787
+
+# Publish this port with -p 8787:8787 at runtime, then open
+# http://localhost:8787/status in your browser to view the Dask dashboard.
+EXPOSE 8787
 
 # =============================================================================
 ARG GIT_SHA=unknown
