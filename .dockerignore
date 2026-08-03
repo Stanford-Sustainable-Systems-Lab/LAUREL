@@ -1,26 +1,21 @@
-##########################
-# Kedro PROJECT
+# Exclude everything; re-include only what the image needs.
+#
+# An ALLOWLIST, not a denylist. A denylist would have to remember the ~1.2 GB
+# host .venv/, .git/, data/, docs/build/, every cache dir, and -- critically --
+# the top-level `manuscript` entry, which is a dangling symlink pointing outside
+# the build context and would break the build outright. An allowlist gets all of
+# that right by construction, and stays correct as the repo grows.
+*
 
-# ignore Dockerfile and .dockerignore
-Dockerfile
-.dockerignore
+!pyproject.toml
+!uv.lock
+!README.md
+!src/
+!tests/
+!conf/base/
+!conf/logging.yml
 
-# ignore potentially sensitive credentials files
-conf/**/*credentials*
-
-# ignore all local configuration
-conf/local
-!conf/local/.gitkeep
-
-# ignore everything in the following folders
-data
-logs
-notebooks
-references
-results
-
-# except the following
-!logs/.gitkeep
-!notebooks/.gitkeep
-!references/.gitkeep
-!results/.gitkeep
+# Re-exclude, inside the allowed subtrees:
+**/__pycache__
+**/.ipynb_checkpoints
+src/*.egg-info

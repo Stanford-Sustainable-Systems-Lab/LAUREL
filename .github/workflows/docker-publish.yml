@@ -67,8 +67,20 @@ jobs:
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@96383f45573cb7f253c731d3b3ab81c87ef81934 # v5.0.0
+        # The default tag set is branch/PR/semver only. Two additions matter here:
+        # `type=sha`, because docs/source/containers.md cites immutable per-commit tags,
+        # and `dev` on the default branch, because that is the tag
+        # scripts/setup/run-in-container.sh derives by default -- without it, the
+        # documented `apptainer build docker://$(... --print-image)` one-liner 404s.
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+            type=raw,value=dev,enable={{is_default_branch}}
 
       # Build and push Docker image with Buildx (don't push on PR)
       # https://github.com/docker/build-push-action
@@ -80,6 +92,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
