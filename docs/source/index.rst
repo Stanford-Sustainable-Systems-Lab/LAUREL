@@ -10,6 +10,7 @@ Welcome to project laurel's API docs!
 
    user_guide
    modules
+   containers
 
 
 Indices and tables
