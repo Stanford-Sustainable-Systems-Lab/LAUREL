@@ -36,8 +36,9 @@ Copy `Dockerfile`, `.dockerignore`, and `scripts/setup/run-in-container.sh` unch
    built with. (There is no single combined `uv:<version>-python<x.y>-<os>` tag per uv
    release — only for uv's `latest` — hence the two separate images.)
 2. Review the **PROJECT-SPECIFIC RUN-TIME ENV** block near the bottom of the `Dockerfile`
-   (matplotlib, numba, PyTensor); delete whichever groups the new project does not use. The
-   block above it is generic and should not need editing.
+   (matplotlib, numba, Dask); delete whichever groups the new project does not use, and add
+   a group for any library the new project has that writes to a fixed path under `$HOME`.
+   The block above it is generic and should not need editing.
 3. Extend `.dockerignore`'s allowlist if the project keeps source outside `src/` and
    `conf/base/`.
 4. Confirm `scripts/setup/**` is not gitignored — the wrapper must be committed even in a
@@ -63,7 +64,7 @@ docker build -t "$(./scripts/setup/run-in-container.sh --print-image)" \
   --build-arg GIT_SHA="$(git rev-parse HEAD)" .
 
 # run a pipeline against LIVE source -- no rebuild, ever
-./scripts/setup/run-in-container.sh kedro run --pipelines=evaluate --env=scenarios/test/task_0
+./scripts/setup/run-in-container.sh kedro run --pipeline=evaluate_impacts --env=scenarios/test/task_0
 
 # interactive shell
 ./scripts/setup/run-in-container.sh bash
@@ -119,10 +120,12 @@ ln -s "$GROUP_HOME/$PKG/$PKG.sif" "./$PKG.sif"
 # one interactive pipeline
 export KEDRO_CONTAINER_CONF_DIR=$GROUP_HOME/$PKG/conf
 export KEDRO_CONTAINER_DATA_DIR=$SCRATCH/$PKG/data
-./scripts/setup/run-in-container.sh kedro run --pipelines=evaluate --env=scenarios/test/task_0
+./scripts/setup/run-in-container.sh kedro run --pipeline=evaluate_impacts --env=scenarios/test/task_0
 
-# a SLURM array, using a generated scenario script
-KEDRO_CONTAINER_MOUNT_SRC=0 sbatch scripts/scenarios/hand_policy.sh
+# a SLURM array, using a scenario script that build_scenarios generated. The name is
+# the builder's `display_name` param, not the env directory name: conf/scenario_builders/
+# boot_scale sets display_name: boot_scale_small, so it emits boot_scale_small.sh.
+KEDRO_CONTAINER_MOUNT_SRC=0 sbatch scripts/scenarios/boot_scale_small.sh
 ```
 
 `KEDRO_CONTAINER_MOUNT_SRC=0` for `sbatch` is the recommended discipline: it runs the code
@@ -168,10 +171,11 @@ All prefixed `KEDRO_CONTAINER_`; every one has a sensible derived default.
 
 ## Caveats worth reading before debugging
 
-- **`PYTENSOR_FLAGS=cxx=`** disables PyTensor's C++ backend entirely (no compiler is
-  installed in the image). This is safe *because* sampling goes through a non-C backend
-  (e.g. `nutpie` with the numba backend). A plain `pm.sample()` would fall back to
-  PyTensor's slow Python linker instead of failing outright.
+- **No C++ compiler is installed in the image** (`build-essential` is not among the apt
+  packages). Nothing this project depends on compiles at run time — the geospatial stack
+  ships wheels with a bundled GDAL, and numba emits machine code through LLVM rather than a
+  C toolchain — but a dependency added later that falls back to run-time compilation would
+  need one.
 - **A `KEDRO_CONTAINER_MOUNT_SRC=1` run is not reproducible from the image tag** — see
   above. Use `MOUNT_SRC=0` for anything you plan to cite.
 - **`pytest` needs `--no-cov -p no:cacheprovider`** unless `/app` itself is bound writable,
@@ -229,9 +233,12 @@ docker build -t "$IMAGE" --build-arg GIT_SHA="$(git rev-parse HEAD)" .
 touch src/*/some_module.py && time docker build -t "$IMAGE" .
 #    -> expect seconds, and "CACHED" on the `uv sync --no-install-project` step
 
-# 2. the image alone is sane, with no mounts at all
+# 2. the image alone is sane, with no mounts at all. The imports worth naming are the
+#    ones with compiled extensions or a bundled GDAL -- a pure-Python dependency does
+#    not fail differently inside a container than outside one.
 docker run --rm "$IMAGE" python -c \
-  "import pymc, pytensor, numba, openturns, nutpie, arviz, pandas; print('stack ok')"
+  "import geopandas, rasterio, pyogrio, exactextract, osmium, dask_geopandas, \
+          numba, openturns, skfda, h3, pandas; print('stack ok')"
 docker run --rm "$IMAGE" kedro registry list          # uses the baked conf/base
 
 # 3. the Apptainer uid model: works as a non-root, passwd-less user?
@@ -246,8 +253,11 @@ docker run --rm -u 65534:65534 "$IMAGE" python -c "import sys; print('foreign ui
 ./scripts/setup/run-in-container.sh python -c "import $PKG; print($PKG.__file__)"
 #    -> must print /app/src/<pkg>/__init__.py
 
-# 6. a real pipeline end to end, writing to the bound data dir
-./scripts/setup/run-in-container.sh kedro run --pipelines=build_scenarios --env=scenario_builders/hand_policy
+# 6. a real pipeline end to end, writing to the bound conf/ and scripts/ dirs.
+#    build_scenarios is the cheapest end-to-end check: its inputs are parameters and
+#    conf/base/catalog.yml, so it needs no staged data and finishes in well under a
+#    second. The env must name a directory that exists under conf/scenario_builders/.
+./scripts/setup/run-in-container.sh kedro run --pipeline=build_scenarios --env=scenario_builders/boot_scale
 ./scripts/setup/run-in-container.sh pytest -m "not slow" --no-cov -p no:cacheprovider
 
 # 7. on the cluster, after apptainer build

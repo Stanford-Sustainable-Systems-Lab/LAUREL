@@ -193,5 +193,13 @@ containers/*
 !containers/.gitkeep
 !containers/README.md
 
+# Built Apptainer images, and the project-root symlink to one. A SIF is hundreds of
+# MB and lives on $GROUP_HOME (a 15 GB $HOME cannot hold one), so only the symlink
+# ever appears here -- but an untracked symlink still makes `git status --porcelain`
+# non-empty, which is what run-in-container.sh reads to decide whether to stamp a run
+# "dirty". Left untracked, every containerized run on the cluster reports a dirty tree
+# and the provenance banner stops meaning anything.
+*.sif
+
 # Claude code files
 CLAUDE.local.md

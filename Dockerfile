@@ -71,7 +71,7 @@ RUN mkdir -p /app/conf/local /app/data /app/logs /app/scripts /app/notebooks /ap
 # exists; 777 because the image is built as root but Apptainer runs as the
 # invoking user, whose uid is unknown at build time.
 RUN mkdir -p /cache/home /cache/xdg /cache/mpl /cache/numba /cache/pyc \
-             /cache/pytensor /cache/uv && chmod -R 777 /cache
+             /cache/uv && chmod -R 777 /cache
 
 # =============================================================================
 # GENERIC RUN-TIME ENV -- applies to any containerized Kedro project.
@@ -182,19 +182,6 @@ ENV MPLBACKEND=Agg \
 #   but must already be writable for that optimization to become possible, and
 #   numba probes the path regardless.
 ENV NUMBA_CACHE_DIR=/cache/numba
-
-# --- PyMC / PyTensor ---------------------------------------------------------
-# Two settings in one variable, per PyTensor's own format:
-#   cxx=            -> empty value tells PyTensor there is NO C++ compiler, so it
-#                      never attempts compilation and never emits a warning
-#                      storm. This is the agreed no-g++ decision. It is safe ONLY
-#                      if sampling goes through a non-C backend (e.g. nutpie with
-#                      the numba backend). A plain pm.sample() would fall back to
-#                      PyTensor's slow Python linker.
-#   base_compiledir -> where PyTensor caches compiled graph modules. Defaults to
-#                      ~/.pytensor, a well-known source of lock contention when
-#                      several processes share it, so it must be node-local.
-ENV PYTENSOR_FLAGS=cxx=,base_compiledir=/cache/pytensor
 
 # --- Dask dashboard -----------------------------------------------------------
 # By default Dask binds its dashboard to 127.0.0.1 (loopback), which is

@@ -7,7 +7,7 @@
 # docs/source/containers.md for the full knob table and adoption checklist.
 #
 # Usage:
-#   ./scripts/setup/run-in-container.sh kedro run --pipelines=evaluate
+#   ./scripts/setup/run-in-container.sh kedro run --pipeline=evaluate_impacts
 #   ./scripts/setup/run-in-container.sh bash
 #   ./scripts/setup/run-in-container.sh --print-image     # for use in build/push commands
 #   ./scripts/setup/run-in-container.sh --print-package
@@ -117,7 +117,7 @@ LOGS_DIR="${KEDRO_CONTAINER_LOGS_DIR:-$PROJECT_ROOT/logs}"
 SCRIPTS_DIR="${KEDRO_CONTAINER_SCRIPTS_DIR:-$PROJECT_ROOT/scripts}"
 MOUNT_SRC="${KEDRO_CONTAINER_MOUNT_SRC:-1}"
 THREADS="${KEDRO_CONTAINER_THREADS:-1}"
-# $SCRATCH, not $L_SCRATCH: the caches redirected here (numba, PyTensor, matplotlib,
+# $SCRATCH, not $L_SCRATCH: the caches redirected here (numba, matplotlib, uv,
 # $HOME) are only worth redirecting if they SURVIVE. $L_SCRATCH is node-local and
 # destroyed when the job ends, so every array task would start cold -- and on a login
 # node it is unset entirely, silently falling back to /tmp. It is also a hard failure
@@ -143,7 +143,7 @@ mkdir -p \
   "$LOGS_DIR/slurm" \
   "$SCRIPTS_DIR/scenarios" \
   "$CACHE_ROOT/home" "$CACHE_ROOT/xdg" "$CACHE_ROOT/mpl" \
-  "$CACHE_ROOT/numba" "$CACHE_ROOT/pyc" "$CACHE_ROOT/pytensor" "$CACHE_ROOT/uv" \
+  "$CACHE_ROOT/numba" "$CACHE_ROOT/pyc" "$CACHE_ROOT/uv" \
   "$CACHE_ROOT/viz"
 
 # -----------------------------------------------------------------------------
