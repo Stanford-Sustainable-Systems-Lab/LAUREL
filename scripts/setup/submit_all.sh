@@ -7,6 +7,8 @@
 #   ./scripts/setup/submit_all.sh                        # submit the full 01->08 chain
 #   ./scripts/setup/submit_all.sh --from=04_compute_routes.sh  # resume from a later step
 #   ./scripts/setup/submit_all.sh --dry-run              # print the sbatch commands only
+#   ./scripts/setup/submit_all.sh --mail-user=you@stanford.edu  # email on each step's end/failure
+#   ./scripts/setup/submit_all.sh --mail-user=you@stanford.edu --mail-type=ALL  # add BEGIN too
 
 # Must run as a subprocess: this script uses `set -e`, `exit`, and positional
 # args, none of which behave correctly when sourced into an interactive shell.
@@ -42,17 +44,34 @@ STEPS=(
 
 from=""
 dry_run=0
+mail_user=""
+mail_type="END,FAIL"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --from=*) from="${1#--from=}" ;;
     --dry-run) dry_run=1 ;;
+    --mail-user=*) mail_user="${1#--mail-user=}" ;;
+    --mail-type=*) mail_type="${1#--mail-type=}" ;;
     *)
-      echo "Usage: $0 [--from=<step_script_name>] [--dry-run]" >&2
+      echo "Usage: $0 [--from=<step_script_name>] [--dry-run]" \
+           "[--mail-user=<address>] [--mail-type=<BEGIN,END,FAIL,ALL,...>]" >&2
       exit 1
       ;;
   esac
   shift
 done
+
+# Catch a mistyped address now rather than after ten jobs have been queued with
+# notifications silently going nowhere.
+if [[ -n "$mail_user" && "$mail_user" != *@* ]]; then
+  echo "--mail-user='$mail_user' does not look like an email address." >&2
+  exit 1
+fi
+if [[ -z "$mail_user" && "$mail_type" != "END,FAIL" ]]; then
+  echo "--mail-type has no effect without --mail-user." >&2
+  exit 1
+fi
+
 
 start_idx=0
 if [[ -n "$from" ]]; then
@@ -72,11 +91,16 @@ fi
 
 prev_jid=""
 for step in "${STEPS[@]:$start_idx}"; do
-  if [[ -z "$prev_jid" ]]; then
-    args=(--parsable "$STEPS_DIR/$step")
-  else
-    args=(--parsable --dependency=afterok:"$prev_jid" "$STEPS_DIR/$step")
+  args=(--parsable)
+  if [[ -n "$prev_jid" ]]; then
+    args+=(--dependency=afterok:"$prev_jid")
   fi
+  # sbatch command-line flags win over the step scripts' #SBATCH directives, so
+  # notifications stay opt-in per submission instead of being baked into a file.
+  if [[ -n "$mail_user" ]]; then
+    args+=(--mail-user="$mail_user" --mail-type="$mail_type")
+  fi
+  args+=("$STEPS_DIR/$step")
 
   if (( dry_run )); then
     echo "sbatch ${args[*]}"

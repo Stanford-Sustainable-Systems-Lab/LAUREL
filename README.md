@@ -243,7 +243,17 @@ starting over:
 
 # Print the sbatch commands without submitting anything
 ./scripts/setup/submit_all.sh --dry-run
+
+# Get an email as each step ends or fails
+./scripts/setup/submit_all.sh --mail-user=you@stanford.edu
+
+# Add a notification when each step starts, too
+./scripts/setup/submit_all.sh --mail-user=you@stanford.edu --mail-type=ALL
 ```
+
+`--mail-type` accepts any value SLURM does (`BEGIN`, `END`, `FAIL`, `ALL`,
+`TIME_LIMIT`, ...) and defaults to `END,FAIL`. The flags apply to every job in
+the chain, so a full run sends one email per step.
 
 The comments at the top of each step script can be used directly by SLURM to set
 its resource allocations (see [HPC Execution](#hpc-execution-sherlock)). Individual
