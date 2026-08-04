@@ -91,7 +91,7 @@ from laurel.utils.time import SECS_PER_HOUR
 logger = logging.getLogger(__name__)
 
 
-def import_graph(server_params: dict) -> None:
+def import_graph(osm_path: str, server_params: dict) -> None:
     """Import an OSM road-network file into a GraphHopper Docker container.
 
     Starts a ``GraphhopperContainerRouter`` in import mode, which instructs
@@ -100,13 +100,16 @@ def import_graph(server_params: dict) -> None:
     pipeline runs reuse the pre-built graph.
 
     Args:
+        osm_path: Path to the OSM/PBF input file, supplied by the
+            ``osm_north_america`` catalog entry. It arrives fully resolved, which
+            matters because the container gets it verbatim and cannot expand
+            environment variables such as ``$SCRATCH``.
         server_params: GraphHopper server configuration dict with keys:
 
             - ``image`` (str): Docker image name/tag.
             - ``graph_dir`` (str): host path to the directory where the
               routing graph will be stored.
             - ``config_path`` (str): path to the GraphHopper config file.
-            - ``map_path`` (str): path to the OSM/PBF input file.
             - ``resources`` (dict): sub-key ``import`` with ``mem_max_gb``,
               ``mem_start_gb``, and ``startup_delay_secs``.
     """
@@ -119,7 +122,7 @@ def import_graph(server_params: dict) -> None:
         mem_start_gb=resource["mem_start_gb"],
         startup_delay=resource["startup_delay_secs"],
     )
-    server.import_graph(input_file=server_params["map_path"])
+    server.import_graph(input_file=osm_path)
     logger.info("Import completed")
 
 

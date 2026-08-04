@@ -50,7 +50,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             Node(
                 func=import_graph,
-                inputs="params:graphhopper",
+                inputs=["osm_north_america", "params:graphhopper"],
                 outputs=None,
                 name="import_graph",
             ),
