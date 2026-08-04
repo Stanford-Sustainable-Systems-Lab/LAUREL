@@ -202,22 +202,22 @@ prepare_stop_locations_public:
     - naics_8
     - geometry
 
-get_osm_estabs:
-  # Resolved against the same --params=data_dir as the catalog's filepaths, so a
-  # run pointed at $SCRATCH finds the PBF (and writes the multi-GB
-  # BackReferenceWriter temp file) there rather than under the project root.
-  osm_path: ${runtime_params:data_dir, 'data'}/01_raw/OpenStreetMap/us-251029.osm.pbf
-  temp_path: ${runtime_params:data_dir, 'data'}/01_raw/OpenStreetMap/temp_reader.osm.pbf
+# temp_path holds the filtered intermediate PBF that osmium's BackReferenceWriter writes
+# and then reads back. It is small (only matched objects survive the filter), lives under
+# 02_intermediate because it is derived rather than raw, and is distinct per node so the
+# two nodes cannot overwrite each other's intermediate if they ever run concurrently.
 
 get_osm_estabs_truck_stops:
   naics_code: 44719007  # Assigned to OSM-derived truck stop locations; must match special_naics in group_hexes
   tag_regex: "\\b(?:love'?s(?:\\s+travel\\s+stops?)?|pilot(?:\\s+travel\\s+center)?|flying\\s+j|pilot\\s+flying\\s+j|ta(?:\\s+travel\\s+center)?|road\\s+ranger|sapp\\s+bros?\\.?)\\b"
   naics_col: ${format_extra_estabs.naics_col}
+  temp_path: ${runtime_params:data_dir, 'data'}/02_intermediate/OpenStreetMap/truck_stops_backref.osm.pbf
 
 get_osm_estabs_warehouses:
   naics_code: 49311000  # Warehouse/distribution NAICS; supplements Data Axle with OSM-derived warehouses
   tag_regex: "\\b(?:distribution|fulfillment|fulfilment|logistics|freight|returns?|return|order|e-?commerce)\\s+(?:center|centre|facility|hub|park|warehouse)\\b"
   naics_col: ${format_extra_estabs.naics_col}
+  temp_path: ${runtime_params:data_dir, 'data'}/02_intermediate/OpenStreetMap/warehouses_backref.osm.pbf
 
 format_extra_estabs:
   naics_col: naics_8

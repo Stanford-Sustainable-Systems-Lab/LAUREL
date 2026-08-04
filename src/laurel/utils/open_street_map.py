@@ -117,11 +117,15 @@ def get_gdf_from_filtered_osm(
         tags: List of OSM tag keys to include as columns in the output
             GeoDataFrame (forwarded to ``GeoInterfaceFilter``).
         temp_path: Writable path for the intermediate filtered PBF.  Overwritten
-            if it already exists.
+            if it already exists; its parent directory is created if needed.
 
     Returns:
         GeoDataFrame of matching features in ``EPSG:4326``.
     """
+    # osmium will not create the intermediate's directory itself, and it is a derived
+    # location that may not exist on a fresh data_dir.
+    Path(temp_path).parent.mkdir(parents=True, exist_ok=True)
+
     # Get all objects of interest based on tags, and write them and their back-references to disk
     with osmium.BackReferenceWriter(
         temp_path, ref_src=osm_path, overwrite=True

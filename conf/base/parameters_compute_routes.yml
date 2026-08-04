@@ -14,7 +14,7 @@
 #     ``image`` at a pre-built Apptainer sandbox (.sif directory). See the HPC
 #     Execution section of README.md for how to build the sandbox.
 #   - On local machines with Docker: switch ``container_class`` to
-#     ``laurel.models.routing.server.DockerContainerRunner`` and set ``image``
+#     ``laurel.routing.containers.DockerContainerRunner`` and set ``image``
 #     to a Docker image name (e.g. ``israelhikingmap/graphhopper:10.0``).
 #
 # Documentation: https://docs.kedro.org/en/stable/configuration/parameters.html
@@ -52,12 +52,14 @@ dask_compute_routes:
 
 graphhopper:
   # Switch container_class to use Docker on local machines (no Apptainer):
-  #   laurel.models.routing.server.DockerContainerRunner
+  #   laurel.routing.containers.DockerContainerRunner
   # Keep ApptainerContainerRunner for HPC/Linux environments.
-  image: containers/graphhopper_10.2.sif               # Path to Apptainer sandbox, or Docker image name for DockerContainerRunner
-  container_class: laurel.models.routing.server.ApptainerContainerRunner
-  map_path: $SCRATCH/north-america-latest.osm.pbf      # Path to OSM .osm.pbf file; $SCRATCH is an HPC env var — replace with an absolute path on local systems
-  graph_dir: $SCRATCH/graphhopper_cache/north-america/ # Pre-built GraphHopper graph cache; populate via scripts/setup/02b_import_graph.sh
+  image: containers/graphhopper_10.2.sif  # Path to Apptainer sandbox, or Docker image name for DockerContainerRunner
+  container_class: laurel.routing.containers.ApptainerContainerRunner
+  # Pre-built GraphHopper graph cache; populate via scripts/setup/02b_import_graph.sh.
+  # Resolved from data_dir rather than written as $SCRATCH/..., because this string is
+  # handed to the container as-is and nothing expands environment variables in it.
+  graph_dir: ${runtime_params:data_dir, 'data'}/02_intermediate/graphhopper_cache/north-america/
   config_path: ./conf/base/parameters_graphhopper.yml
   resources:
     import:
