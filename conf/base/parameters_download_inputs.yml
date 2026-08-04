@@ -1,0 +1,9 @@
+# Parameters for the download_inputs pipeline.
+#
+# The downloads themselves are configured on the catalog entries the pipeline's nodes
+# write to, in conf/base/catalog.yml: each entry holds both its source URL (save_args.url)
+# and its destination (filepath). Nothing about a download belongs in this file.
+
+# Read by DaskClusterHook (src/laurel/hooks.py) before_pipeline_run; not consumed by pipeline nodes.
+dask_download_inputs:
+  use_dask: False  # Pure network I/O; a Dask cluster would sit idle for the whole run
