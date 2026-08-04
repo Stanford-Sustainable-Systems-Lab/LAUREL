@@ -157,13 +157,13 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             Node(
                 func=get_osm_estabs_truck_stops,
-                inputs=["params:get_osm_estabs", "params:get_osm_estabs_truck_stops"],
+                inputs=["osm_north_america", "params:get_osm_estabs_truck_stops"],
                 outputs="estabs_osm_truck_stops",
                 name="get_osm_estabs_truck_stops",
             ),
             Node(
                 func=get_osm_estabs_warehouses,
-                inputs=["params:get_osm_estabs", "params:get_osm_estabs_warehouses"],
+                inputs=["osm_north_america", "params:get_osm_estabs_warehouses"],
                 outputs="estabs_osm_warehouses",
                 name="get_osm_estabs_warehouses",
             ),

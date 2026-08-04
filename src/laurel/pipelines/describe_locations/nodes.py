@@ -1000,7 +1000,7 @@ def prepare_stop_locations_public(
     return parks_fmt
 
 
-def get_osm_estabs_truck_stops(osm_params: dict, params: dict) -> gpd.GeoDataFrame:
+def get_osm_estabs_truck_stops(osm_path: str, params: dict) -> gpd.GeoDataFrame:
     """Extract truck-stop fuel stations from an OSM PBF file by name pattern.
 
     Filters OSM nodes/ways that have a ``name`` tag, are tagged as
@@ -1008,10 +1008,10 @@ def get_osm_estabs_truck_stops(osm_params: dict, params: dict) -> gpd.GeoDataFra
     ``"(?i)truck stop|travel center"``).
 
     Args:
-        osm_params: OSM server/path configuration dict with keys:
-
-            - ``osm_path`` (str): path to the OSM PBF input file.
-            - ``temp_path`` (str): path for temporary files during OSM parsing.
+        osm_path: Path to the OSM PBF input file, supplied by the
+            ``osm_north_america`` catalog entry. Read directly by ``osmium`` rather
+            than loaded through the catalog, because the file is far too large to
+            hold in memory and osmium streams it.
         params: Pipeline parameters dict with keys:
 
             - ``naics_code`` (int): NAICS code to assign to all extracted
@@ -1019,6 +1019,9 @@ def get_osm_estabs_truck_stops(osm_params: dict, params: dict) -> gpd.GeoDataFra
             - ``tag_regex`` (str): regular-expression pattern matched against
               the OSM ``name`` tag.
             - ``naics_col`` (str): output column name for the NAICS code.
+            - ``temp_path`` (str): path for the filtered intermediate PBF written
+              during OSM parsing. Distinct per node so two OSM nodes cannot
+              overwrite each other's intermediate.
 
     Returns:
         A ``gpd.GeoDataFrame`` of matching OSM establishments with a
@@ -1032,16 +1035,16 @@ def get_osm_estabs_truck_stops(osm_params: dict, params: dict) -> gpd.GeoDataFra
     ]
 
     gdf = get_gdf_from_filtered_osm(
-        osm_path=osm_params["osm_path"],
+        osm_path=osm_path,
         filters=filts,
         tags=["name"],
-        temp_path=osm_params["temp_path"],
+        temp_path=params["temp_path"],
     )
     gdf[params["naics_col"]] = naics_code
     return gdf
 
 
-def get_osm_estabs_warehouses(osm_params: dict, params: dict) -> gpd.GeoDataFrame:
+def get_osm_estabs_warehouses(osm_path: str, params: dict) -> gpd.GeoDataFrame:
     """Extract warehouse and distribution-centre candidates from an OSM PBF file by name pattern.
 
     Filters OSM nodes/ways that have a ``name`` tag and whose name matches
@@ -1050,10 +1053,10 @@ def get_osm_estabs_warehouses(osm_params: dict, params: dict) -> gpd.GeoDataFram
     positives.
 
     Args:
-        osm_params: OSM server/path configuration dict with keys:
-
-            - ``osm_path`` (str): path to the OSM PBF input file.
-            - ``temp_path`` (str): path for temporary files during OSM parsing.
+        osm_path: Path to the OSM PBF input file, supplied by the
+            ``osm_north_america`` catalog entry. Read directly by ``osmium`` rather
+            than loaded through the catalog, because the file is far too large to
+            hold in memory and osmium streams it.
         params: Pipeline parameters dict with keys:
 
             - ``naics_code`` (int): NAICS code to assign to all extracted
@@ -1061,6 +1064,9 @@ def get_osm_estabs_warehouses(osm_params: dict, params: dict) -> gpd.GeoDataFram
             - ``tag_regex`` (str): regular-expression pattern matched against
               the OSM ``name`` tag.
             - ``naics_col`` (str): output column name for the NAICS code.
+            - ``temp_path`` (str): path for the filtered intermediate PBF written
+              during OSM parsing. Distinct per node so two OSM nodes cannot
+              overwrite each other's intermediate.
 
     Returns:
         A ``gpd.GeoDataFrame`` of matching OSM establishments (excluding
@@ -1073,10 +1079,10 @@ def get_osm_estabs_warehouses(osm_params: dict, params: dict) -> gpd.GeoDataFram
     ]
 
     gdf = get_gdf_from_filtered_osm(
-        osm_path=osm_params["osm_path"],
+        osm_path=osm_path,
         filters=filts,
         tags=["name", "amenity"],
-        temp_path=osm_params["temp_path"],
+        temp_path=params["temp_path"],
     )
     gdf[params["naics_col"]] = naics_code
 
