@@ -203,8 +203,11 @@ prepare_stop_locations_public:
     - geometry
 
 get_osm_estabs:
-  osm_path: data/01_raw/OpenStreetMap/us-251029.osm.pbf
-  temp_path: data/01_raw/OpenStreetMap/temp_reader.osm.pbf
+  # Resolved against the same --params=data_dir as the catalog's filepaths, so a
+  # run pointed at $SCRATCH finds the PBF (and writes the multi-GB
+  # BackReferenceWriter temp file) there rather than under the project root.
+  osm_path: ${runtime_params:data_dir, 'data'}/01_raw/OpenStreetMap/us-251029.osm.pbf
+  temp_path: ${runtime_params:data_dir, 'data'}/01_raw/OpenStreetMap/temp_reader.osm.pbf
 
 get_osm_estabs_truck_stops:
   naics_code: 44719007  # Assigned to OSM-derived truck stop locations; must match special_naics in group_hexes
@@ -274,13 +277,14 @@ partition_hex_corresp:
   n_partitions: 500  # Number of Dask partitions; controls parallelism during raster extraction
 
 read_land_use:
-  # Path to the NLCD 2023 Annual Land Cover GeoTIFF, relative to the Kedro project root.
+  # Path to the NLCD 2023 Annual Land Cover GeoTIFF, relative to data_dir
+  # (default "data", overridable with --params=data_dir=...).
   # NOTE: This path is passed as a parameter (not a catalog dataset) because
   # exactextract reads the raster directly from disk via its own I/O layer.
   # There is no standard Kedro dataset type that loads a GeoTIFF into memory
   # in the format exactextract requires.
   # Download: https://www.usgs.gov/centers/eros/science/annual-national-land-cover-database
-  raster_path: data/01_raw/land_use/Annual_NLCD_LndCov_2023_CU_C1V1.tif
+  raster_path: ${runtime_params:data_dir, 'data'}/01_raw/land_use/Annual_NLCD_LndCov_2023_CU_C1V1.tif
   hex_col: ${hexify_polygons.hex_col}  # Shared hex column name (= "hex_id")
 
 pivot_hex_land_use:
