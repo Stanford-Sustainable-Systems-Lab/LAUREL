@@ -18,7 +18,14 @@ if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
 fi
 
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")"
+
+# Submit from the repo root, not from this script's directory. The step scripts
+# use a relative `#SBATCH --output=logs/slurm/%x_%j.log`, which SLURM resolves
+# against the job's working directory (inherited from wherever sbatch ran), so
+# submitting from scripts/setup/ would scatter logs into scripts/setup/logs/.
+STEPS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$STEPS_DIR/../.."
+mkdir -p logs/slurm
 
 STEPS=(
   01_download_osm.sh
@@ -66,9 +73,9 @@ fi
 prev_jid=""
 for step in "${STEPS[@]:$start_idx}"; do
   if [[ -z "$prev_jid" ]]; then
-    args=(--parsable "$step")
+    args=(--parsable "$STEPS_DIR/$step")
   else
-    args=(--parsable --dependency=afterok:"$prev_jid" "$step")
+    args=(--parsable --dependency=afterok:"$prev_jid" "$STEPS_DIR/$step")
   fi
 
   if (( dry_run )); then
