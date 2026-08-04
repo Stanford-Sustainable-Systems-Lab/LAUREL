@@ -173,7 +173,7 @@ The model requires several external datasets, placed under ``data/01_raw/``. The
    * - Jason's Law truck parking
      - `BTS geodata <https://geodata.bts.gov/datasets/fff36e0c37c748a5a1773b5784d4d9a5_0>`_
      - ``describe_locations``, ``compute_routes``
-   * - OpenStreetMap (continental U.S.)
+   * - OpenStreetMap (North America)
      - `Geofabrik <https://download.geofabrik.de>`_
      - ``compute_routes``, ``describe_locations``
 
@@ -306,8 +306,10 @@ The ``compute_routes`` pipeline uses GraphHopper via Docker. Before running:
    # The pipeline manages container startup/shutdown automatically
    uv run kedro run --pipeline=compute_routes
 
-The OSM road network file for the continental U.S. must be placed at the path specified in
-``conf/base/parameters_graphhopper.yml``.
+The OSM road network file is downloaded for you by the ``download_inputs`` pipeline (see
+``scripts/setup/01_download_osm.sh``). Its location is the ``osm_north_america`` entry in
+``conf/base/catalog.yml``, which also pins the Geofabrik snapshot date; the same file is
+read by ``describe_locations``, so it is downloaded once and shared.
 
 ----
 
@@ -337,7 +339,7 @@ The chain runs these steps in order:
    * - Script
      - Purpose
    * - ``01_download_osm.sh``
-     - Download the OpenStreetMap road network for the continental U.S.
+     - Download the OpenStreetMap extract for North America (skipped if already present)
    * - ``02a_describe_locations.sh``
      - Run the ``describe_locations`` pipeline (TAZ classification)
    * - ``02b_import_graph.sh``
@@ -552,6 +554,11 @@ manual steps:
 
 Once patched, point ``conf/base/parameters_compute_routes.yml`` at the Apptainer sandbox path
 instead of a Docker image name.
+
+The paths handed to the container — the OSM extract via GraphHopper's ``--input`` and the graph
+cache via ``--graph-cache`` — are resolved from ``data_dir`` before the container is launched.
+Do not write environment variables such as ``$SCRATCH`` into them: the command is built as an
+argument list with no shell, so nothing would expand them.
 
 ----
 

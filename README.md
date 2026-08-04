@@ -99,7 +99,7 @@ The model requires several external datasets, placed under `data/01_raw/`. The d
 | PG&E ICA maps | [grip.pge.com](https://grip.pge.com) | `evaluate_impacts` (PG&E territory only) |
 | NLCD 2023 (National Land Cover Database) | [USGS](https://doi.org/10.5066/P94UXNTS) | `describe_locations` |
 | Jason's Law truck parking | [BTS geodata](https://geodata.bts.gov/datasets/fff36e0c37c748a5a1773b5784d4d9a5_0) | `describe_locations`, `compute_routes` |
-| OpenStreetMap (continental U.S.) | [Geofabrik](https://download.geofabrik.de) | `compute_routes`, `describe_locations` |
+| OpenStreetMap (North America) | [Geofabrik](https://download.geofabrik.de) | `compute_routes`, `describe_locations` |
 
 > **Note on telematics data:** The International, Inc. dataset is proprietary and cannot be redistributed. Researchers wishing to replicate this work should contact International, Inc. to request access, or adapt the pipeline to use a comparable telematics dataset with the same schema (vehicle ID, dwell TAZ, dwell start/end times, trip distance).
 
@@ -199,7 +199,10 @@ docker pull graphhopper/graphhopper
 uv run kedro run --pipeline=compute_routes
 ```
 
-The OSM road network file for the continental U.S. must be placed at the path specified in `conf/base/parameters_graphhopper.yml`.
+The OSM road network file is downloaded for you by the `download_inputs` pipeline (see
+`scripts/setup/01_download_osm.sh`). Its location is the `osm_north_america` entry in
+`conf/base/catalog.yml`, which also pins the Geofabrik snapshot date; the same file is
+read by `describe_locations`, so it is downloaded once and shared.
 
 ---
 
@@ -223,7 +226,7 @@ The chain runs these steps in order:
 
 | Script | Purpose |
 | ------ | ------- |
-| `01_download_osm.sh` | Download the OpenStreetMap road network for the continental U.S. |
+| `01_download_osm.sh` | Download the OpenStreetMap extract for North America (skipped if already present) |
 | `02a_describe_locations.sh` | Run the `describe_locations` pipeline (TAZ classification) |
 | `02b_import_graph.sh` | Import the OSM graph into GraphHopper |
 | `02c_preprocess_trips.sh` | Preprocess raw telematics trips |
