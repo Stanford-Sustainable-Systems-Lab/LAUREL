@@ -219,8 +219,9 @@ Repository Structure
    ├── notebooks/                 # Exploratory Jupyter notebooks
    ├── scripts/
    │   ├── setup/                 # Setup scripts for preparing model data before running scenarios
+   │   │   ├── submit_all.sh      # Submit steps 01-08 as a chain of dependent SLURM jobs
    │   │   ├── 01_download_osm.sh
-   │   │   ├── 02a–07_*.sh        # Pipeline setup steps in execution order
+   │   │   ├── 02a–08_*.sh        # Pipeline setup steps in execution order
    │   │   └── ...
    │   └── scenarios/             # Run scripts for scenario execution (e.g. validate.sh)
    │       └── validate.sh        # Example: run script for the validate scenario
@@ -316,8 +317,18 @@ Running the Model
 One-time data preparation
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Before running any scenario, the model data must be prepared. The ``scripts/setup/`` directory
-contains shell scripts for each preparation step, numbered in execution order:
+Before running any scenario, the model data must be prepared. Submit the whole preparation chain
+with a single command from the repository root:
+
+.. code-block:: bash
+
+   ./scripts/setup/submit_all.sh
+
+Each step in ``scripts/setup/`` is submitted as a SLURM job that depends on the previous one
+(``--dependency=afterok``), so if a step fails or is cancelled SLURM automatically cancels
+everything downstream. Job logs are written to ``logs/slurm/<job_name>_<job_id>.log``.
+
+The chain runs these steps in order:
 
 .. list-table::
    :header-rows: 1
@@ -346,9 +357,21 @@ contains shell scripts for each preparation step, numbered in execution order:
    * - ``08_prepare_totals.sh``
      - Run the ``prepare_totals`` pipeline (SoW generation)
 
-Run these scripts in order once before executing any scenario. The comments at the top of these
-scripts can be used directly by SLURM to set its resource allocations (see
-`HPC Execution (Sherlock)`_), but you can also run them as ``bash`` scripts directly.
+If a step fails, fix the cause and resume the chain from that step rather than starting over:
+
+.. code-block:: bash
+
+   # Resume from a later step (the name must match the table above exactly)
+   ./scripts/setup/submit_all.sh --from=04_compute_routes.sh
+
+   # Print the sbatch commands without submitting anything
+   ./scripts/setup/submit_all.sh --dry-run
+
+The comments at the top of each step script can be used directly by SLURM to set its resource
+allocations (see `HPC Execution (Sherlock)`_). Individual steps can also be submitted on their
+own with ``sbatch scripts/setup/<step>.sh`` -- run this from the repository root so the scripts'
+relative ``--output=logs/slurm/...`` resolves correctly -- or run them as ``bash`` scripts
+directly.
 
 Running a specific scenario
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -3,10 +3,10 @@
 # depending on the previous one via --dependency=afterok. If any step fails
 # or is cancelled, SLURM automatically cancels the remaining downstream jobs.
 #
-# Usage:
-#   ./submit_all.sh                          # submit the full 01->08 chain
-#   ./submit_all.sh --from=04_compute_routes.sh   # resume from a later step
-#   ./submit_all.sh --dry-run                # print the sbatch commands only
+# Usage (from the repository root):
+#   ./scripts/setup/submit_all.sh                        # submit the full 01->08 chain
+#   ./scripts/setup/submit_all.sh --from=04_compute_routes.sh  # resume from a later step
+#   ./scripts/setup/submit_all.sh --dry-run              # print the sbatch commands only
 
 # Must run as a subprocess: this script uses `set -e`, `exit`, and positional
 # args, none of which behave correctly when sourced into an interactive shell.
