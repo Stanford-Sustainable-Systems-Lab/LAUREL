@@ -1417,6 +1417,9 @@ def pivot_hex_land_use(land_use: dd.DataFrame, params: dict) -> pd.DataFrame:
     land_use = land_use.map_partitions(groupby_part)
     land_use_hex = land_use.compute()
     land_use_hex = land_use_hex.unstack("land_use_group", fill_value=0.0)
+    # Unstacking a categorical level leaves a CategoricalIndex on the columns,
+    # which pyarrow can write to Feather but cannot read back.
+    land_use_hex.columns = land_use_hex.columns.astype(str)
     return land_use_hex
 
 
