@@ -6,8 +6,19 @@
 # Usage:
 #   ./submit_all.sh                          # submit the full 01->08 chain
 #   ./submit_all.sh --from=04_compute_routes.sh   # resume from a later step
+#   ./submit_all.sh --dry-run                # print the sbatch commands only
+
+# Must run as a subprocess: this script uses `set -e`, `exit`, and positional
+# args, none of which behave correctly when sourced into an interactive shell.
+# This check has to precede `set -euo pipefail`, or sourcing arms errexit in
+# the caller's shell before we get a chance to bail out.
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  echo "Run this script, don't source it:  ${BASH_SOURCE[0]}" >&2
+  return 1
+fi
+
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
 STEPS=(
   01_download_osm.sh
@@ -22,9 +33,22 @@ STEPS=(
   08_prepare_totals.sh
 )
 
+from=""
+dry_run=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --from=*) from="${1#--from=}" ;;
+    --dry-run) dry_run=1 ;;
+    *)
+      echo "Usage: $0 [--from=<step_script_name>] [--dry-run]" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
 start_idx=0
-if [[ "${1:-}" == --from=* ]]; then
-  from="${1#--from=}"
+if [[ -n "$from" ]]; then
   start_idx=-1
   for i in "${!STEPS[@]}"; do
     if [[ "${STEPS[$i]}" == "$from" ]]; then
@@ -37,18 +61,23 @@ if [[ "${1:-}" == --from=* ]]; then
     printf '  %s\n' "${STEPS[@]}" >&2
     exit 1
   fi
-elif [[ $# -gt 0 ]]; then
-  echo "Usage: $0 [--from=<step_script_name>]" >&2
-  exit 1
 fi
 
 prev_jid=""
 for step in "${STEPS[@]:$start_idx}"; do
   if [[ -z "$prev_jid" ]]; then
-    jid=$(sbatch --parsable "$step")
+    args=(--parsable "$step")
   else
-    jid=$(sbatch --parsable --dependency=afterok:"$prev_jid" "$step")
+    args=(--parsable --dependency=afterok:"$prev_jid" "$step")
   fi
-  echo "$step -> $jid"
-  prev_jid=$jid
+
+  if (( dry_run )); then
+    echo "sbatch ${args[*]}"
+    # Stand-in so the next step's --dependency reads sensibly.
+    prev_jid="<jobid:$step>"
+  else
+    jid=$(sbatch "${args[@]}")
+    echo "$step -> $jid"
+    prev_jid=$jid
+  fi
 done
