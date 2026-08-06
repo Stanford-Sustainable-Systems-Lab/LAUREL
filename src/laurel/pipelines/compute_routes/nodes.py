@@ -573,5 +573,13 @@ def concat_optional_stops(
     id_col, *rest_id_cols = params["trip_id_cols"]
     trips = trips.set_index(id_col, sorted=False, npartitions=params["n_partitions"])
     if rest_id_cols:
-        trips = trips.map_partitions(lambda df: df.sort_values(rest_id_cols))
+        # Stable sort by the remaining ID columns first, then a stable
+        # sort_index: ties (same veh_id) keep their rest_id_cols order from
+        # the first pass, while the index stays monotonic per partition --
+        # required for `.loc[scalar]` lookups on the duplicate-valued index.
+        trips = trips.map_partitions(
+            lambda df: df.sort_values(rest_id_cols, kind="stable").sort_index(
+                kind="stable"
+            )
+        )
     return trips
