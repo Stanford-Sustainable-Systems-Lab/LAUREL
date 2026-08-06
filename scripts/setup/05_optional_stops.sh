@@ -3,8 +3,8 @@
 #SBATCH --ntasks=2
 #SBATCH --ntasks-per-node=2
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=40GB
-#SBATCH --time=0-02:00
+#SBATCH --mem=64GB
+#SBATCH --time=0-04:00
 #SBATCH --job-name=optional_stops
 #SBATCH --output=logs/slurm/%x_%j.log
 
