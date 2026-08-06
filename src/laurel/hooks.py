@@ -34,6 +34,12 @@ Key design decisions
   :func:`~laurel.pipelines.evaluate_impacts.nodes.sample_profiles_node`)
   resolve the client via ``distributed.get_client()`` and handle the
   ``ValueError`` raised when no cluster is running.
+- **GeoPandas sizeof registrations**: ``laurel.utils.dask_sizeof`` is
+  imported here for its client-side ``@sizeof.register`` side effects, and
+  is added to every ``LocalCluster``'s ``preload`` list so worker processes
+  also get accurate geometry-aware ``sizeof()`` estimates for spill
+  decisions (workers do not otherwise inherit the parent process's
+  registrations).
 """
 
 from __future__ import annotations
@@ -44,6 +50,8 @@ from typing import Any
 from dask.distributed import Client, LocalCluster
 from kedro.framework.hooks import hook_impl
 from kedro.io.core import DatasetNotFoundError
+
+import laurel.utils.dask_sizeof  # noqa: F401  (import-time side effect: registers dask sizeof() handlers)
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +95,11 @@ class DaskClusterHook:
             return
         if not params.get("use_dask", True):
             return
-        cluster_kwargs = params.get("cluster") or {}
+        cluster_kwargs = dict(params.get("cluster") or {})
+        cluster_kwargs["preload"] = [
+            "laurel.utils.dask_sizeof",
+            *cluster_kwargs.get("preload", []),
+        ]
         self._cluster = LocalCluster(**cluster_kwargs)
         logger.info(
             "DaskClusterHook: started LocalCluster for pipeline '%s' (%s).",
