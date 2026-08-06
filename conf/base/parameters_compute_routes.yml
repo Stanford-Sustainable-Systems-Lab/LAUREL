@@ -118,10 +118,8 @@ get_optional_stop_trips:
   drop_cols_initial:
     - orig_point
     - dest_point
-  progress_report_interval_secs: 10
 
 describe_optional_stop_trips:
-  park_buffer_miles: 1.0  # Must match get_optional_stop_trips.park_buffer_miles
   columns:
     dist_along_miles: dist_along_miles
     miles_route: trip_miles_route

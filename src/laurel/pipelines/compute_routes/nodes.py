@@ -26,16 +26,18 @@ Pipeline overview
    hours, and setting the route LineString as the active geometry.
 7. **format_stop_locations** — Reformats and point-geometrises the truck-stop
    candidate locations (Jason's Law + OSM) for spatial joining.
-8. **get_optional_stop_trips** — Spatially joins truck stops within a buffer
-   of each route, projects each stop onto the route line to obtain its
-   distance from the trip origin, and returns the combined DataFrame of
-   original trips plus optional intermediate trips.
-9. **describe_optional_stop_trips** — Trims optional stops that are too close
-   to the trip endpoints, sorts by trip and distance, and recomputes start/end
-   timestamps for each sub-segment using proportional time allocation.
-10. **concat_optional_stops** — Appends the optional-stop trips onto the
-    original trips DataFrame, deduplicating so that only the split version of
-    each affected trip survives.
+8. **get_optional_stop_trips** — Per partition, spatially joins truck stops
+   within a buffer of each route, projects each stop onto the route line to
+   obtain its distance from the trip origin, drops optional stops too close
+   to either trip endpoint, and returns a lazy Dask DataFrame combining
+   original trips with the surviving optional intermediate trips.
+9. **describe_optional_stop_trips** — Per partition, sorts by trip and
+   distance and recomputes start/end timestamps for each sub-segment using
+   proportional time allocation.
+10. **concat_optional_stops** — Anti-joins the optional-stop trips against the
+    original trips DataFrame to drop the original (unsplit) row for any trip
+    that was split, concatenates what remains, and sorts/indexes the result
+    by trip ID.
 
 Key design decisions
 --------------------
@@ -51,10 +53,9 @@ Key design decisions
 - **Endpoint buffer exclusion**: Optional stops within ``park_buffer_miles``
   of the trip origin or destination are dropped, as the vehicle would most
   likely have been counted as dwelling there already.
-- **Deduplication strategy**: After concatenation, original trips are sorted
-  to the bottom (``is_original=False`` sorts before ``True``) and then
-  ``drop_duplicates(keep="first")`` on the trip-ID columns retains the
-  split version and drops the original.
+- **Deduplication strategy**: A left anti-join drops any original trip row
+  whose trip ID appears among the optional-stop sub-trips, so the split
+  version replaces the original rather than coexisting with it.
 
 References
 ----------
@@ -72,9 +73,7 @@ import logging
 import dask.dataframe as dd
 import dask_geopandas as dgpd
 import geopandas as gpd
-import numpy as np
 import pandas as pd
-from dask.diagnostics.progress import ProgressBar
 from routingpy import Graphhopper
 
 from laurel.routing.router import (
@@ -323,25 +322,87 @@ def format_stop_locations(stops: pd.DataFrame, params: dict) -> gpd.GeoDataFrame
     return stops_out
 
 
+def _build_partition_trips(
+    part: gpd.GeoDataFrame,
+    parks: gpd.GeoDataFrame,
+    params: dict,
+) -> pd.DataFrame:
+    """Compute one partition's full, filtered contribution: its own trip
+    row(s) (``is_optional=False``) plus any optional-stop split rows from
+    joining against ``parks`` (``is_optional=True``), with endpoint-adjacent
+    stops already excluded (``describe_optional_stop_trips`` still does its
+    own sort, right before the position-based math that needs it).
+
+    Runs as one task per partition -- no ``dask_geopandas`` broadcast-join
+    graph layer inside this function, so the optimizer can fuse it directly
+    onto the upstream read. ``part`` is never mutated in place; every
+    transformation below produces a new frame, so the original routed-trip
+    data always remains available to both branches independently.
+
+    Valid only because every trip's original row and all of its
+    optional-stop splits are guaranteed to live in the same partition of
+    ``routes`` (``partition_trips`` repartitions before any join can
+    multiply rows). Do not introduce a ``.repartition()``/``.set_index()``/
+    shuffle anywhere between ``partition_trips`` and
+    ``describe_optional_stop_trips`` without re-verifying this invariant.
+    """
+    pcols = params["columns"]
+
+    trips_source = part.dropna(subset=[pcols["route_geom"]]).drop(
+        columns=params["drop_cols_initial"]
+    )
+    del part
+
+    orig = pd.DataFrame(trips_source.drop(columns=[pcols["route_geom"]]))
+    orig[pcols["dist_along_miles"]] = orig["trip_miles_route"]
+    orig["is_optional"] = False
+
+    part_proj = trips_source.set_geometry(pcols["route_geom"]).to_crs(
+        params["projected_crs"]
+    )
+    del trips_source
+
+    short = gpd.sjoin(part_proj, parks, how="inner", predicate="intersects")
+    del part_proj
+    short = short.drop(columns=["index_right"])
+    short[pcols["dist_along_miles"]] = (
+        short[pcols["route_geom"]].project(short[pcols["park_point"]])
+        / METERS_PER_MILE
+    )
+    short[pcols["hex_end"]] = short[pcols["hex_park"]]
+    short = pd.DataFrame(
+        short.drop(columns=[pcols["route_geom"], pcols["park_point"], pcols["hex_park"]])
+    )
+    short["is_optional"] = True
+
+    trips = pd.concat([orig, short], axis=0)
+    del orig, short
+
+    # Drop optional stops too close to either trip endpoint (already
+    # counted as a dwell there), then sort for the segment distance/time
+    # math below.
+    started_at_park = trips[pcols["dist_along_miles"]] < params["park_buffer_miles"]
+    ended_at_park = trips[pcols["dist_along_miles"]] > (
+        trips["trip_miles_route"] - params["park_buffer_miles"]
+    )
+    is_opt = trips[pcols["is_optional"]]
+    trips = trips.loc[(~started_at_park & ~ended_at_park & is_opt) | ~is_opt, :]
+    return trips
+
+
 def get_optional_stop_trips(
     routes: dgpd.GeoDataFrame, parks: gpd.GeoDataFrame, params: dict
-) -> pd.DataFrame:
+) -> dd.DataFrame:
     """Identify truck stops along each route and compute their distance from the trip origin.
 
-    The procedure is:
-
-    1. Buffer each truck-stop point by ``park_buffer_miles`` in a projected
-       CRS to create a catchment polygon.
-    2. Drop routed trips with null geometry; spatially join the buffered stop
-       polygons onto the route LineStrings using ``intersects``.
-    3. For each matched (trip, stop) pair, project the stop-point geometry
-       onto the route LineString to obtain its distance from the trip origin
-       (in miles).
-    4. Append the optional-stop rows to the original trips rows (with
-       ``is_optional`` flags) and trigger a Dask compute with a progress bar.
-
-    Route geometries are dropped from the optional-stop rows after projection
-    to reduce memory usage.
+    Fuses, into a single per-partition task, everything that used to be a
+    chain of separate Dask operations: dropping null-geometry routes and
+    unused columns, buffering and spatially joining truck stops onto the
+    route LineStrings, projecting each matched stop onto its route to get
+    its distance from the trip origin, dropping the now-unneeded route
+    geometry, and excluding optional stops too close to either trip
+    endpoint. Returns a lazy ``dd.DataFrame`` -- nothing is computed here;
+    the pipeline's only materialization point is the final catalog write.
 
     Args:
         routes: Routed trips Dask GeoDataFrame with route LineString geometry.
@@ -350,132 +411,53 @@ def get_optional_stop_trips(
 
             - ``columns`` (dict): sub-keys for column names including
               ``route_geom``, ``park_point``, ``park_id``, ``hex_end``,
-              ``hex_park``, ``dist_along_miles``.
+              ``hex_park``, ``dist_along_miles``, ``is_optional``.
             - ``projected_crs`` (str | CRS): CRS used for buffering and
               distance projection.
             - ``park_buffer_miles`` (float): buffer radius around each truck
-              stop (miles).
+              stop (miles); also used to exclude stops adjacent to either
+              trip endpoint.
             - ``drop_cols_initial`` (list[str]): columns to drop from the
               routes DataFrame before joining.
-            - ``progress_report_interval_secs`` (float): Dask progress bar
-              reporting interval.
 
     Returns:
-        An in-memory ``pd.DataFrame`` combining original trips
+        A lazy ``dd.DataFrame`` combining original trips
         (``is_optional=False``) and optional truck-stop trips
         (``is_optional=True``), with a ``dist_along_miles`` column recording
         each record's distance from the trip origin.
     """
-    pcols = params["columns"]
-
-    # Set up the parks for spatial join
     parks = parks.to_crs(params["projected_crs"])
     parks["buffer"] = parks.geometry.buffer(
         distance=params["park_buffer_miles"] * METERS_PER_MILE
     )
     parks = parks.set_geometry("buffer")
 
-    # Eliminate routes with no geometry and unused columns
-    trips_source = routes.dropna(subset=[pcols["route_geom"]])
-    trips_source = trips_source.drop(columns=params["drop_cols_initial"])
+    # Broadcast as a 1-partition collection so `parks` is a shared
+    # dependency, not re-embedded as a literal in every partition task.
+    parks_dgpd = dgpd.from_geopandas(parks, npartitions=1)
 
-    # Spatial join
-    trips_short = trips_source.to_crs(params["projected_crs"])
-    trips_short = trips_short.sjoin(parks, how="inner", predicate="intersects")
-    trips_short = trips_short.drop(columns=["index_right"])
-
-    # Find distances along the route for each optional stop
-    def project_partition(
-        part: gpd.GeoDataFrame, line_col: str, point_col: str, out_col: str
-    ) -> gpd.GeoDataFrame:
-        """Project the points_col of the partition on to the line_col."""
-        part[out_col] = part[line_col].project(part[point_col]) / METERS_PER_MILE
-        return part
-
-    trips_short[pcols["dist_along_miles"]] = np.nan
-    trips_short = trips_short.map_partitions(
-        project_partition,
-        line_col=pcols["route_geom"],
-        point_col=pcols["park_point"],
-        out_col=pcols["dist_along_miles"],
-        meta=trips_short,
-    )
-
-    # After this point, the route geometries are no longer needed, so we drop them to save memory
-    trips_short[pcols["hex_end"]] = trips_short[pcols["hex_park"]]
-    trips_short = trips_short.drop(
-        columns=[pcols["route_geom"], pcols["park_point"], pcols["hex_park"]]
-    )
-    trips_short["is_optional"] = True
-
-    # Prepare the original trips for concatenation
-    trips_source["dist_along_miles"] = trips_source["trip_miles_route"]
-    trips_orig = trips_source.drop(columns=pcols["route_geom"])
-    trips_orig["is_optional"] = False
-
-    # Concatenate trips
-    trips_mod = dd.concat([trips_orig, trips_short], axis=0)
-
-    logger.info("Computing the optional stop trips by spatial joining and projecting.")
-    with ProgressBar(dt=params["progress_report_interval_secs"]):
-        trips_mod = trips_mod.compute()
-    return trips_mod
+    meta = _build_partition_trips(routes._meta_nonempty, parks, params)
+    return routes.map_partitions(_build_partition_trips, parks_dgpd, params, meta=meta)
 
 
-def describe_optional_stop_trips(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
-    """Compute split timestamps and distances for optional-stop sub-trips.
+def _describe_partition(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Compute split timestamps and distances for one partition's sub-trips.
 
-    For each trip that has been split at one or more truck stops, this
-    function:
-
-    1. Drops optional stops within ``park_buffer_miles`` of the trip origin or
-       destination (where the vehicle is likely already counted as dwelling).
-    2. Sorts all rows (original + optional) by trip ID and distance from
-       origin to establish sub-trip ordering.
-    3. Computes each sub-segment's distance as ``dist_along - dist_prev`` and
-       its duration as ``(seg_miles / route_speed) × (obs_hours / route_hours)``
-       (proportional scaling preserves the observed total trip time).
-    4. Derives cumulative time shifts from the trip start time to produce new
-       ``start_time`` and ``end_time`` for each sub-trip, rounded to seconds.
-    5. Renames and selects columns to match the original trips schema.
-
-    Args:
-        trips: Combined DataFrame of original and optional-stop trips (output
-            of ``get_optional_stop_trips``).
-        params: Pipeline parameters dict with keys:
-
-            - ``columns`` (dict): sub-keys for ``dist_along_miles``,
-              ``miles_route``, ``is_optional``, ``speed_route``,
-              ``hours_orig``, ``hours_route``, ``start_time``.
-            - ``park_buffer_miles`` (float): buffer distance used to exclude
-              endpoint-adjacent stops.
-            - ``trip_id_cols`` (list[str]): columns that uniquely identify a
-              trip (used for groupby and sort).
-            - ``rename_cols_final`` (dict[str, str]): column renames applied
-              at the end to restore original column names.
-            - ``keep_cols_final`` (list[str]): columns to retain in the output.
-
-    Returns:
-        A ``pd.DataFrame`` of sub-trips with updated timestamps and distances,
-        ready to be concatenated with the original trips.
+    Endpoint-adjacent optional stops are already excluded by
+    ``_build_partition_trips``; this sorts by trip ID and distance from
+    origin to establish sub-trip ordering, computes each sub-segment's
+    distance as ``dist_along - dist_prev`` and its duration as
+    ``(seg_miles / route_speed) x (obs_hours / route_hours)`` (proportional
+    scaling preserves the observed total trip time), derives cumulative time
+    shifts from the trip start time to produce new ``start_time``/``end_time``
+    for each sub-trip rounded to seconds, then renames/selects columns to
+    match the original trips schema.
     """
     pcols = params["columns"]
-
-    # Eliminate optional trips too close to the ends of the original trip
-    started_at_park = trips[pcols["dist_along_miles"]] < params["park_buffer_miles"]
-    ended_at_park = trips[pcols["dist_along_miles"]] > (
-        trips[pcols["miles_route"]] - params["park_buffer_miles"]
-    )
-    is_opt = trips[pcols["is_optional"]]
-    trips = trips.loc[(~started_at_park & ~ended_at_park & is_opt) | ~is_opt, :]
-
-    logger.info("Sort trips to enable position-based computations")
     trip_id_cols = params["trip_id_cols"]
-    trips = trips.sort_values(
-        trip_id_cols + [pcols["dist_along_miles"]], ascending=True
-    )
 
-    logger.info("Compute new timings and distances for optional and original trips")
+    trips = trips.sort_values(trip_id_cols + [pcols["dist_along_miles"]], ascending=True)
+
     # Distances by segment
     trips["dist_prev_miles"] = trips.groupby(trip_id_cols)[
         pcols["dist_along_miles"]
@@ -507,29 +489,56 @@ def describe_optional_stop_trips(trips: pd.DataFrame, params: dict) -> pd.DataFr
     trips_out = trips.rename(
         columns={v: k for k, v in params["rename_cols_final"].items()}
     )
-    trips_out = trips_out.loc[:, params["keep_cols_final"]]
-    return trips_out
+    return trips_out.loc[:, params["keep_cols_final"]]
+
+
+def describe_optional_stop_trips(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
+    """Compute split timestamps and distances for optional-stop sub-trips.
+
+    Applies ``_describe_partition`` lazily to each partition of ``trips``
+    (output of ``get_optional_stop_trips``). Safe to run per-partition
+    because every trip's rows are guaranteed to live in one partition (see
+    ``_build_partition_trips``'s docstring).
+
+    Args:
+        trips: Combined Dask DataFrame of original and optional-stop trips
+            (output of ``get_optional_stop_trips``).
+        params: Pipeline parameters dict with keys:
+
+            - ``columns`` (dict): sub-keys for ``dist_along_miles``,
+              ``speed_route``, ``hours_orig``, ``hours_route``, ``start_time``.
+            - ``trip_id_cols`` (list[str]): columns that uniquely identify a
+              trip (used for groupby and sort).
+            - ``rename_cols_final`` (dict[str, str]): column renames applied
+              at the end to restore original column names.
+            - ``keep_cols_final`` (list[str]): columns to retain in the output.
+
+    Returns:
+        A lazy ``dd.DataFrame`` of sub-trips with updated timestamps and
+        distances, ready to be concatenated with the original trips.
+    """
+    meta = _describe_partition(trips._meta_nonempty, params)
+    return trips.map_partitions(_describe_partition, params, meta=meta)
 
 
 def concat_optional_stops(
-    trips_orig: dd.DataFrame, trips_opt: pd.DataFrame, params: dict
-) -> pd.DataFrame:
+    trips_orig: dd.DataFrame, trips_opt: dd.DataFrame, params: dict
+) -> dd.DataFrame:
     """Merge optional-stop sub-trips with the original trips, replacing split trips.
 
-    Concatenates the original Dask trips (materialised in memory) with the
-    optional-stop sub-trip records.  For trips that were split at truck stops,
-    the original trip row must be replaced by the split sub-trips.  This is
-    achieved by:
+    For trips that were split at truck stops, the original trip row must be
+    replaced by the split sub-trips. Rather than gathering everything into
+    one process to sort-and-dedup, this does a left anti-join to drop
+    exactly the original rows whose trip ID appears in ``trips_opt``, then
+    concatenates what's left with ``trips_opt`` -- both Dask-native,
+    shuffle-based operations rather than a full gather.
 
-    1. Flagging original trips as ``is_original=True`` and optional trips as
-       ``is_original=False``.
-    2. Sorting by trip-ID columns followed by ``is_original`` ascending, so
-       optional (split) rows sort before the original row for the same trip.
-    3. Calling ``drop_duplicates(subset=trip_id_cols, keep="first")`` to
-       retain the optional rows and discard the originals.
-
-    The resulting pandas DataFrame is wrapped back into a Dask DataFrame for
-    downstream pipeline compatibility.
+    The result is sorted by ``trip_id_cols`` and indexed by the leading
+    trip-ID column (``veh_id``): ``set_index`` shuffles once to guarantee
+    every vehicle's rows land in a single partition and are ordered across
+    partitions, then a cheap per-partition sort handles the remaining
+    trip-ID column(s) within each vehicle's rows -- avoiding a full
+    multi-key global sort.
 
     Args:
         trips_orig: Original trips Dask DataFrame (pre-routing).
@@ -540,31 +549,29 @@ def concat_optional_stops(
             - ``drop_cols`` (list[str]): columns to drop from ``trips_orig``
               before concatenation.
             - ``trip_id_cols`` (list[str]): columns uniquely identifying a
-              trip row.
-            - ``n_partitions`` (int): number of Dask partitions for the
-              output DataFrame.
+              trip row; the first is used as the output index.
+            - ``n_partitions`` (int): output partition count, applied as
+              part of the ``set_index`` shuffle below.
 
     Returns:
         A Dask DataFrame combining original unmodified trips and split
         optional-stop sub-trips, with one row per unique (trip_id_cols)
-        combination.
+        combination, indexed by the leading ``trip_id_cols`` entry.
     """
-    logger.info("Computing original trips into memory.")
     trips_orig = trips_orig.drop(columns=params["drop_cols"])
-    trips_orig = trips_orig.compute()
 
-    logger.info("Concatenating and sorting trips.")
-    trips_orig["is_original"] = True
-    trips_opt["is_original"] = False
-    trips = pd.concat([trips_orig, trips_opt], axis=0)
+    opt_ids = trips_opt[params["trip_id_cols"]].drop_duplicates()
+    merged = trips_orig.merge(
+        opt_ids, on=params["trip_id_cols"], how="left", indicator=True
+    )
+    trips_orig_kept = merged[merged["_merge"] == "left_only"].drop(columns=["_merge"])
+    del merged
 
-    # Drop the original versions of trips which have been split
-    sort_cols = params["trip_id_cols"] + ["is_original"]
-    trips = trips.sort_values(sort_cols, ascending=True)
-    # We keep the first trip because we want to replace original with modified trips
-    trips = trips.drop_duplicates(subset=params["trip_id_cols"], keep="first")
-    trips = trips.drop(columns=["is_original"])
+    trips = dd.concat([trips_orig_kept, trips_opt], axis=0)
+    del trips_orig_kept
 
-    # Send back to Dask for later processing
-    trips_out = dd.from_pandas(trips, npartitions=params["n_partitions"])
-    return trips_out
+    id_col, *rest_id_cols = params["trip_id_cols"]
+    trips = trips.set_index(id_col, sorted=False, npartitions=params["n_partitions"])
+    if rest_id_cols:
+        trips = trips.map_partitions(lambda df: df.sort_values(rest_id_cols))
+    return trips
