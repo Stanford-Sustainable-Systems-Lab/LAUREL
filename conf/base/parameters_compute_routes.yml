@@ -49,10 +49,30 @@ partition_trips:
 # Cluster kwargs are forwarded verbatim to dask.distributed.LocalCluster.
 dask_compute_routes:
   cluster:
-    n_workers: 4           # Tune to available CPU cores
+    n_workers: 8           # Tune to available CPU cores
     processes: True        # Must be True; code is not proven thread-safe
     threads_per_worker: 1
-    memory_limit: 8GiB     # Tune to available RAM per worker
+    memory_limit: 6GiB     # Tune to available RAM per worker
+    # Periodically recycle workers via their Nanny. This is a bounded-recovery
+    # mitigation, not a root-cause fix, for a scheduler/worker desync where a
+    # task is assigned but never dispatched to the executor (empty call-stack,
+    # Processing>0, indefinitely - confirmed via py-spy on job 38094015,
+    # 2026-08-07). Leading hypothesis: GraphHopper's Jetty thread pool is
+    # unbounded (conf/base/parameters_graphhopper.yml has no server.max_threads)
+    # and grows into the hundreds of threads under load, crowding the 8
+    # single-threaded Dask worker processes off the node's CPUs and making
+    # this race more likely to trigger. Until that's confirmed/fixed
+    # (capping GraphHopper's thread pool and/or get_routes.client
+    # .max_concurrent_requests), this keeps wedged workers from sitting
+    # unnoticed for the length of an unattended run.
+    lifetime: "15 minutes"
+    # Each worker draws its own lifetime once at startup as lifetime +/-
+    # uniform(stagger), so workers cycle at independently randomized times
+    # instead of all at once. Keep (lifetime - lifetime_stagger) comfortably
+    # above the worst-case task time (see get_routes.client.timeout_secs)
+    # so a slow-but-legitimate task doesn't get preempted before completing.
+    lifetime_stagger: "5 minutes"
+    lifetime_restart: True         # respawn via Nanny instead of shrinking the cluster
 
 graphhopper:
   # Switch container_class to use Docker on local machines (no Apptainer):
@@ -78,7 +98,7 @@ graphhopper:
 get_routes:
   profile: car   # GraphHopper routing profile; "car" approximates truck road access for continental routing
   client:
-    max_concurrent_requests: 20
+    max_concurrent_requests: 40
     batch_size: 5000
     timeout_secs: 60
     verbose: True
