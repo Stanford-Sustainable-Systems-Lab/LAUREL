@@ -14,30 +14,34 @@ Pipeline overview
    container to prepare it for routing queries.
 2. **test_get_routes** — Sends a single cross-country test query to verify
    that the GraphHopper server is healthy before batch routing begins.
-3. **filter_routable_trips** — Drops short trips (below
-   ``min_dist_miles``) and unnecessary columns; optionally subsamples for
-   debugging.
-4. **get_trip_orig_dest_points** — Converts origin and destination H3
+3. **select_trips_to_route** — Drops unnecessary columns and splits trips
+   into those worth routing and those below ``min_dist_miles``; optionally
+   subsamples the to-route side for debugging.
+4. **index_by_vehicle** — Indexes a trips DataFrame by vehicle ID with known
+   divisions. Run once, on the full trips set before
+   ``select_trips_to_route``, so both the to-route and not-to-route sides
+   inherit it for free, and it survives unchanged all the way through
+   ``describe_optional_stop_trips``.
+5. **get_trip_orig_dest_points** — Converts origin and destination H3
    hexagons to point geometries and attaches them to the trips GeoDataFrame.
-5. **partition_trips** — Re-partitions the Dask GeoDataFrame to the desired
+6. **partition_trips** — Re-partitions the Dask GeoDataFrame to the desired
    number of partitions before routing (allows checkpointing to disk).
-6. **get_routes_node** — Calls ``get_routes`` partition-by-partition via
+7. **get_routes_node** — Calls ``get_routes`` partition-by-partition via
    GraphHopper, converting raw metric distances and seconds to miles and
    hours, and setting the route LineString as the active geometry.
-7. **format_stop_locations** — Reformats and point-geometrises the truck-stop
+8. **format_stop_locations** — Reformats and point-geometrises the truck-stop
    candidate locations (Jason's Law + OSM) for spatial joining.
-8. **get_optional_stop_trips** — Per partition, spatially joins truck stops
+9. **get_optional_stop_trips** — Per partition, spatially joins truck stops
    within a buffer of each route, projects each stop onto the route line to
    obtain its distance from the trip origin, drops optional stops too close
    to either trip endpoint, and returns a lazy Dask DataFrame combining
    original trips with the surviving optional intermediate trips.
-9. **describe_optional_stop_trips** — Per partition, sorts by trip and
-   distance and recomputes start/end timestamps for each sub-segment using
-   proportional time allocation.
-10. **concat_optional_stops** — Anti-joins the optional-stop trips against the
-    original trips DataFrame to drop the original (unsplit) row for any trip
-    that was split, concatenates what remains, and sorts/indexes the result
-    by trip ID.
+10. **describe_optional_stop_trips** — Per partition, sorts by trip and
+    distance and recomputes start/end timestamps for each sub-segment using
+    proportional time allocation.
+11. **concat_optional_stops** — Combines the never-routed trips with the
+    described optional-stop trips via a divisions-aware ``dd.concat``, then
+    sorts the result by trip ID.
 
 Key design decisions
 --------------------
@@ -53,9 +57,21 @@ Key design decisions
 - **Endpoint buffer exclusion**: Optional stops within ``park_buffer_miles``
   of the trip origin or destination are dropped, as the vehicle would most
   likely have been counted as dwelling there already.
-- **Deduplication strategy**: A left anti-join drops any original trip row
-  whose trip ID appears among the optional-stop sub-trips, so the split
-  version replaces the original rather than coexisting with it.
+- **Deduplication by construction, not anti-join**: trips too short to route
+  and routed trips are disjoint sets from the moment ``select_trips_to_route``
+  splits them -- a trip can only ever appear in one of the two collections
+  ``concat_optional_stops`` combines, so no anti-join is needed to avoid
+  double-counting split trips.
+- **Divisions survive the checkpoint, not a second shuffle**: the vehicle-ID
+  index and its divisions are established once (``index_by_vehicle``, before
+  ``select_trips_to_route``) and never shuffled again -- every node between
+  there and ``describe_optional_stop_trips`` operates per-partition only
+  (see ``_build_partition_trips``'s no-shuffle invariant). The catalog entry
+  ``describe_optional_stop_trips`` writes to is loaded back with
+  ``calculate_divisions: True``, which recovers known divisions from the
+  written partitions' index ranges instead of paying for an unsorted
+  ``set_index`` (divisions-sampling pass, then data-transfer pass) a second
+  time.
 
 References
 ----------
@@ -155,16 +171,28 @@ def test_get_routes(route_params: dict, server_params: dict) -> None:
         logger.info(f"Route distance: {route.distance} meters")
 
 
-def filter_routable_trips(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
-    """Drop unnecessary columns and short trips that are not worth routing.
+def select_trips_to_route(
+    trips: dd.DataFrame, params: dict
+) -> tuple[dd.DataFrame, dd.DataFrame]:
+    """Split trips into those worth routing and those too short to bother.
 
-    Very short trips (below ``min_dist_miles``) are excluded because routing
-    them would add noise without meaningfully changing the set of reachable
-    truck stops.  An optional debug subsample further reduces the dataset for
-    rapid iteration.
+    Very short trips (below ``min_dist_miles``) are excluded from routing
+    because it would add noise without meaningfully changing the set of
+    reachable truck stops -- they can never gain an optional stop, so they
+    are returned separately rather than dropped, ready to be reattached
+    unchanged by ``concat_optional_stops`` further downstream. An optional
+    debug subsample further reduces the to-route set for rapid iteration;
+    it is not applied to the not-to-route set, since that set isn't part of
+    the expensive routing path debug_subsample exists to shrink.
+
+    ``trips`` is expected to already be indexed by vehicle ID (see
+    ``index_by_vehicle``) -- both returned frames inherit that index and its
+    divisions for free via ``.loc[]``, so nothing downstream needs to
+    re-index the not-to-route side.
 
     Args:
-        trips: Dask DataFrame of formatted trip records.
+        trips: Dask DataFrame of formatted trip records, indexed by vehicle
+            ID.
         params: Pipeline parameters dict with keys:
 
             - ``drop_cols`` (list[str]): columns to remove before routing.
@@ -174,14 +202,40 @@ def filter_routable_trips(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
               (float) for fractional subsampling.
 
     Returns:
-        A filtered Dask DataFrame retaining only trips long enough to route.
+        A ``(to_route, not_to_route)`` tuple of Dask DataFrames.
     """
     trips = trips.drop(columns=params["drop_cols"])
     long_enough_trip = trips[params["dist_col"]] >= params["min_dist_miles"]
-    trips = trips.loc[long_enough_trip]
+    to_route = trips.loc[long_enough_trip]
+    not_to_route = trips.loc[~long_enough_trip]
     if params["debug_subsample"]["active"]:
-        trips = trips.sample(frac=params["debug_subsample"]["frac"])
-    return trips
+        to_route = to_route.sample(frac=params["debug_subsample"]["frac"])
+    return to_route, not_to_route
+
+
+def index_by_vehicle(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
+    """Index a trips DataFrame by vehicle ID with known, monotonic divisions.
+
+    Used at two points in this pipeline where the caller needs a collection
+    with real divisions on the vehicle-ID column so it can later be combined
+    with another such collection via ``dd.concat(..., interleave_partitions=True)``
+    -- a partition-wise merge rather than a full hash shuffle. An unsorted
+    ``set_index`` does its own divisions-sampling pass and its own
+    data-transfer pass over its input, so this is only called on inputs that
+    are either cheap (no expensive ancestry to redo twice) or already
+    checkpointed to disk (severing any expensive ancestry beforehand).
+
+    Args:
+        trips: Dask DataFrame to index.
+        params: Pipeline parameters dict with keys:
+
+            - ``id_col`` (str): vehicle-ID column to index by.
+            - ``n_partitions`` (int): target output partition count.
+
+    Returns:
+        ``trips`` indexed by ``id_col``, with known divisions.
+    """
+    return trips.set_index(params["id_col"], sorted=False, npartitions=params["n_partitions"])
 
 
 def get_trip_orig_dest_points(trips: dd.DataFrame, params: dict) -> dgpd.GeoDataFrame:
@@ -452,11 +506,26 @@ def _describe_partition(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
     shifts from the trip start time to produce new ``start_time``/``end_time``
     for each sub-trip rounded to seconds, then renames/selects columns to
     match the original trips schema.
+
+    ``trips`` arrives indexed by vehicle ID (set upstream by
+    ``index_by_vehicle`` and carried through unchanged ever since, per
+    ``_build_partition_trips``'s no-shuffle invariant) and stays indexed by
+    it on the way out -- nothing downstream needs it back as a column, so
+    there's no reason to round-trip it through one here. Sorting mirrors
+    ``concat_optional_stops``: a stable sort on the remaining
+    ``trip_id_cols`` plus ``dist_along_miles`` (the finest-grained
+    tiebreaker) establishes sub-trip order, then a stable ``sort_index``
+    groups rows back by vehicle ID while preserving that order for ties.
+    ``groupby(trip_id_cols)`` below works unchanged either way -- pandas
+    resolves names against index levels and columns together.
     """
     pcols = params["columns"]
+    id_col, *rest_id_cols = params["trip_id_cols"]
     trip_id_cols = params["trip_id_cols"]
 
-    trips = trips.sort_values(trip_id_cols + [pcols["dist_along_miles"]], ascending=True)
+    trips = trips.sort_values(
+        rest_id_cols + [pcols["dist_along_miles"]], ascending=True, kind="stable"
+    ).sort_index(kind="stable")
 
     # Distances by segment
     trips["dist_prev_miles"] = trips.groupby(trip_id_cols)[
@@ -489,7 +558,11 @@ def _describe_partition(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
     trips_out = trips.rename(
         columns={v: k for k, v in params["rename_cols_final"].items()}
     )
-    return trips_out.loc[:, params["keep_cols_final"]]
+    # id_col (veh_id) stays the index rather than a column -- keep_cols_final
+    # lists it because it names the original trips schema, but it's not a
+    # selectable column here.
+    keep_cols = [c for c in params["keep_cols_final"] if c != id_col]
+    return trips_out.loc[:, keep_cols]
 
 
 def describe_optional_stop_trips(trips: dd.DataFrame, params: dict) -> dd.DataFrame:
@@ -500,9 +573,17 @@ def describe_optional_stop_trips(trips: dd.DataFrame, params: dict) -> dd.DataFr
     because every trip's rows are guaranteed to live in one partition (see
     ``_build_partition_trips``'s docstring).
 
+    The output stays indexed by vehicle ID, same as the input -- no shuffle
+    happens here (see ``_build_partition_trips``'s no-shuffle invariant), so
+    the existing divisions remain structurally valid. The catalog entry this
+    feeds is checkpointed to disk with ``calculate_divisions: True`` on
+    load, which recovers known divisions from the written partitions' index
+    ranges for free -- no second ``index_by_vehicle``/``set_index`` pass is
+    needed before ``concat_optional_stops``.
+
     Args:
-        trips: Combined Dask DataFrame of original and optional-stop trips
-            (output of ``get_optional_stop_trips``).
+        trips: Combined Dask DataFrame of original and optional-stop trips,
+            indexed by vehicle ID (output of ``get_optional_stop_trips``).
         params: Pipeline parameters dict with keys:
 
             - ``columns`` (dict): sub-keys for ``dist_along_miles``,
@@ -522,56 +603,45 @@ def describe_optional_stop_trips(trips: dd.DataFrame, params: dict) -> dd.DataFr
 
 
 def concat_optional_stops(
-    trips_orig: dd.DataFrame, trips_opt: dd.DataFrame, params: dict
+    trips_not_to_route: dd.DataFrame, trips_opt: dd.DataFrame, params: dict
 ) -> dd.DataFrame:
-    """Merge optional-stop sub-trips with the original trips, replacing split trips.
+    """Merge optional-stop sub-trips with the trips that were never routed.
 
-    For trips that were split at truck stops, the original trip row must be
-    replaced by the split sub-trips. Rather than gathering everything into
-    one process to sort-and-dedup, this does a left anti-join to drop
-    exactly the original rows whose trip ID appears in ``trips_opt``, then
-    concatenates what's left with ``trips_opt`` -- both Dask-native,
-    shuffle-based operations rather than a full gather.
+    ``trips_not_to_route`` (trips too short to route -- see
+    ``select_trips_to_route``) and ``trips_opt`` (output of
+    ``describe_optional_stop_trips``) are already disjoint by construction: a
+    trip is either too short to route, or it went through routing and
+    appears exactly once in ``trips_opt``, split or not. No anti-join/dedup
+    is needed. Both inputs also arrive already indexed by vehicle ID, each
+    with its own known divisions, so they can be combined via
+    ``interleave_partitions=True`` -- a partition-wise merge on those
+    divisions rather than a full hash shuffle.
 
-    The result is sorted by ``trip_id_cols`` and indexed by the leading
-    trip-ID column (``veh_id``): ``set_index`` shuffles once to guarantee
-    every vehicle's rows land in a single partition and are ordered across
-    partitions, then a cheap per-partition sort handles the remaining
-    trip-ID column(s) within each vehicle's rows -- avoiding a full
-    multi-key global sort.
+    A final per-partition stable sort handles the remaining trip-ID
+    column(s) within each vehicle's rows, since interleaving doesn't
+    guarantee that ordering on its own.
 
     Args:
-        trips_orig: Original trips Dask DataFrame (pre-routing).
-        trips_opt: Optional-stop sub-trips (output of
-            ``describe_optional_stop_trips``).
+        trips_not_to_route: Trips too short to route, indexed by vehicle ID
+            (output of ``select_trips_to_route``, which inherits the index
+            set by ``index_by_vehicle`` on the full trips set upstream).
+        trips_opt: Optional-stop sub-trips, indexed by vehicle ID (output of
+            ``describe_optional_stop_trips``, checkpointed to disk with
+            divisions recovered on load -- see that function's docstring).
         params: Pipeline parameters dict with keys:
 
-            - ``drop_cols`` (list[str]): columns to drop from ``trips_orig``
-              before concatenation.
             - ``trip_id_cols`` (list[str]): columns uniquely identifying a
-              trip row; the first is used as the output index.
-            - ``n_partitions`` (int): output partition count, applied as
-              part of the ``set_index`` shuffle below.
+              trip row; the leading column is the shared index; any
+              remaining columns are sorted on per-partition below.
 
     Returns:
-        A Dask DataFrame combining original unmodified trips and split
-        optional-stop sub-trips, with one row per unique (trip_id_cols)
+        A Dask DataFrame combining the never-routed trips and the described
+        optional-stop trips, with one row per unique (trip_id_cols)
         combination, indexed by the leading ``trip_id_cols`` entry.
     """
-    trips_orig = trips_orig.drop(columns=params["drop_cols"])
+    trips = dd.concat([trips_not_to_route, trips_opt], axis=0, interleave_partitions=True)
 
-    opt_ids = trips_opt[params["trip_id_cols"]].drop_duplicates()
-    merged = trips_orig.merge(
-        opt_ids, on=params["trip_id_cols"], how="left", indicator=True
-    )
-    trips_orig_kept = merged[merged["_merge"] == "left_only"].drop(columns=["_merge"])
-    del merged
-
-    trips = dd.concat([trips_orig_kept, trips_opt], axis=0)
-    del trips_orig_kept
-
-    id_col, *rest_id_cols = params["trip_id_cols"]
-    trips = trips.set_index(id_col, sorted=False, npartitions=params["n_partitions"])
+    _id_col, *rest_id_cols = params["trip_id_cols"]
     if rest_id_cols:
         # Stable sort by the remaining ID columns first, then a stable
         # sort_index: ties (same veh_id) keep their rest_id_cols order from

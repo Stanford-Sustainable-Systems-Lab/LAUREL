@@ -1,7 +1,8 @@
 """Unit tests for the fused optional-stop-trips nodes in compute_routes.
 
 Covers the per-partition fusion introduced to fix the worker memory
-crash-loop:
+crash-loop, plus the divisions-aware concat that replaced the anti-join
+dedup pattern:
 
 - ``_build_partition_trips``: dropna/column-drop, spatial join against
   ``parks``, distance projection, and endpoint-adjacent stop exclusion --
@@ -9,8 +10,10 @@ crash-loop:
 - ``_describe_partition``: the segment distance/time math and final
   renames that remain in ``describe_optional_stop_trips`` after its
   filter+sort responsibilities moved upstream.
-- ``concat_optional_stops``: the anti-join + set_index dedup/sort that
-  replaced the old compute+concat+drop_duplicates pattern.
+- ``select_trips_to_route``: the to-route/not-to-route split.
+- ``index_by_vehicle``: indexing by vehicle ID with known divisions.
+- ``concat_optional_stops``: the divisions-aware concat + per-partition
+  sort that replaced the anti-join + global set_index dedup pattern.
 """
 
 import geopandas as gpd
@@ -22,6 +25,8 @@ from laurel.pipelines.compute_routes.nodes import (
     _build_partition_trips,
     _describe_partition,
     concat_optional_stops,
+    index_by_vehicle,
+    select_trips_to_route,
 )
 from laurel.utils.geo import METERS_PER_MILE
 
@@ -192,6 +197,11 @@ class TestDescribePartition:
     sub-rows (an is_optional=True stop at mile 5, and the original
     is_optional=False row at mile 10) as already produced and filtered by
     ``_build_partition_trips``.
+
+    ``split_trip`` is indexed by ``veh_id`` (not a plain column), matching
+    what actually arrives at this stage in production: the index set far
+    upstream by ``index_by_vehicle`` and carried through unshuffled by every
+    node in between (see ``_build_partition_trips``'s no-shuffle invariant).
     """
 
     @pytest.fixture
@@ -208,7 +218,7 @@ class TestDescribePartition:
                 "hours_route": [0.2, 0.2],
                 "start_time": [T0, T0],
             }
-        )
+        ).set_index("veh_id")
 
     def test_sorts_by_trip_and_distance(self, split_trip):
         """The mile-5 segment (lower dist_along_miles) sorts before mile-10."""
@@ -228,101 +238,200 @@ class TestDescribePartition:
         assert result["end_time"].iloc[0] == result["start_time"].iloc[1]
 
     def test_keep_cols_final_applied(self, split_trip):
+        """veh_id, the leading trip_id_cols entry, stays the index rather
+        than becoming a column -- keep_cols_final lists it because it names
+        the original trips schema, but only the remaining columns are
+        actually selectable here."""
         result = _describe_partition(split_trip, DESCRIBE_PARAMS)
-        assert list(result.columns) == DESCRIBE_PARAMS["keep_cols_final"]
+        expected_cols = [c for c in DESCRIBE_PARAMS["keep_cols_final"] if c != "veh_id"]
+        assert list(result.columns) == expected_cols
+
+    def test_index_preserved_not_reset(self, split_trip):
+        """veh_id remains the index -- no index-dropping side effect."""
+        result = _describe_partition(split_trip, DESCRIBE_PARAMS)
+        assert result.index.name == "veh_id"
+        assert result.index.tolist() == ["V1", "V1"]
+
+
+SELECT_PARAMS = {
+    "drop_cols": ["veh_type", "vin_gvw"],
+    "dist_col": "trip_miles",
+    "min_dist_miles": 50,
+    "debug_subsample": {"active": False, "frac": 0.01},
+}
+
+
+class TestSelectTripsToRoute:
+    """Tests for the to-route/not-to-route split."""
+
+    @pytest.fixture
+    def dd(self):
+        return pytest.importorskip("dask.dataframe")
+
+    def _trips(self, dd):
+        pdf = pd.DataFrame(
+            {
+                "veh_id": ["V1", "V2", "V3"],
+                "trip_miles": [10.0, 60.0, 100.0],
+                "veh_type": ["a", "a", "a"],
+                "vin_gvw": [1, 1, 1],
+            }
+        )
+        return dd.from_pandas(pdf, npartitions=1).set_index("veh_id", sorted=True)
+
+    def test_splits_by_min_dist_miles(self, dd):
+        """V1 (10mi) is too short to route; V2 and V3 (60mi, 100mi) are not."""
+        to_route, not_to_route = select_trips_to_route(self._trips(dd), SELECT_PARAMS)
+        assert sorted(to_route.compute().index.tolist()) == ["V2", "V3"]
+        assert sorted(not_to_route.compute().index.tolist()) == ["V1"]
+
+    def test_drop_cols_removed_from_both(self, dd):
+        to_route, not_to_route = select_trips_to_route(self._trips(dd), SELECT_PARAMS)
+        assert "veh_type" not in to_route.columns
+        assert "veh_type" not in not_to_route.columns
+
+    def test_index_preserved_on_both_outputs(self, dd):
+        """Both outputs inherit the input's index for free via .loc[]."""
+        to_route, not_to_route = select_trips_to_route(self._trips(dd), SELECT_PARAMS)
+        assert to_route.index.name == "veh_id"
+        assert not_to_route.index.name == "veh_id"
+
+    def test_debug_subsample_applies_only_to_to_route(self, dd):
+        """An active debug subsample shrinks the to-route side but leaves
+        not_to_route (not part of the expensive routing path) untouched."""
+        params = {**SELECT_PARAMS, "debug_subsample": {"active": True, "frac": 0.0}}
+        to_route, not_to_route = select_trips_to_route(self._trips(dd), params)
+        assert len(to_route.compute()) == 0
+        assert len(not_to_route.compute()) == 1
+
+
+INDEX_PARAMS = {"id_col": "veh_id", "n_partitions": 3}
+
+
+class TestIndexByVehicle:
+    """Tests for indexing a trips DataFrame by vehicle ID with known divisions."""
+
+    @pytest.fixture
+    def dd(self):
+        return pytest.importorskip("dask.dataframe")
+
+    def _trips_many_vehicles(self, dd, n_vehicles=200, npartitions=4):
+        """Enough distinct veh_id values that set_index's quantile-based
+        partitioning can actually honor a requested npartitions."""
+        pdf = pd.DataFrame(
+            {
+                "veh_id": [f"V{i:04d}" for i in range(n_vehicles)],
+                "some_col": list(range(n_vehicles)),
+            }
+        )
+        return dd.from_pandas(pdf, npartitions=npartitions)
+
+    def test_indexes_by_id_col(self, dd):
+        result = index_by_vehicle(self._trips_many_vehicles(dd), INDEX_PARAMS)
+        assert result.index.name == "veh_id"
+        assert "veh_id" not in result.columns
+
+    def test_known_divisions(self, dd):
+        result = index_by_vehicle(self._trips_many_vehicles(dd), INDEX_PARAMS)
+        assert result.known_divisions
+
+    def test_output_partition_count_matches_n_partitions(self, dd):
+        result = index_by_vehicle(self._trips_many_vehicles(dd), INDEX_PARAMS)
+        assert result.npartitions == INDEX_PARAMS["n_partitions"]
+
+    def test_data_preserved(self, dd):
+        result = index_by_vehicle(self._trips_many_vehicles(dd), INDEX_PARAMS).compute()
+        assert sorted(result["some_col"].tolist()) == list(range(200))
 
 
 CONCAT_PARAMS = {
-    "drop_cols": ["veh_type", "vin_gvw"],
     "trip_id_cols": ["veh_id", "end_timestamp_utc"],
-    "n_partitions": 2,
 }
 
 
 class TestConcatOptionalStops:
-    """Tests for the anti-join + set_index dedup/sort logic."""
+    """Tests for the divisions-aware concat + per-partition sort logic.
+
+    Both inputs are expected to already be disjoint (by construction, via
+    ``select_trips_to_route``) and indexed by vehicle ID with known
+    divisions (via ``index_by_vehicle``) -- no anti-join/dedup is needed.
+    """
 
     @pytest.fixture
     def dd(self):
         dask_dataframe = pytest.importorskip("dask.dataframe")
         return dask_dataframe
 
-    def _trips_orig(self, dd, npartitions=1):
+    def _trips_not_to_route(self, dd, npartitions=1):
         pdf = pd.DataFrame(
             {
-                "veh_id": ["V1", "V2", "V3"],
-                "end_timestamp_utc": [T0, T0, T0],
-                "veh_type": ["a", "a", "a"],
-                "vin_gvw": [1, 1, 1],
-                "some_col": [1, 2, 3],
+                "veh_id": ["V1", "V3"],
+                "end_timestamp_utc": [T0, T0],
+                "some_col": [1, 3],
             }
         )
-        return dd.from_pandas(pdf, npartitions=npartitions)
+        return dd.from_pandas(pdf, npartitions=npartitions).set_index("veh_id", sorted=True)
 
     def _trips_opt(self, dd):
+        # V2 is a split trip: two sub-rows with distinct (post-describe)
+        # end_timestamp_utc values, deliberately out of chronological order.
+        # V4 is a routed-but-unsplit trip, appearing as a single row.
         pdf = pd.DataFrame(
             {
-                "veh_id": ["V2", "V2"],
-                "end_timestamp_utc": [T0, T0],
-                "some_col": [20, 21],
+                "veh_id": ["V2", "V2", "V4"],
+                "end_timestamp_utc": [T0 + pd.Timedelta(minutes=15), T0, T0],
+                "some_col": [21, 20, 40],
             }
         )
-        return dd.from_pandas(pdf, npartitions=1)
+        return dd.from_pandas(pdf, npartitions=1).set_index("veh_id", sorted=True)
 
-    def test_split_trip_original_row_dropped(self, dd):
-        """V2's original row is replaced entirely by its two split rows."""
-        result = concat_optional_stops(self._trips_orig(dd), self._trips_opt(dd), CONCAT_PARAMS).compute()
+    def test_split_trip_rows_present(self, dd):
+        """Both of V2's split rows (from trips_opt) appear in the output."""
+        result = concat_optional_stops(
+            self._trips_not_to_route(dd), self._trips_opt(dd), CONCAT_PARAMS
+        ).compute()
         assert list(result.index).count("V2") == 2
         assert sorted(result.loc["V2", "some_col"].tolist()) == [20, 21]
 
-    def test_unsplit_trips_preserved(self, dd):
-        """V1 and V3, which never appear in trips_opt, survive unchanged."""
-        result = concat_optional_stops(self._trips_orig(dd), self._trips_opt(dd), CONCAT_PARAMS).compute()
+    def test_not_to_route_trips_preserved(self, dd):
+        """V1 and V3, too short to route, survive unchanged."""
+        result = concat_optional_stops(
+            self._trips_not_to_route(dd), self._trips_opt(dd), CONCAT_PARAMS
+        ).compute()
         assert result.loc["V1", "some_col"] == 1
         assert result.loc["V3", "some_col"] == 3
 
-    def test_drop_cols_removed(self, dd):
-        result = concat_optional_stops(self._trips_orig(dd), self._trips_opt(dd), CONCAT_PARAMS).compute()
-        assert "veh_type" not in result.columns
-        assert "vin_gvw" not in result.columns
+    def test_unsplit_routed_trip_preserved(self, dd):
+        """V4, routed but never split, appears once via trips_opt."""
+        result = concat_optional_stops(
+            self._trips_not_to_route(dd), self._trips_opt(dd), CONCAT_PARAMS
+        ).compute()
+        assert result.loc["V4", "some_col"] == 40
 
     def test_indexed_by_leading_trip_id_col(self, dd):
         """Output is indexed by veh_id rather than carrying it as a column."""
-        result = concat_optional_stops(self._trips_orig(dd), self._trips_opt(dd), CONCAT_PARAMS).compute()
+        result = concat_optional_stops(
+            self._trips_not_to_route(dd), self._trips_opt(dd), CONCAT_PARAMS
+        ).compute()
         assert result.index.name == "veh_id"
         assert "veh_id" not in result.columns
 
     def test_globally_sorted_by_index(self, dd):
-        result = concat_optional_stops(self._trips_orig(dd), self._trips_opt(dd), CONCAT_PARAMS).compute()
+        result = concat_optional_stops(
+            self._trips_not_to_route(dd), self._trips_opt(dd), CONCAT_PARAMS
+        ).compute()
         assert list(result.index) == sorted(result.index)
 
-    def test_anti_join_works_across_multiple_partitions(self, dd):
-        """The dedup is correct even when trips_orig spans multiple partitions."""
+    def test_v2_rows_sorted_chronologically_within_vehicle(self, dd):
+        """The final per-partition sort orders V2's two rows by
+        end_timestamp_utc even though trips_opt handed them in reverse."""
         result = concat_optional_stops(
-            self._trips_orig(dd, npartitions=3), self._trips_opt(dd), CONCAT_PARAMS
+            self._trips_not_to_route(dd), self._trips_opt(dd), CONCAT_PARAMS
         ).compute()
-        assert sorted(result.index.tolist()) == ["V1", "V2", "V2", "V3"]
+        assert result.loc["V2", "some_col"].tolist() == [20, 21]
 
-    def _trips_orig_many_vehicles(self, dd, n_vehicles=200, npartitions=4):
-        """A larger fixture with enough distinct veh_id values that
-        set_index's quantile-based partitioning can actually honor a
-        requested npartitions (a handful of distinct index values, as in
-        the other tests' 3-row fixture, isn't enough for that)."""
-        pdf = pd.DataFrame(
-            {
-                "veh_id": [f"V{i:04d}" for i in range(n_vehicles)],
-                "end_timestamp_utc": [T0] * n_vehicles,
-                "veh_type": ["a"] * n_vehicles,
-                "vin_gvw": [1] * n_vehicles,
-                "some_col": list(range(n_vehicles)),
-            }
-        )
-        return dd.from_pandas(pdf, npartitions=npartitions)
-
-    def test_output_partition_count_matches_n_partitions(self, dd):
-        """set_index's npartitions kwarg controls the output partition count directly."""
-        params = {**CONCAT_PARAMS, "n_partitions": 5}
+    def test_works_when_not_to_route_spans_multiple_partitions(self, dd):
         result = concat_optional_stops(
-            self._trips_orig_many_vehicles(dd), self._trips_opt(dd), params
-        )
-        assert result.npartitions == 5
+            self._trips_not_to_route(dd, npartitions=2), self._trips_opt(dd), CONCAT_PARAMS
+        ).compute()
+        assert sorted(result.index.tolist()) == ["V1", "V2", "V2", "V3", "V4"]

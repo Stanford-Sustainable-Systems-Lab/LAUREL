@@ -8,13 +8,17 @@ Sub-pipelines / tags
 --------------------
 - **import** — imports the OSM road network into the GraphHopper Docker
   container (run once; reuses the pre-built graph on subsequent runs).
-- **pre_routing** — filters short trips, converts H3 hex origins/destinations
-  to point geometries, and re-partitions for checkpointing.
+- **pre_routing** — indexes trips by vehicle ID, splits off trips too short
+  to route, converts H3 hex origins/destinations to point geometries, and
+  re-partitions for checkpointing.
 - **routing** — starts a Dask cluster and the GraphHopper server, computes
   shortest-path routes for all trips, then tears both down.
 - **insert_optional_stops** — spatially joins truck-stop candidates onto
   routes, projects stop positions along each route, splits trips at stops,
-  and concatenates the result with the original trips.
+  and concatenates the result with the never-routed trips. The vehicle-ID
+  index (and its divisions) set in ``pre_routing`` survives unshuffled all
+  the way through, recovered for free off the checkpoint dataset rather than
+  re-established with a second ``index_by_vehicle`` pass.
 
 To visualise the node graph interactively, run::
 
@@ -35,13 +39,14 @@ from laurel.utils.data import filter_by_vals_in_cols
 from .nodes import (
     concat_optional_stops,
     describe_optional_stop_trips,
-    filter_routable_trips,
     format_stop_locations,
     get_optional_stop_trips,
     get_routes_node,
     get_trip_orig_dest_points,
     import_graph,
+    index_by_vehicle,
     partition_trips,
+    select_trips_to_route,
 )
 
 
@@ -61,21 +66,27 @@ def create_pipeline(**kwargs) -> Pipeline:
     pre_route_pipe = Pipeline(
         [
             Node(
-                func=filter_routable_trips,
-                inputs=["trips_formatted", "params:filter_routable_trips"],
-                outputs="trips_routable_filtered",
-                name="filter_routable_trips",
+                func=index_by_vehicle,
+                inputs=["trips_formatted", "params:index_by_vehicle"],
+                outputs="trips_formatted_indexed",
+                name="index_trips_formatted_by_vehicle",
+            ),
+            Node(
+                func=select_trips_to_route,
+                inputs=["trips_formatted_indexed", "params:select_trips_to_route"],
+                outputs=["trips_to_route", "trips_not_to_route"],
+                name="select_trips_to_route",
             ),
             Node(
                 func=get_trip_orig_dest_points,
-                inputs=["trips_routable_filtered", "params:get_trip_orig_dest_points"],
+                inputs=["trips_to_route", "params:get_trip_orig_dest_points"],
                 outputs="trips_to_route_big_partitions",
                 name="get_trip_orig_dest_points",
             ),
             Node(
                 func=partition_trips,
                 inputs=["trips_to_route_big_partitions", "params:partition_trips"],
-                outputs="trips_to_route",
+                outputs="trips_to_route_partitioned",
                 name="partition_trips",
             ),
         ],
@@ -95,7 +106,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=get_routes_node,
                 inputs=[
-                    "trips_to_route",
+                    "trips_to_route_partitioned",
                     "routing_server",
                     "params:get_routes",
                 ],
@@ -148,7 +159,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             Node(
                 func=concat_optional_stops,
                 inputs=[
-                    "trips_formatted",
+                    "trips_not_to_route",
                     "optional_stop_trips",
                     "params:concat_optional_stops",
                 ],

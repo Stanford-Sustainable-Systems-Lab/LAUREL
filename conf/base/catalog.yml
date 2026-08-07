@@ -239,11 +239,20 @@ trips_formatted:
   type: dask.ParquetDataset
   filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/trips_formatted/
 
-trips_to_route:
-  type: laurel.datasets.geoparquet.GeoParquetDataset
-  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/trips_to_route
+trips_not_to_route:
+  type: dask.ParquetDataset
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/trips_not_to_route
   save_args:
-    write_index: False
+    write_index: True
+    write_metadata_file: True
+  load_args:
+    calculate_divisions: True
+
+trips_to_route_partitioned:
+  type: laurel.datasets.geoparquet.GeoParquetDataset
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/trips_to_route_partitioned
+  save_args:
+    write_index: True
   load_args:
     split_row_groups: False
 
@@ -251,7 +260,16 @@ trips_routed:
   type: laurel.datasets.geoparquet.GeoParquetDataset
   filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/trips_routed
   save_args:
-    write_index: False
+    write_index: True
+
+optional_stop_trips:
+  type: dask.ParquetDataset
+  filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/optional_stop_trips
+  save_args:
+    write_index: True
+    write_metadata_file: True
+  load_args:
+    calculate_divisions: True
 
 trips_with_optional:
   type: dask.ParquetDataset

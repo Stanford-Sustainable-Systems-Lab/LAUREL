@@ -19,7 +19,11 @@
 #
 # Documentation: https://docs.kedro.org/en/stable/configuration/parameters.html
 
-filter_routable_trips:
+index_by_vehicle:
+  id_col: veh_id
+  n_partitions: 300
+
+select_trips_to_route:
   drop_cols:
     - veh_type
     - vin_gvw
@@ -148,11 +152,6 @@ describe_optional_stop_trips:
     - trip_hrs
 
 concat_optional_stops:
-  drop_cols:
-    - veh_type
-    - vin_gvw
   trip_id_cols:
     - veh_id
     - end_timestamp_utc
-  dist_col: trip_miles
-  n_partitions: 300  # For saving out to Parquet
