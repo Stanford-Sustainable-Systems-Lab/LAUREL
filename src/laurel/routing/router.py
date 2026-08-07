@@ -34,6 +34,7 @@ async def _get_routes_async(
     **kwargs,
 ) -> gpd.GeoDataFrame:
     """Set up the server and client for routing, then iterate through groups asynchronously."""
+    trips = trips.copy()
     trips[DIST_COL] = np.nan
     trips[TIME_COL] = np.nan
     trips[ROUTE_COL] = gpd.GeoSeries(data=None, crs=trips.crs)
