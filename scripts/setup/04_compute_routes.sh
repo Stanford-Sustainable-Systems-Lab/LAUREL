@@ -4,7 +4,7 @@
 #SBATCH --ntasks-per-node=2
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=128GB
-#SBATCH --time=0-10:00
+#SBATCH --time=0-06:00
 #SBATCH --job-name=compute_routes
 #SBATCH --output=logs/slurm/%x_%j.log
 
