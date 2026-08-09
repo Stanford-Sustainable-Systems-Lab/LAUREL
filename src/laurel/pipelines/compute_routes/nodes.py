@@ -504,7 +504,8 @@ def _describe_partition(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
     ``(seg_miles / route_speed) x (obs_hours / route_hours)`` (proportional
     scaling preserves the observed total trip time), derives cumulative time
     shifts from the trip start time to produce new ``start_time``/``end_time``
-    for each sub-trip rounded to seconds, then renames/selects columns to
+    for each sub-trip rounded to seconds, drops any split left with a
+    duplicate ``end_time`` by that rounding, then renames/selects columns to
     match the original trips schema.
 
     ``trips`` arrives indexed by vehicle ID (set upstream by
@@ -558,6 +559,19 @@ def _describe_partition(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
     trips_out = trips.rename(
         columns={v: k for k, v in params["rename_cols_final"].items()}
     )
+
+    # Stops close enough together to round to the same new_end which will cause
+    # row explosions later when merging; trip_id_cols now names each split's own
+    # end time (post-rename), so it doubles as the key for dropping repeats.
+    key_arrays = [
+        trips_out[col].to_numpy()
+        if col in trips_out.columns
+        else trips_out.index.get_level_values(col).to_numpy()
+        for col in trip_id_cols
+    ]
+    is_dupe = pd.MultiIndex.from_arrays(key_arrays).duplicated(keep="first")
+    trips_out = trips_out.loc[~is_dupe]
+
     # id_col (veh_id) stays the index rather than a column -- keep_cols_final
     # lists it because it names the original trips schema, but it's not a
     # selectable column here.
