@@ -647,6 +647,12 @@ def concat_optional_stops(
             - ``trip_id_cols`` (list[str]): columns uniquely identifying a
               trip row; the leading column is the shared index; any
               remaining columns are sorted on per-partition below.
+            - ``n_partitions`` (int): target partition count for the merged
+              output. ``interleave_partitions=True`` builds output partitions
+              from the union of both inputs' division boundaries, which can
+              far exceed either input's own partition count; this rebalances
+              it back down. Divisions stay known and monotonic going in, so
+              this is a cheap merge of adjacent partitions, not a shuffle.
 
     Returns:
         A Dask DataFrame combining the never-routed trips and the described
@@ -654,6 +660,7 @@ def concat_optional_stops(
         combination, indexed by the leading ``trip_id_cols`` entry.
     """
     trips = dd.concat([trips_not_to_route, trips_opt], axis=0, interleave_partitions=True)
+    trips = trips.repartition(npartitions=params["n_partitions"])
 
     _id_col, *rest_id_cols = params["trip_id_cols"]
     if rest_id_cols:

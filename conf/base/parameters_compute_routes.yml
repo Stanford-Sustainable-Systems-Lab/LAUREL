@@ -175,3 +175,4 @@ concat_optional_stops:
   trip_id_cols:
     - veh_id
     - end_timestamp_utc
+  n_partitions: 60
