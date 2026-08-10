@@ -70,6 +70,7 @@ from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
 from laurel.models.dwell_sets import CumAggFunc, DwellSet
+from laurel.utils.data import merge_dataframes_node
 from laurel.utils.h3 import str_to_h3
 from laurel.utils.time import total_hours
 
@@ -475,11 +476,12 @@ def map_location_groups(
     """Join freight-activity-class labels from the hex correspondence table onto dwells.
 
     Maps the cluster/group label for each hexagon (computed by the
-    ``describe_locations`` pipeline) onto the ``DwellSet`` rows by hexagon ID.
-    For Dask-backed ``DwellSet`` instances, the mapping is done via a lazy
-    broadcast merge rather than ``Series.map()``, which would otherwise embed
-    the correspondence table as an unmanaged, unspillable graph literal and
-    can stall workers under memory pressure.
+    ``describe_locations`` pipeline) onto the ``DwellSet`` rows by hexagon ID,
+    via ``merge_dataframes_node``. That helper preserves ``dw.data``'s index
+    (``veh_id``) across the merge and, for Dask-backed ``DwellSet`` instances,
+    performs a partition-wise broadcast merge rather than ``Series.map()``,
+    which would otherwise embed the correspondence table as an unmanaged,
+    unspillable graph literal and can stall workers under memory pressure.
 
     Args:
         dw: ``DwellSet`` with a hex-ID column.
@@ -499,16 +501,18 @@ def map_location_groups(
         The ``DwellSet`` with a new location-group column added to ``dw.data``.
     """
     grp_col = params["location_group_col"]
-    map_ser = hex_corresp[grp_col]
 
-    if dw.is_dask:
-        orig_hex_dtype = dw.data[dw.hex].dtype
-        corresp = map_ser.rename_axis(dw.hex).reset_index()
-        corresp[dw.hex] = corresp[dw.hex].astype(orig_hex_dtype)
-        corresp_ddf = dd.from_pandas(corresp, npartitions=1)
-        dw.data = dw.data.merge(corresp_ddf, on=dw.hex, how="left")
-    else:
-        dw.data[grp_col] = dw.data[dw.hex].map(map_ser)
+    # H3 hex IDs come out of `str_to_h3` as int64, but `hex_corresp`'s index
+    # is uint64 -- a merge on mismatched key dtypes can silently drop rows.
+    orig_hex_dtype = dw.data[dw.hex].dtype
+    corresp = hex_corresp[[grp_col]].copy()
+    corresp.index = corresp.index.astype(orig_hex_dtype)
+
+    merge_params = {
+        "keep_right_columns": [dw.hex, grp_col],
+        "merge_kwargs": {"on": dw.hex, "how": "left"},
+    }
+    dw.data = merge_dataframes_node(left=dw.data, right=corresp, params=merge_params)
 
     mpars = params["missing_values"]
     if mpars["fill_missing"]:
