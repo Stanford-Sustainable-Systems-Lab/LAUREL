@@ -4,7 +4,7 @@
 #SBATCH --ntasks-per-node=2
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=64GB
-#SBATCH --time=0-01:00
+#SBATCH --time=0-00:10
 #SBATCH --job-name=describe_dwells
 #SBATCH --output=logs/slurm/%x_%j.log
 
