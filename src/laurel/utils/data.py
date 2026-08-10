@@ -86,7 +86,10 @@ def merge_dataframes_node(
 
     For Dask inputs, the join is executed partition-by-partition via
     ``map_partitions`` to avoid the expensive global ``set_index`` that a
-    standard Dask merge would require.
+    standard Dask merge would require. ``right`` is converted to a
+    one-partition Dask collection and passed positionally so it becomes a
+    single shared graph dependency rather than being re-embedded as an
+    unmanaged, unspillable literal in every partition's task.
 
     Args:
         left: The large fact DataFrame (pandas or Dask) whose index is preserved.
@@ -138,9 +141,13 @@ def merge_dataframes_node(
     if not is_dask:
         merged = _merge_dataframe(left=left, right=mrg, mrg_kws=params["merge_kwargs"])
     else:
-        # For dask DataFrames, we need to preserve the index without expensive set_index operations
+        # For dask DataFrames, we need to preserve the index without expensive set_index operations.
+        # `mrg` must be passed as a *positional* Dask collection: a plain pandas
+        # arg (or any arg passed via kwarg) gets pickled into every partition's
+        # task instead of becoming one shared, spillable graph node.
+        mrg_ddf = dd.from_pandas(mrg, npartitions=1)
         merged = left.map_partitions(
-            _merge_dataframe, right=mrg, mrg_kws=params["merge_kwargs"]
+            _merge_dataframe, mrg_ddf, params["merge_kwargs"]
         )
 
     return merged
