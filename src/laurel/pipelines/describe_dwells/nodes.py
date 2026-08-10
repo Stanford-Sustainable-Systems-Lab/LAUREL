@@ -476,8 +476,10 @@ def map_location_groups(
 
     Maps the cluster/group label for each hexagon (computed by the
     ``describe_locations`` pipeline) onto the ``DwellSet`` rows by hexagon ID.
-    For Dask-backed ``DwellSet`` instances, the mapping is performed lazily
-    via ``dw.data[dw.hex].map(map_ser, meta=...)``.
+    For Dask-backed ``DwellSet`` instances, the mapping is done via a lazy
+    broadcast merge rather than ``Series.map()``, which would otherwise embed
+    the correspondence table as an unmanaged, unspillable graph literal and
+    can stall workers under memory pressure.
 
     Args:
         dw: ``DwellSet`` with a hex-ID column.
@@ -500,8 +502,11 @@ def map_location_groups(
     map_ser = hex_corresp[grp_col]
 
     if dw.is_dask:
-        meta = (grp_col, map_ser.dtype)
-        dw.data[grp_col] = dw.data[dw.hex].map(map_ser, meta=meta)
+        orig_hex_dtype = dw.data[dw.hex].dtype
+        corresp = map_ser.rename_axis(dw.hex).reset_index()
+        corresp[dw.hex] = corresp[dw.hex].astype(orig_hex_dtype)
+        corresp_ddf = dd.from_pandas(corresp, npartitions=1)
+        dw.data = dw.data.merge(corresp_ddf, on=dw.hex, how="left")
     else:
         dw.data[grp_col] = dw.data[dw.hex].map(map_ser)
 
