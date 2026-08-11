@@ -450,9 +450,9 @@ def _build_partition_trips(
         short["trip_miles_route"] - params["park_buffer_miles"]
     )
     short = short.loc[(~started_at_park & ~ended_at_park), :]
-    short[pcols["hex_end"]] = short[pcols["hex_park"]]
+    short = short.rename(columns={pcols["hex_park"]: pcols["hex_end"]})
     short = pd.DataFrame(
-        short.drop(columns=[pcols["route_geom"], pcols["park_point"], pcols["hex_park"]])
+        short.drop(columns=[pcols["route_geom"], pcols["park_point"]])
     )
     short[pcols["routing_status"]] = "routed"
 
