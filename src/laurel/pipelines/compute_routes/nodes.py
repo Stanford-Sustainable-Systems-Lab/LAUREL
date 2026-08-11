@@ -382,10 +382,22 @@ def _build_partition_trips(
     params: dict,
 ) -> pd.DataFrame:
     """Compute one partition's full, filtered contribution: its own trip
-    row(s) (``is_optional=False``) plus any optional-stop split rows from
-    joining against ``parks`` (``is_optional=True``), with endpoint-adjacent
-    stops already excluded (``describe_optional_stop_trips`` still does its
-    own sort, right before the position-based math that needs it).
+    row(s) (``routing_status="original"`` or ``"unrouted"``) plus any
+    optional-stop split rows from joining against ``parks``
+    (``routing_status="routed"``), with endpoint-adjacent stops already
+    excluded (``describe_optional_stop_trips`` still does its own sort,
+    right before the position-based math that needs it).
+
+    A trip with no route geometry is tagged ``"unrouted"`` instead of being
+    dropped, and contributes only its own row (no route path exists to
+    check against truck stops) -- ``_describe_partition`` fills in its
+    distance/time from pre-routing ``trip_miles``/``trip_hrs`` before doing
+    its segment math. This covers two distinct cases that
+    ``laurel.routing.router`` cannot tell apart once a trip reaches this
+    function: the trip's origin and destination H3 hexes are identical
+    (``router``'s ``orig == dest`` short-circuit -- which does not imply
+    zero distance traveled, since hex centroids rather than raw GPS points
+    are being compared), or GraphHopper genuinely failed to route it.
 
     Runs as one task per partition -- no ``dask_geopandas`` broadcast-join
     graph layer inside this function, so the optimizer can fuse it directly
@@ -402,19 +414,29 @@ def _build_partition_trips(
     """
     pcols = params["columns"]
 
-    trips_source = part.dropna(subset=[pcols["route_geom"]]).drop(
-        columns=params["drop_cols_initial"]
-    )
+    trips_source = part.drop(columns=params["drop_cols_initial"])
     del part
 
-    orig = pd.DataFrame(trips_source.drop(columns=[pcols["route_geom"]]))
-    orig[pcols["dist_along_miles"]] = orig["trip_miles_route"]
-    orig["is_optional"] = False
+    no_route = trips_source[pcols["route_geom"]].isna()
 
-    part_proj = trips_source.set_geometry(pcols["route_geom"]).to_crs(
+    # Get the original routed trips
+    routed_source = trips_source.loc[~no_route]
+
+    orig = pd.DataFrame(routed_source.drop(columns=[pcols["route_geom"]]))
+    orig[pcols["dist_along_miles"]] = orig["trip_miles_route"]
+    orig[pcols["routing_status"]] = "original"
+
+    # Mark trips that did not get routes for later fallback behavior
+    unrouted = pd.DataFrame(
+        trips_source.loc[no_route].drop(columns=[pcols["route_geom"]])
+    )
+    unrouted[pcols["routing_status"]] = "unrouted"
+
+    # Identify optional stops on routed trips
+    part_proj = routed_source.set_geometry(pcols["route_geom"]).to_crs(
         params["projected_crs"]
     )
-    del trips_source
+    del routed_source
 
     short = gpd.sjoin(part_proj, parks, how="inner", predicate="intersects")
     del part_proj
@@ -423,24 +445,19 @@ def _build_partition_trips(
         short[pcols["route_geom"]].project(short[pcols["park_point"]])
         / METERS_PER_MILE
     )
+    started_at_park = short[pcols["dist_along_miles"]] < params["park_buffer_miles"]
+    ended_at_park = short[pcols["dist_along_miles"]] > (
+        short["trip_miles_route"] - params["park_buffer_miles"]
+    )
+    short = short.loc[(~started_at_park & ~ended_at_park), :]
     short[pcols["hex_end"]] = short[pcols["hex_park"]]
     short = pd.DataFrame(
         short.drop(columns=[pcols["route_geom"], pcols["park_point"], pcols["hex_park"]])
     )
-    short["is_optional"] = True
+    short[pcols["routing_status"]] = "routed"
 
-    trips = pd.concat([orig, short], axis=0)
-    del orig, short
-
-    # Drop optional stops too close to either trip endpoint (already
-    # counted as a dwell there), then sort for the segment distance/time
-    # math below.
-    started_at_park = trips[pcols["dist_along_miles"]] < params["park_buffer_miles"]
-    ended_at_park = trips[pcols["dist_along_miles"]] > (
-        trips["trip_miles_route"] - params["park_buffer_miles"]
-    )
-    is_opt = trips[pcols["is_optional"]]
-    trips = trips.loc[(~started_at_park & ~ended_at_park & is_opt) | ~is_opt, :]
+    # Bring all trips back together
+    trips = pd.concat([orig, unrouted, short], axis=0)
     return trips
 
 
@@ -450,10 +467,11 @@ def get_optional_stop_trips(
     """Identify truck stops along each route and compute their distance from the trip origin.
 
     Fuses, into a single per-partition task, everything that used to be a
-    chain of separate Dask operations: dropping null-geometry routes and
-    unused columns, buffering and spatially joining truck stops onto the
-    route LineStrings, projecting each matched stop onto its route to get
-    its distance from the trip origin, dropping the now-unneeded route
+    chain of separate Dask operations: dropping unused columns, falling
+    back to pre-routing ``trip_miles``/``trip_hrs`` for trips with no route
+    geometry, buffering and spatially joining truck stops onto the route
+    LineStrings, projecting each matched stop onto its route to get its
+    distance from the trip origin, dropping the now-unneeded route
     geometry, and excluding optional stops too close to either trip
     endpoint. Returns a lazy ``dd.DataFrame`` -- nothing is computed here;
     the pipeline's only materialization point is the final catalog write.
@@ -465,7 +483,7 @@ def get_optional_stop_trips(
 
             - ``columns`` (dict): sub-keys for column names including
               ``route_geom``, ``park_point``, ``park_id``, ``hex_end``,
-              ``hex_park``, ``dist_along_miles``, ``is_optional``.
+              ``hex_park``, ``dist_along_miles``, ``routing_status``.
             - ``projected_crs`` (str | CRS): CRS used for buffering and
               distance projection.
             - ``park_buffer_miles`` (float): buffer radius around each truck
@@ -476,9 +494,10 @@ def get_optional_stop_trips(
 
     Returns:
         A lazy ``dd.DataFrame`` combining original trips
-        (``is_optional=False``) and optional truck-stop trips
-        (``is_optional=True``), with a ``dist_along_miles`` column recording
-        each record's distance from the trip origin.
+        (``routing_status="original"`` or ``"unrouted"``) and optional
+        truck-stop trips (``routing_status="routed"``), with a
+        ``dist_along_miles`` column recording each record's distance from
+        the trip origin.
     """
     parks = parks.to_crs(params["projected_crs"])
     parks["buffer"] = parks.geometry.buffer(
@@ -498,15 +517,18 @@ def _describe_partition(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
     """Compute split timestamps and distances for one partition's sub-trips.
 
     Endpoint-adjacent optional stops are already excluded by
-    ``_build_partition_trips``; this sorts by trip ID and distance from
-    origin to establish sub-trip ordering, computes each sub-segment's
-    distance as ``dist_along - dist_prev`` and its duration as
-    ``(seg_miles / route_speed) x (obs_hours / route_hours)`` (proportional
-    scaling preserves the observed total trip time), derives cumulative time
-    shifts from the trip start time to produce new ``start_time``/``end_time``
-    for each sub-trip rounded to seconds, drops any split left with a
-    duplicate ``end_time`` by that rounding, then renames/selects columns to
-    match the original trips schema.
+    ``_build_partition_trips``; this first backfills distance/time/speed for
+    ``routing_status="unrouted"`` rows (no GraphHopper route -- see
+    ``_build_partition_trips``) from their pre-routing ``trip_miles``/
+    ``trip_hrs``, then sorts by trip ID and distance from origin to
+    establish sub-trip ordering, computes each sub-segment's distance as
+    ``dist_along - dist_prev`` and its duration as ``(seg_miles /
+    route_speed) x (obs_hours / route_hours)`` (proportional scaling
+    preserves the observed total trip time), derives cumulative time shifts
+    from the trip start time to produce new ``start_time``/``end_time`` for
+    each sub-trip rounded to seconds, drops any split left with a duplicate
+    ``end_time`` by that rounding, then renames/selects columns to match
+    the original trips schema.
 
     ``trips`` arrives indexed by vehicle ID (set upstream by
     ``index_by_vehicle`` and carried through unchanged ever since, per
@@ -527,6 +549,21 @@ def _describe_partition(trips: pd.DataFrame, params: dict) -> pd.DataFrame:
     trips = trips.sort_values(
         rest_id_cols + [pcols["dist_along_miles"]], ascending=True, kind="stable"
     ).sort_index(kind="stable")
+
+    # "unrouted" rows (no GraphHopper route geometry -- see
+    # _build_partition_trips) have no route-derived distance/time/speed;
+    # fall back to the trip's pre-routing values so the segment math below
+    # doesn't divide by zero or produce a NaN time_scaler, and so the
+    # result reproduces the trip's originally observed start/end times
+    # unchanged.
+    is_unrouted = trips[pcols["routing_status"]] == "unrouted"
+    trips.loc[is_unrouted, pcols["miles_route"]] = trips.loc[is_unrouted, pcols["miles_orig"]]
+    trips.loc[is_unrouted, pcols["hours_route"]] = trips.loc[is_unrouted, pcols["hours_orig"]]
+    trips.loc[is_unrouted, pcols["speed_route"]] = (
+        trips.loc[is_unrouted, pcols["miles_route"]]
+        / trips.loc[is_unrouted, pcols["hours_route"]]
+    )
+    trips.loc[is_unrouted, pcols["dist_along_miles"]] = trips.loc[is_unrouted, pcols["miles_route"]]
 
     # Distances by segment
     trips["dist_prev_miles"] = trips.groupby(trip_id_cols)[
@@ -601,7 +638,8 @@ def describe_optional_stop_trips(trips: dd.DataFrame, params: dict) -> dd.DataFr
         params: Pipeline parameters dict with keys:
 
             - ``columns`` (dict): sub-keys for ``dist_along_miles``,
-              ``speed_route``, ``hours_orig``, ``hours_route``, ``start_time``.
+              ``speed_route``, ``hours_orig``, ``hours_route``, ``start_time``,
+              ``routing_status``, ``miles_route``, ``miles_orig``.
             - ``trip_id_cols`` (list[str]): columns that uniquely identify a
               trip (used for groupby and sort).
             - ``rename_cols_final`` (dict[str, str]): column renames applied

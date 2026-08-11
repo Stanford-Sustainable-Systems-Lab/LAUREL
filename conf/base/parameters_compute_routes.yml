@@ -138,7 +138,7 @@ get_optional_stop_trips:
     dist_along_miles: dist_along_miles
     hex_park: hex_id_park
     hex_end: ending_h3_8
-    is_optional: is_optional
+    routing_status: routing_status
   drop_cols_initial:
     - orig_point
     - dest_point
@@ -151,7 +151,7 @@ describe_optional_stop_trips:
     hours_route: trip_hrs_route
     hours_orig: trip_hrs
     speed_route: trip_speed_route_mph
-    is_optional: is_optional
+    routing_status: routing_status
     start_time: start_timestamp_utc
     end_time: end_timestamp_utc
   trip_id_cols:

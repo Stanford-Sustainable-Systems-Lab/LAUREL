@@ -39,7 +39,7 @@ BUILD_PARAMS = {
         "hex_park": "hex_park",
         "hex_end": "hex_end",
         "dist_along_miles": "dist_along_miles",
-        "is_optional": "is_optional",
+        "routing_status": "routing_status",
     },
     "projected_crs": CRS,
     "park_buffer_miles": 1.0,
@@ -70,24 +70,40 @@ def _make_parks(offsets_miles: list[float], hex_ids: list[str]) -> gpd.GeoDataFr
 def _make_part(rows: list[dict]) -> gpd.GeoDataFrame:
     """Build a ``routes``-partition-shaped GeoDataFrame from row dicts.
 
-    Each row dict may set ``route_geom`` (a LineString or None) and
-    ``trip_miles_route``; ``orig_point`` (the drop_cols_initial column) is
-    filled in automatically.
+    Each row dict may set ``route_geom`` (a LineString or None),
+    ``trip_miles_route``, ``trip_hrs_route``, and the pre-routing
+    ``trip_miles``/``trip_hrs`` (consumed as a fallback for rows with no
+    route geometry); ``orig_point`` (the drop_cols_initial column) and
+    ``trip_miles``/``trip_hrs`` are filled in automatically when omitted,
+    matching every column real ``routes`` partitions always carry.
     """
     df = pd.DataFrame(rows)
     if "orig_point" not in df.columns:
         df["orig_point"] = [Point(0, 0)] * len(df)
+    if "trip_miles" not in df.columns:
+        df["trip_miles"] = float("nan")
+    if "trip_hrs" not in df.columns:
+        df["trip_hrs"] = float("nan")
     return gpd.GeoDataFrame(df, geometry="route_geom", crs=CRS)
 
 
 class TestBuildPartitionTrips:
     """Tests for ``_build_partition_trips``."""
 
-    def test_drops_null_geometry_routes(self):
-        """A row with no route geometry is dropped before any join happens."""
+    def test_null_geometry_row_tagged_unrouted_not_dropped(self):
+        """A row with no route geometry survives, tagged "unrouted",
+        rather than being dropped. (Its distance/time fallback is computed
+        later by _describe_partition, not here -- see that function's
+        tests.)"""
         part = _make_part(
             [
-                {"route_geom": None, "trip_miles_route": 5.0},
+                {
+                    "route_geom": None,
+                    "trip_miles_route": 0.0,
+                    "trip_hrs_route": 0.0,
+                    "trip_miles": 5.0,
+                    "trip_hrs": 0.1,
+                },
                 {
                     "route_geom": LineString([(0, 0), (TRIP_LEN_M, 0)]),
                     "trip_miles_route": TRIP_LEN_MILES,
@@ -96,8 +112,52 @@ class TestBuildPartitionTrips:
         )
         parks = _make_parks([], [])
         result = _build_partition_trips(part, parks, BUILD_PARAMS)
+        assert len(result) == 2
+        unrouted_row = result.loc[result["trip_miles"] == 5.0].iloc[0]
+        assert unrouted_row["routing_status"] == "unrouted"
+
+    def test_same_hex_origin_destination_trip_preserved(self):
+        """A trip whose origin/destination hex are identical hits
+        router.py's orig == dest short-circuit (route_geom=None,
+        trip_miles_route/trip_hrs_route of 0.0) but may be a real, long
+        round trip -- it must survive, tagged "unrouted" so
+        _describe_partition can recover its true pre-routing distance
+        rather than the router's zeroed-out values."""
+        part = _make_part(
+            [
+                {
+                    "route_geom": None,
+                    "trip_miles_route": 0.0,
+                    "trip_hrs_route": 0.0,
+                    "trip_miles": 416.0,
+                    "trip_hrs": 8.0,
+                }
+            ]
+        )
+        parks = _make_parks([], [])
+        result = _build_partition_trips(part, parks, BUILD_PARAMS)
         assert len(result) == 1
-        assert result["trip_miles_route"].iloc[0] == TRIP_LEN_MILES
+        assert result["routing_status"].iloc[0] == "unrouted"
+
+    def test_genuine_routing_failure_trip_preserved(self):
+        """A trip GraphHopper genuinely failed to route (route_geom=None,
+        NaN trip_miles_route/trip_hrs_route) is handled identically to the
+        same-hex case: tagged "unrouted" and preserved."""
+        part = _make_part(
+            [
+                {
+                    "route_geom": None,
+                    "trip_miles_route": float("nan"),
+                    "trip_hrs_route": float("nan"),
+                    "trip_miles": 120.0,
+                    "trip_hrs": 2.5,
+                }
+            ]
+        )
+        parks = _make_parks([], [])
+        result = _build_partition_trips(part, parks, BUILD_PARAMS)
+        assert len(result) == 1
+        assert result["routing_status"].iloc[0] == "unrouted"
 
     def test_drop_cols_initial_removed(self):
         """Columns named in drop_cols_initial never appear in the output."""
@@ -109,14 +169,14 @@ class TestBuildPartitionTrips:
         assert "orig_point" not in result.columns
 
     def test_original_row_present_and_unflagged(self):
-        """Every input trip contributes exactly one is_optional=False row
-        whose dist_along_miles equals the full route length."""
+        """Every input trip contributes exactly one routing_status="original"
+        row whose dist_along_miles equals the full route length."""
         part = _make_part(
             [{"route_geom": LineString([(0, 0), (TRIP_LEN_M, 0)]), "trip_miles_route": TRIP_LEN_MILES}]
         )
         parks = _make_parks([], [])
         result = _build_partition_trips(part, parks, BUILD_PARAMS)
-        orig_rows = result.loc[~result["is_optional"]]
+        orig_rows = result.loc[result["routing_status"] == "original"]
         assert len(orig_rows) == 1
         assert orig_rows["dist_along_miles"].iloc[0] == TRIP_LEN_MILES
 
@@ -128,7 +188,7 @@ class TestBuildPartitionTrips:
         )
         parks = _make_parks([0.31, 5.0, 9.32], ["H_START", "H_MID", "H_END"])
         result = _build_partition_trips(part, parks, BUILD_PARAMS)
-        opt_rows = result.loc[result["is_optional"]]
+        opt_rows = result.loc[result["routing_status"] == "routed"]
         assert list(opt_rows["hex_end"]) == ["H_MID"]
         assert opt_rows["dist_along_miles"].iloc[0] == pytest.approx(5.0, abs=1e-6)
 
@@ -140,7 +200,7 @@ class TestBuildPartitionTrips:
         parks = _make_parks([100.0], ["H_FAR"])  # 100 miles away, never intersects
         result = _build_partition_trips(part, parks, BUILD_PARAMS)
         assert len(result) == 1
-        assert not result["is_optional"].any()
+        assert not (result["routing_status"] == "routed").any()
 
     def test_route_geom_and_park_point_dropped_from_output(self):
         """Geometry columns are dropped before returning (memory-saving intent)."""
@@ -171,11 +231,14 @@ DESCRIBE_PARAMS = {
         "hours_orig": "hours_orig",
         "hours_route": "hours_route",
         "start_time": "start_time",
+        "routing_status": "routing_status",
+        "miles_route": "trip_miles_route",
+        "miles_orig": "trip_miles",
     },
     "trip_id_cols": ["veh_id", "end_timestamp_utc"],
     "rename_cols_final": {
         "start_time": "new_start",
-        "end_time": "new_end",
+        "end_timestamp_utc": "new_end",
         "trip_miles": "trip_miles_route_seg",
         "trip_hrs": "trip_hrs_route_seg",
     },
@@ -183,7 +246,6 @@ DESCRIBE_PARAMS = {
         "veh_id",
         "end_timestamp_utc",
         "start_time",
-        "end_time",
         "trip_miles",
         "trip_hrs",
     ],
@@ -194,9 +256,9 @@ T0 = pd.Timestamp("2024-01-01 00:00:00")
 
 class TestDescribePartition:
     """Tests for ``_describe_partition``, using one trip split into two
-    sub-rows (an is_optional=True stop at mile 5, and the original
-    is_optional=False row at mile 10) as already produced and filtered by
-    ``_build_partition_trips``.
+    sub-rows (a routing_status="routed" stop at mile 5, and the
+    routing_status="original" row at mile 10) as already produced and
+    filtered by ``_build_partition_trips``.
 
     ``split_trip`` is indexed by ``veh_id`` (not a plain column), matching
     what actually arrives at this stage in production: the index set far
@@ -208,6 +270,9 @@ class TestDescribePartition:
     def split_trip(self) -> pd.DataFrame:
         # Route computed 10 miles at 50 mph = 0.2h; the observed trip took
         # 0.25h (hours_orig), so the proportional time_scaler is 1.25.
+        # trip_miles_route/trip_miles are irrelevant for these rows (neither
+        # is "unrouted") but must exist -- _describe_partition's unrouted
+        # backfill reads them via pcols regardless of how many rows match.
         return pd.DataFrame(
             {
                 "veh_id": ["V1", "V1"],
@@ -217,6 +282,9 @@ class TestDescribePartition:
                 "hours_orig": [0.25, 0.25],
                 "hours_route": [0.2, 0.2],
                 "start_time": [T0, T0],
+                "routing_status": ["original", "routed"],
+                "trip_miles_route": [float("nan"), float("nan")],
+                "trip_miles": [float("nan"), float("nan")],
             }
         ).set_index("veh_id")
 
@@ -230,12 +298,12 @@ class TestDescribePartition:
         """Proportional time allocation preserves the total observed trip time."""
         result = _describe_partition(split_trip, DESCRIBE_PARAMS)
         last_new_end = (T0 + pd.to_timedelta(0.25, unit="h")).round("s")
-        assert result["end_time"].iloc[-1] == last_new_end
+        assert result["end_timestamp_utc"].iloc[-1] == last_new_end
 
     def test_new_start_chains_from_previous_new_end(self, split_trip):
         """The second sub-trip's start equals the first sub-trip's end."""
         result = _describe_partition(split_trip, DESCRIBE_PARAMS)
-        assert result["end_time"].iloc[0] == result["start_time"].iloc[1]
+        assert result["end_timestamp_utc"].iloc[0] == result["start_time"].iloc[1]
 
     def test_keep_cols_final_applied(self, split_trip):
         """veh_id, the leading trip_id_cols entry, stays the index rather
@@ -251,6 +319,34 @@ class TestDescribePartition:
         result = _describe_partition(split_trip, DESCRIBE_PARAMS)
         assert result.index.name == "veh_id"
         assert result.index.tolist() == ["V1", "V1"]
+
+    def test_unrouted_row_backfills_from_pre_routing_values(self):
+        """A routing_status="unrouted" row (no GraphHopper route -- see
+        _build_partition_trips) arrives with trip_miles_route/hours_route/
+        speed_route/dist_along_miles still unset. _describe_partition must
+        backfill them from trip_miles/hours_orig (via pcols, not hardcoded
+        names) so the time_scaler resolves to 1.0 (not NaN/inf) and a
+        single unrouted row -- always alone in its trip_id group, since
+        _build_partition_trips never sjoins one against truck stops --
+        reproduces its original observed distance and end time exactly."""
+        unrouted_row = pd.DataFrame(
+            {
+                "veh_id": ["V9"],
+                "end_timestamp_utc": [T0 + pd.Timedelta(hours=8)],
+                "dist_along_miles": [float("nan")],
+                "speed_route": [float("nan")],
+                "hours_orig": [8.0],
+                "hours_route": [float("nan")],
+                "start_time": [T0],
+                "routing_status": ["unrouted"],
+                "trip_miles_route": [float("nan")],
+                "trip_miles": [416.0],
+            }
+        ).set_index("veh_id")
+        result = _describe_partition(unrouted_row, DESCRIBE_PARAMS)
+        assert result["start_time"].iloc[0] == T0
+        assert result["end_timestamp_utc"].iloc[0] == T0 + pd.Timedelta(hours=8)
+        assert result["trip_miles"].iloc[0] == 416.0
 
 
 SELECT_PARAMS = {
@@ -346,6 +442,7 @@ class TestIndexByVehicle:
 
 CONCAT_PARAMS = {
     "trip_id_cols": ["veh_id", "end_timestamp_utc"],
+    "n_partitions": 2,
 }
 
 
