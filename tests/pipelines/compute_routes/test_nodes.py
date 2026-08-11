@@ -73,8 +73,11 @@ def _make_part(rows: list[dict]) -> gpd.GeoDataFrame:
     Each row dict may set ``route_geom`` (a LineString or None),
     ``trip_miles_route``, ``trip_hrs_route``, and the pre-routing
     ``trip_miles``/``trip_hrs`` (consumed as a fallback for rows with no
-    route geometry); ``orig_point`` (the drop_cols_initial column) and
-    ``trip_miles``/``trip_hrs`` are filled in automatically when omitted,
+    route geometry); ``orig_point`` (the drop_cols_initial column),
+    ``trip_miles``/``trip_hrs``, and ``hex_end`` (the trip's real,
+    pre-existing destination hex -- always present upstream, e.g. as
+    ``ending_h3_8`` -- distinct from any park hex a stop-split renames
+    into that same column) are filled in automatically when omitted,
     matching every column real ``routes`` partitions always carry.
     """
     df = pd.DataFrame(rows)
@@ -84,6 +87,8 @@ def _make_part(rows: list[dict]) -> gpd.GeoDataFrame:
         df["trip_miles"] = float("nan")
     if "trip_hrs" not in df.columns:
         df["trip_hrs"] = float("nan")
+    if "hex_end" not in df.columns:
+        df["hex_end"] = "HEX_TRIP_DEST"
     return gpd.GeoDataFrame(df, geometry="route_geom", crs=CRS)
 
 
@@ -191,6 +196,37 @@ class TestBuildPartitionTrips:
         opt_rows = result.loc[result["routing_status"] == "routed"]
         assert list(opt_rows["hex_end"]) == ["H_MID"]
         assert opt_rows["dist_along_miles"].iloc[0] == pytest.approx(5.0, abs=1e-6)
+
+    def test_stop_split_overwrites_hex_end_without_duplicating_column(self):
+        """The trip's real, pre-existing hex_end (e.g. ending_h3_8, always
+        present on production `routes` partitions) must be replaced -- not
+        duplicated -- by the truck stop's hex on a routed split row, while
+        the "original" row for the same trip keeps its own real hex_end.
+
+        Regression test: previously, `short.rename` overwrote hex_park onto
+        hex_end without dropping the trip's existing hex_end column first,
+        producing two same-named "hex_end" columns and crashing the final
+        `pd.concat` with `InvalidIndexError: Reindexing only valid with
+        uniquely valued Index objects` on real data -- masked in this suite
+        because ``_make_part``'s fixture never set a pre-existing hex_end,
+        unlike every real routes partition."""
+        part = _make_part(
+            [
+                {
+                    "route_geom": LineString([(0, 0), (TRIP_LEN_M, 0)]),
+                    "trip_miles_route": TRIP_LEN_MILES,
+                    "hex_end": "HEX_REAL_DEST",
+                }
+            ]
+        )
+        parks = _make_parks([5.0], ["H_MID"])
+        result = _build_partition_trips(part, parks, BUILD_PARAMS)
+
+        assert list(result.columns).count("hex_end") == 1
+        orig_row = result.loc[result["routing_status"] == "original"].iloc[0]
+        routed_row = result.loc[result["routing_status"] == "routed"].iloc[0]
+        assert orig_row["hex_end"] == "HEX_REAL_DEST"
+        assert routed_row["hex_end"] == "H_MID"
 
     def test_no_matching_stops_yields_only_original_row(self):
         """A route that intersects no park buffer produces no optional rows."""

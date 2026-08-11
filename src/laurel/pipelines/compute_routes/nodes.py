@@ -450,7 +450,13 @@ def _build_partition_trips(
         short["trip_miles_route"] - params["park_buffer_miles"]
     )
     short = short.loc[(~started_at_park & ~ended_at_park), :]
-    short = short.rename(columns={pcols["hex_park"]: pcols["hex_end"]})
+    # The truck stop becomes this split's new endpoint, so the trip's
+    # existing hex_end must go before the rename -- otherwise hex_park
+    # collides with it instead of replacing it, leaving two same-named
+    # columns and breaking the concat below.
+    short = short.drop(columns=[pcols["hex_end"]]).rename(
+        columns={pcols["hex_park"]: pcols["hex_end"]}
+    )
     short = pd.DataFrame(
         short.drop(columns=[pcols["route_geom"], pcols["park_point"]])
     )
