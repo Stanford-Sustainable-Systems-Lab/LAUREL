@@ -39,7 +39,7 @@ slurm_resources:
   mem-per-cpu: 16GB        # Tune to your cluster; each SoW requires ~64 GB total (4 cores × 16 GB)
   gpus: 0
   time: 0-01:00            # Wall-clock limit; each SoW runs in ~25 minutes; 1 hour gives generous headroom
-  array: 1-60%2            # Array range and concurrency limit; adjust to match the number of SoWs
+  array: 0-0%250            # Array range and concurrency limit; adjust to match the number of SoWs
 
 cmd_line_calls:
   prefix: KEDRO_CONTAINER_DATA_DIR=$SCRATCH/laurel/data ./scripts/setup/run-in-container.sh
