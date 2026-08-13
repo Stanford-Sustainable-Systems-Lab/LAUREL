@@ -1,0 +1,47 @@
+county.bootstrap_profiles_debug_scenario:
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: .feather
+  path: ${runtime_params:data_dir, 'data'}/07_model_output/bootstrap_profiles_debug/county/validate/task_0
+  type: partitions.PartitionedDataset
+county.report_by_region_quantiles_scenario:
+  filepath: ${runtime_params:data_dir, 'data'}/07_model_output/report_by_region_quantiles/county/validate/task_0.feather
+  type: pandas.FeatherDataset
+county.report_by_region_summaries_scenario:
+  filepath: ${runtime_params:data_dir, 'data'}/07_model_output/report_by_region_summaries/county/validate/task_0.feather
+  type: pandas.FeatherDataset
+county.sampling_source_scenario:
+  filepath: ${runtime_params:data_dir, 'data'}/07_model_output/sampling_source/county/validate/task_0.feather
+  type: pandas.FeatherDataset
+dwells_with_charging_scenario:
+  filepath: ${runtime_params:data_dir, 'data'}/07_model_output/dwells_with_charging/validate/task_0.feather
+  type: pandas.FeatherDataset
+dwells_with_charging_scenario_dask:
+  filepath: ${runtime_params:data_dir, 'data'}/07_model_output/dwells_with_charging/validate/task_0
+  load_args:
+    calculate_divisions: true
+  save_args:
+    write_index: true
+    write_metadata_file: true
+  type: dask.ParquetDataset
+substation.bootstrap_profiles_debug_scenario:
+  dataset:
+    type: pandas.FeatherDataset
+  filename_suffix: .feather
+  path: ${runtime_params:data_dir, 'data'}/07_model_output/bootstrap_profiles_debug/substation/validate/task_0
+  type: partitions.PartitionedDataset
+substation.report_by_region_quantiles_scenario:
+  filepath: ${runtime_params:data_dir, 'data'}/07_model_output/report_by_region_quantiles/substation/validate/task_0.feather
+  type: pandas.FeatherDataset
+substation.report_by_region_summaries_scenario:
+  filepath: ${runtime_params:data_dir, 'data'}/07_model_output/report_by_region_summaries/substation/validate/task_0.feather
+  type: pandas.FeatherDataset
+substation.sampling_source_scenario:
+  filepath: ${runtime_params:data_dir, 'data'}/07_model_output/sampling_source/substation/validate/task_0.feather
+  type: pandas.FeatherDataset
+vehicles_evaluated_scenario:
+  filepath: ${runtime_params:data_dir, 'data'}/07_model_output/vehicles_evaluated/validate/task_0.feather
+  type: pandas.FeatherDataset
+vehicles_with_params_scenario:
+  filepath: ${runtime_params:data_dir, 'data'}/07_model_output/vehicles_with_params/validate/task_0.feather
+  type: pandas.FeatherDataset
