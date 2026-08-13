@@ -40,7 +40,7 @@ slurm_resources:
   array: 1-60%2            # Array range and concurrency limit; adjust to match the number of SoWs
 
 cmd_line_calls:
-  prefix: uv run
+  prefix: KEDRO_CONTAINER_DATA_DIR=$SCRATCH/laurel/data ./scripts/setup/run-in-container.sh
   kedro:
     - pipeline: electrify_trips
     - pipeline: evaluate_impacts
