@@ -20,10 +20,12 @@
 
 slurm_command: local  # Valid values are "local", "sbatch", and "salloc"
 
+# Parameters for reporting results. You can also add "mail-user" and/or
+# "mail-type", to control what email SLURM updates get sent to and which
+# events trigger those emails. These can also be passed as command line
+# arguments when calling sbatch.
 slurm_reporting:
   output: logs/slurm/%x_%A_%a.log
-  mail-user: YOUR_EMAIL@institution.edu  # Replace with your email for SLURM job notifications
-  mail-type: ALL
 
 # A note on selecting job times:
 # In job arrays, the startup processes for Kedro within each job compete for shared resources.
