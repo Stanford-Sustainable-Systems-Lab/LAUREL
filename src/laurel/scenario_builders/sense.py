@@ -262,7 +262,10 @@ class SenseScenarioBuilder(ScenarioBuilder):
         else:
             joint_cop = None
 
-        joint_dist = ot.JointDistribution(marg_dists, joint_cop)
+        if joint_cop is None:
+            joint_dist = ot.JointDistribution(marg_dists)
+        else:
+            joint_dist = ot.JointDistribution(marg_dists, joint_cop)
         return joint_dist
 
 
