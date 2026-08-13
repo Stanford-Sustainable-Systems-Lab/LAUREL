@@ -125,6 +125,15 @@ THREADS="${KEDRO_CONTAINER_THREADS:-1}"
 # which is what a stale $L_SCRATCH path becomes the moment its job exits. $TMPDIR/tmp
 # remains the last resort for a machine with no $SCRATCH at all, i.e. Docker on a Mac.
 CACHE_ROOT="${KEDRO_CONTAINER_CACHE_ROOT:-${SCRATCH:-${TMPDIR:-/tmp}}/${PKG}-cache}"
+# $L_SCRATCH, not $CACHE_ROOT, for /tmp: unlike the caches above, scratch data
+# written under /tmp (e.g. Dask's P2P shuffle spill) is per-job and disposable
+# by design, so none of the reasons to avoid $L_SCRATCH for CACHE_ROOT apply --
+# there is nothing to keep warm across array tasks, and the path is resolved
+# and created fresh within this job's lifetime rather than reused from a
+# previous one. Node-local disk also keeps shuffle's many small-file I/O off
+# Lustre's metadata server, which matters once several containers run at once.
+# Falls back to $CACHE_ROOT/tmp when $L_SCRATCH is unset (login node, Docker/Mac).
+TMP_DIR="${L_SCRATCH:-$CACHE_ROOT}/tmp"
 EXTRA_ARGS="${KEDRO_CONTAINER_EXTRA_ARGS:-}"
 
 # -----------------------------------------------------------------------------
@@ -144,7 +153,7 @@ mkdir -p \
   "$SCRIPTS_DIR/scenarios" \
   "$CACHE_ROOT/home" "$CACHE_ROOT/xdg" "$CACHE_ROOT/mpl" \
   "$CACHE_ROOT/numba" "$CACHE_ROOT/pyc" "$CACHE_ROOT/uv" \
-  "$CACHE_ROOT/viz"
+  "$CACHE_ROOT/viz" "$TMP_DIR"
 
 # -----------------------------------------------------------------------------
 # Defensive cleanup: a `*.egg-info/` directory under src/ is disposable build
@@ -205,6 +214,12 @@ if [ -f "$SIF" ] && command -v apptainer >/dev/null 2>&1; then
     # with ENOTDIR/EROFS regardless of mode. Bind it, or every array task logs two
     # WARNINGs. Non-fatal either way -- the pipeline itself completes.
     --bind "$CACHE_ROOT/viz:/app/.viz"
+    # Without this, Dask's P2P shuffle (and anything else relying on
+    # tempfile.gettempdir()) spills into the 64 MB RAM-backed tmpfs that
+    # --contain gives /tmp -- see the --home comment below -- and dies with
+    # "OSError: [Errno 28] No space left on device" within seconds on any
+    # shuffle-heavy pipeline.
+    --bind "$TMP_DIR:/tmp"
   )
   if [ "$MOUNT_SRC" = 1 ]; then
     binds+=(--bind "$PROJECT_ROOT/src:/app/src")
@@ -255,6 +270,7 @@ binds=(
   -v "$LOGS_DIR:/app/logs"
   -v "$SCRIPTS_DIR:/app/scripts"
   -v "$CACHE_ROOT:/cache"
+  -v "$TMP_DIR:/tmp"
 )
 if [ "$MOUNT_SRC" = 1 ]; then
   binds+=(-v "$PROJECT_ROOT/src:/app/src")
