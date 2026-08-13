@@ -37,7 +37,6 @@ slurm_resources:
   ntasks: 2                # Kedro SequentialRunner requires 2 tasks; increase for ParallelRunner (n_parallels + 1)
   cpus-per-task: 2
   mem-per-cpu: 16GB        # Tune to your cluster; each SoW requires ~64 GB total (4 cores × 16 GB)
-  gpus: 0
   time: 0-01:00            # Wall-clock limit; each SoW runs in ~25 minutes; 1 hour gives generous headroom
   array: 0-0%250            # Array range and concurrency limit; adjust to match the number of SoWs
 
