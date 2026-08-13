@@ -36,7 +36,7 @@ dask_electrify_trips:
     memory_limit: 8GiB     # Tune to available RAM; 8 GiB works for typical fleet sizes on a laptop
 
 filter_vehicles_partitions:
-  n_partitions: 4        # Tune to available RAM; 300 works well for ~69,000 vehicles on 64 GB
+  n_partitions: 300        # Tune to available RAM; 300 works well for ~69,000 vehicles on 64 GB
 
 filter_vehicles:
   # Restricts simulation to the desired weight classes. By default, only Class 8
