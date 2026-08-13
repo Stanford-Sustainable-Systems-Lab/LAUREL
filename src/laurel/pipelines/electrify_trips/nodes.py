@@ -69,6 +69,7 @@ from __future__ import annotations
 import logging
 
 import dask.dataframe as dd
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 
@@ -79,6 +80,29 @@ from laurel.utils.mode_masks import bool_arr_to_bits
 from laurel.utils.time import total_hours
 
 logger = logging.getLogger(__name__)
+
+
+def drop_cols_to_pandas(
+    vehs: pd.DataFrame | gpd.GeoDataFrame, params: dict
+) -> pd.DataFrame:
+    """Drop columns unneeded downstream and coerce the result to a plain pandas DataFrame.
+
+    Geometry-bearing GeoDataFrames (e.g. from ``vehicles_labelled``) carry columns
+    that Dask cannot pyarrow-string-encode (raw WKB/shapely objects). This node drops
+    those columns and returns a plain DataFrame so that later Dask operations (e.g.
+    ``dd.from_pandas`` in ``simulate_charging_choice``) never see them.
+
+    Args:
+        vehs: DataFrame or GeoDataFrame to process.
+        params: Configuration dict with the following key:
+
+            - ``drop_cols`` (list[str]): Column names to drop.
+
+    Returns:
+        Plain ``pd.DataFrame`` with ``drop_cols`` removed.
+    """
+    vehs = vehs.drop(columns=params["drop_cols"])
+    return pd.DataFrame(vehs)
 
 
 def filter_vehicles(dw: DwellSet, vehs: pd.DataFrame, params: dict) -> DwellSet:
@@ -969,19 +993,22 @@ def simulate_charging_choice(
     logger.info("Run charging choice simulation.")
     if dw.is_dask:
 
-        def _run_charging_on_partition(partition_df: pd.DataFrame, dw_empty: DwellSet):
+        def _run_charging_on_partition(
+            partition_df: pd.DataFrame, vehs_part: pd.DataFrame, dw_empty: DwellSet
+        ):
             # Create a temporary DwellSet for this partition
             dw_part = dw_empty.copy_without_data()
             dw_part.data = partition_df
             result = strat.run(
-                dwells=dw_part, vehs=vehs, modes=modes, show_progress=False
+                dwells=dw_part, vehs=vehs_part, modes=modes, show_progress=False
             )
             return result
 
         # Create meta DataFrame to define output structure using schema generation
         meta = strat.get_output_schema(input=dw.data)
+        vehs_ddf = dd.from_pandas(vehs, npartitions=1)
         dw.data = dw.data.map_partitions(
-            _run_charging_on_partition, dw_empty=dw.copy_without_data(), meta=meta
+            _run_charging_on_partition, vehs_ddf, dw.copy_without_data(), meta=meta
         )
     else:
         dw.data = strat.run(dwells=dw, vehs=vehs, modes=modes)

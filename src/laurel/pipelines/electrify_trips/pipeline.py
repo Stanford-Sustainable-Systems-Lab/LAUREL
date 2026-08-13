@@ -32,6 +32,7 @@ from .nodes import (
     calc_dwell_durations,
     calc_energy_use,
     calc_vehicle_ranges,
+    drop_cols_to_pandas,
     filter_dwells,
     filter_dwells_post,
     filter_vehicles,
@@ -53,8 +54,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="filter_by_vals_in_cols_vehs",
             ),
             Node(
+                func=drop_cols_to_pandas,
+                inputs=["vehicles_filtered", "params:drop_veh_geom_cols"],
+                outputs="vehicles_filtered_pd",
+                name="drop_veh_geom_cols",
+            ),
+            Node(
                 func=set_entity_params,
-                inputs=["vehicles_filtered", "params:vehicles"],
+                inputs=["vehicles_filtered_pd", "params:vehicles"],
                 outputs="vehicles_with_params",
                 name="set_entity_params_vehicles",
             ),

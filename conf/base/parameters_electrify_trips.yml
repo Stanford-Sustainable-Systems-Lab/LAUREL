@@ -54,6 +54,10 @@ filter_vehicles:
     #     - 613222834799378431
   keep_only_filter_cols: False
 
+drop_veh_geom_cols:
+  drop_cols:
+    - ${time_weighted_centers.out_col}
+
 vehicles:
   consump_rate_kwh_per_mi:
     # Baseline energy consumption rates by operating distance class and GVW class.

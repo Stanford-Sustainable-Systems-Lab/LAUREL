@@ -317,7 +317,8 @@ vehicles_raw:
   filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/vehicles_raw.feather
 
 vehicles_labelled:
-  type: pandas.FeatherDataset
+  type: geopandas.GenericDataset
+  file_format: feather
   filepath: ${runtime_params:data_dir, 'data'}/02_intermediate/vehicles_labelled.feather
 
 vehicle_location_pairs_clustered:
